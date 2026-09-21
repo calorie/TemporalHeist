@@ -1,0 +1,14 @@
+{
+  "extraKnownMarketplaces": {
+    "agentic-engineering": {
+      "source": {
+        "source": "github",
+        "repo": "calorie/agentic-engineering"
+      },
+      "autoUpdate": true
+    }
+  },
+  "enabledPlugins": {
+    "agentic-engineering@agentic-engineering": true
+  }
+}

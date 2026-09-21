@@ -1,0 +1,96 @@
+name: agentic-contract
+
+on:
+  pull_request:
+    paths:
+      - 'README.md'
+      - 'CLAUDE.md'
+      - 'AGENTS.md'
+      - '.claude/**'
+      - '.codex/**'
+      - '.agentic/**'
+      - '.github/pull_request_template.md'
+      - '.github/dependabot.yml'
+      - '.github/workflows/agentic-contract.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'README.md'
+      - 'CLAUDE.md'
+      - 'AGENTS.md'
+      - '.claude/**'
+      - '.codex/**'
+      - '.agentic/**'
+      - '.github/pull_request_template.md'
+      - '.github/dependabot.yml'
+      - '.github/workflows/agentic-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+          check-latest: true
+      - name: Validate minimal runtime configuration
+        run: |
+          python3 - <<'PY'
+          import json, tomllib
+
+          with open(".claude/settings.json", encoding="utf-8") as f:
+              claude = json.load(f)
+          assert "ultracode" not in claude
+          assert claude["enabledPlugins"]["agentic-engineering@agentic-engineering"] is True
+
+          with open(".codex/config.toml", "rb") as f:
+              codex = tomllib.load(f)
+          assert "model_reasoning_effort" not in codex
+          assert codex["agents"]["enabled"] is True
+          assert codex["plugins"]["agentic-engineering@agentic-engineering"]["enabled"] is True
+          PY
+      - name: Enforce English agent infrastructure
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          pattern = re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uff66-\uff9f]")
+          paths = [
+              Path("README.md"),
+              Path("CLAUDE.md"),
+              Path("AGENTS.md"),
+              Path(".agentic/PROJECT.md"),
+              Path(".codex/config.toml"),
+              Path(".github/pull_request_template.md"),
+          ]
+
+          failures = []
+          for path in paths:
+              text = path.read_text(encoding="utf-8")
+              match = pattern.search(text)
+              if match:
+                  line = text.count("\n", 0, match.start()) + 1
+                  failures.append(f"{path}:{line}")
+
+          if failures:
+              raise SystemExit("Non-English text detected: " + ", ".join(failures))
+          PY
+      - name: Check minimal layout
+        run: |
+          test -f CLAUDE.md
+          test -f AGENTS.md
+          test -f .agentic/PROJECT.md
+          test -f .claude/settings.json
+          test -f .codex/config.toml
+          test -d .agent/tasks
+          test ! -e .agentic/agentic.json
+          test ! -d scripts
+          test ! -d .agent/plans

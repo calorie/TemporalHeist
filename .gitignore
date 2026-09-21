@@ -1,0 +1,9 @@
+# Claude local overrides
+.claude/settings.local.json
+.claude/*.local.md
+
+# Local agent scratch
+.agent/tmp/
+
+# OS
+.DS_Store
