@@ -13,6 +13,7 @@ The repository currently contains only the agentic project template plus the des
 - Echo gameplay semantics fixed for P0.
 - Authority/timeline/transport boundaries documented.
 - End-to-end acceptance scene and verification requirements documented.
+- Container-only execution and per-agent runtime-isolation requirements confirmed by the user and documented.
 
 ## Verified external baseline at task creation
 
@@ -31,15 +32,18 @@ Execute the vertical-slice task from `SPEC.md` end-to-end.
 
 Start with narrow environment/bootstrap spikes rather than speculative full implementation:
 
-1. Inspect current MoQ docs/API and choose compatible stable browser/Rust/relay versions.
-2. Establish the minimal TypeScript/Vite + Rust workspace layout.
-3. Prove browser ↔ relay and Rust ↔ relay data flow with tiny payloads.
-4. Prove WebGPU primitive rendering.
-5. Prove Rust/TypeScript protobuf compatibility.
-6. Record stable build/test/dev commands in `.agentic/PROJECT.md`.
-7. Build the deterministic simulation and Echo semantics with tests before coupling gameplay to networking/rendering.
+1. Bootstrap a container-first development/test environment; do not install or execute the application toolchain on the host.
+2. Define per-agent Compose/project namespacing and prove two isolated stacks can coexist without port/network/volume collisions.
+3. Inspect current MoQ docs/API from the containerized toolchain and choose compatible stable browser/Rust/relay versions.
+4. Establish the minimal TypeScript/Vite + Rust workspace layout inside the container contract.
+5. Prove browser ↔ relay and Rust ↔ relay data flow with tiny payloads, entirely inside a per-agent container stack.
+6. Prove containerized Chromium WebGPU primitive rendering.
+7. Prove Rust/TypeScript protobuf compatibility using containerized codegen/tests.
+8. Freeze the minimal shared protocol/interfaces needed for a parallel implementation wave.
+9. Record stable containerized build/test/dev commands in `.agentic/PROJECT.md`.
+10. Build the deterministic simulation and Echo semantics with tests before coupling gameplay to networking/rendering.
 
-Agentic Engineering should select delegation, worktrees, and PR topology automatically.
+Agentic Engineering should select delegation, worktrees, and PR topology automatically. Parallel writing agents must receive disjoint worktrees/ownership and independently namespaced container stacks. Shared contract edits must be serialized as the narrow synchronization boundary.
 
 ## Current blockers
 

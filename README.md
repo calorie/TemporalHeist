@@ -12,6 +12,7 @@ Two players move through a top-down 2.5D facility. Each player acquires one auth
 - Wire schema: Protocol Buffers unless an implementation spike finds a concrete blocker.
 - Initial target: desktop Chromium.
 - MVP scope: two players, one 10-second Echo generation, one small three-room facility, no account system or persistent database.
+- Execution model: all application build/run/test/browser/WebGPU processes run in containers; concurrent agents use fully isolated per-worktree container stacks.
 
 MoQ is intentionally isolated behind application adapters. The game domain must not depend directly on MoQ library types or wire-protocol details.
 
@@ -47,6 +48,12 @@ Then start Codex in this repository and give it this objective:
 > Continue the active `vertical-slice` task. Read `.agentic/PROJECT.md`, `.agent/tasks/vertical-slice/{SPEC,STATE,DECISIONS}.md`, and the design docs. Implement the task end-to-end, maintaining durable task state and verification evidence. Resolve reversible engineering choices autonomously. Do not change product semantics or architecture invariants without recording the reason and requesting input only when the decision is genuinely product-level or irreversible.
 
 Codex should choose its own effort, subagent use, worktrees, verification strategy, and PR topology according to `AGENTS.md`; the user should not need to orchestrate agents.
+
+## Container-only development
+
+All project execution and verification is containerized. Do not run the application toolchain directly on the host. Each concurrent writing agent must use its own worktree and independently namespaced container stack (network, writable volumes/caches, relay, authority, web service, browser profile, and test artifacts). Shared protocol/source-of-truth changes are the narrow synchronization boundary; freeze/version the minimum contract before dispatching a parallel implementation wave.
+
+See `docs/CONTAINERS.md` and `docs/ARCHITECTURE.md` for the normative isolation model.
 
 ## Core acceptance scene
 

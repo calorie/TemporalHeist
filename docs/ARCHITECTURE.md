@@ -264,16 +264,93 @@ Never use `Date.now()`/browser timezone as canonical game time.
 
 Client estimates presentation time relative to received authority samples but identifies canonical events by epoch/tick.
 
-## Development topology
+## Development and agent execution topology
 
-Local development must make it straightforward to run:
+Containerization is mandatory for every project process. The host is only an orchestration surface for Git, Codex/agent tooling, and the container runtime.
 
-1. `moq-relay`;
-2. Rust authority;
-3. browser dev server;
-4. two browser tabs/windows.
+A normal per-agent stack is conceptually:
 
-Containerization is optional. Prefer the smallest reproducible local loop first.
+~~~text
+agent A worktree                    agent B worktree
+       |                                   |
+compose project: th-a              compose project: th-b
+       |                                   |
++------+------------------+         +------+------------------+
+| isolated container net  |         | isolated container net  |
+|                         |         |                         |
+| dev/build/test tools    |         | dev/build/test tools    |
+| moq-relay A             |         | moq-relay B             |
+| authority A             |         | authority B             |
+| web A                   |         | web B                   |
+| Chromium/E2E A          |         | Chromium/E2E B          |
+| private writable vols   |         | private writable vols   |
++-------------------------+         +-------------------------+
+~~~
+
+No application process is shared between these stacks.
+
+### Host boundary
+
+Project correctness must never depend on host-installed language runtimes or browsers. Do not run project `cargo`, Node/Bun/npm/pnpm, protobuf generators, Vite, MoQ binaries, Chromium, Playwright, or test tools directly on the host.
+
+Repository helper commands may execute on the host only as thin wrappers around the container runtime/orchestrator.
+
+### Per-agent namespacing
+
+Every writing agent receives:
+
+- an isolated Git worktree/checkout;
+- a unique agent/run identifier;
+- a unique Compose/project namespace;
+- an isolated container network;
+- independently writable named volumes/caches;
+- its own relay and authority process;
+- its own generated certificates/test credentials;
+- isolated test artifacts, logs, screenshots, and browser profiles.
+
+Avoid `container_name`. Avoid globally named networks/volumes. Automated tests must not depend on fixed host ports; prefer container-network DNS and ephemeral/published-on-demand ports.
+
+A single teardown command for agent A must be unable to stop or delete agent B resources.
+
+### Parallel implementation boundary
+
+The architecture should maximize implementation parallelism, but shared contracts remain a deliberate synchronization boundary.
+
+The first bootstrap wave should establish the minimum viable shared contracts:
+
+- repository/container entry points;
+- protobuf/application protocol baseline;
+- semantic client/server transport interfaces;
+- stable simulation-facing data contracts.
+
+Once those are frozen/versioned, independent implementation agents can work concurrently on disjoint ownership such as simulation, authority/MoQ, browser/MoQ, WebGPU, and integration/E2E.
+
+No component may require another agent's live container or unpublished filesystem output. Generated files must be reproducible from checked-in sources of truth inside each agent's own container.
+
+If a shared contract must change, serialize that change, update/regenerate affected consumers in containers, verify compatibility, then resume the parallel wave.
+
+### Containerized test topology
+
+Provide containerized layers so an agent can run the narrowest useful check without starting unrelated services:
+
+1. **component** — Rust sim/unit tests; TypeScript unit/type tests; shader/static checks;
+2. **protocol** — protobuf generation and Rust↔TypeScript compatibility;
+3. **transport** — browser/Rust MoQ adapter integration against a private relay;
+4. **stack** — private relay + authority + web;
+5. **E2E** — two containerized Chromium clients against that private stack;
+6. **WebGPU** — Chromium WebGPU smoke/render checks inside the browser container.
+
+WebGPU may use a verified software Vulkan/GPU implementation for CI/agents, or explicit device passthrough when available. In either case the browser process remains containerized.
+
+The isolation acceptance test is to run two independently namespaced integration/full-stack test invocations concurrently on the same host and show no port, network, volume, certificate, profile, or service-name collisions.
+
+### Interactive visual verification
+
+If a human needs to inspect the running game, keep Chromium in the container and expose an appropriate remote display/debugging surface. Opening the application in a host-native browser is not the normative run/test path.
+
+### CI parity
+
+CI must call the same containerized entry points used by local agents. CI should not duplicate the project toolchain as a separate host-native workflow.
 
 ## Observability
 

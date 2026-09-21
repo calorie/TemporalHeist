@@ -21,6 +21,76 @@ The implementation must reach the end-to-end acceptance scene described below wi
 - Browser target: desktop Chromium first.
 - Authentication/persistence: none for MVP.
 
+## Container-only execution and parallel-agent isolation
+
+Containerization is a hard engineering requirement, not an optional deployment concern.
+
+### Host boundary
+
+All project execution must occur inside containers, including:
+
+- dependency installation and code generation;
+- Rust and TypeScript compilation;
+- format/lint/typecheck;
+- unit and integration tests;
+- `moq-relay`;
+- the Rust authority process;
+- the Vite/web development server;
+- Chromium/Playwright or equivalent browser processes used for automated or manual verification;
+- WebGPU verification.
+
+Do not rely on host-installed `cargo`, `rustc`, Node/Bun/npm/pnpm, `protoc`, `moq-relay`, Chromium, or test runners. The host may run Git, Codex/agent tooling, and the container runtime/orchestrator only.
+
+Provide stable repository entry points that wrap container execution. A developer/agent should be able to bootstrap and verify the project on a clean host with the documented container runtime plus Git, without separately installing the application toolchain.
+
+### Per-agent isolation
+
+Every concurrent implementation agent must be able to work and test without coordinating runtime resources with another agent.
+
+Required properties:
+
+- one isolated Git worktree/checkout per writing agent;
+- one unique Compose/project namespace per agent/run, derived from an agent/run ID;
+- no hard-coded `container_name` values;
+- no globally shared mutable Docker networks or volumes;
+- no fixed host ports in automated component/integration/E2E tests;
+- service discovery through the per-project container network rather than host-global addresses;
+- build/dependency caches must either be read-only shared artifacts or namespaced per agent so one agent cannot corrupt another's state;
+- test data, relay state, certificates, room IDs, logs, screenshots, and browser profiles must be isolated per agent/run;
+- an agent must be able to tear down its complete stack with volumes without affecting another agent.
+
+Where human inspection needs a browser UI, the browser process still runs in a container; expose a remote display/debugging surface or another containerized-browser workflow rather than requiring host Chromium.
+
+### Contract-first parallelism
+
+The goal is that implementation agents can proceed in parallel after a minimal shared contract baseline exists.
+
+Shared schemas/source-of-truth files (especially `.proto` definitions and cross-component interfaces) are synchronization boundaries. Establish the minimum viable contract early, then treat it as frozen/versioned for a parallel implementation wave. If the contract must change, serialize that contract change, regenerate/verify consumers in containers, and then resume parallel implementation.
+
+After the contract baseline, independent agents should be able to own disjoint areas such as:
+
+- deterministic simulation/Echo semantics;
+- Rust authority + server-side MoQ adapter;
+- TypeScript browser + client-side MoQ adapter;
+- WebGPU renderer;
+- protocol/codegen and compatibility verification;
+- integration/E2E harness and container orchestration.
+
+Do not create an architecture that requires one agent's live container, local filesystem outside the worktree, unpublished generated files, or manually provisioned shared service for another agent to build/test its component.
+
+### Containerized verification tiers
+
+The repository should provide containerized entry points for at least:
+
+1. component checks (format/lint/typecheck/unit tests);
+2. protocol cross-language compatibility tests;
+3. MoQ transport integration tests;
+4. authority + relay + web integration tests;
+5. two-browser E2E tests;
+6. WebGPU smoke/render verification in containerized Chromium, using a verified software GPU/Vulkan path or explicitly configured GPU passthrough while remaining inside the container.
+
+The container strategy must support running at least two independent full verification stacks concurrently on one host without port, network, volume, browser-profile, or service-name collisions.
+
 ## P0 gameplay
 
 ### Player
@@ -174,6 +244,9 @@ Perform small, verified spikes early and record conclusions in `STATE.md`/`DECIS
 3. The current selected MoQ versions provide a workable way to retain/fetch enough recent grouped history for reconnect/late join, or a clearly bounded application-side fallback is documented.
 4. Chromium WebGPU initializes under the selected Vite/dev setup and renders a primitive.
 5. The chosen protobuf toolchain generates/consumes equivalent Rust and TypeScript messages.
+6. The complete toolchain works from containers on a clean-host assumption; no host-native project toolchain is required.
+7. Two independently namespaced agent stacks can execute representative tests concurrently without resource collisions.
+8. Containerized Chromium can exercise the raw WebGPU path with the selected software-GPU or GPU-passthrough configuration.
 
 Do not turn a spike into a parallel production architecture. Keep it minimal, then integrate through the intended adapters.
 
@@ -230,6 +303,9 @@ Capture enough automated or reproducible evidence that a later agent can determi
 - Relevant format/lint/typecheck/unit/integration checks pass.
 - Durable commands discovered during bootstrap are written to `.agentic/PROJECT.md`.
 - `STATE.md` records verification evidence and remaining limitations.
+- All verification evidence comes from containerized project processes; host-native build/test/run results do not satisfy acceptance.
+- A documented isolation check demonstrates that two per-agent Compose/project namespaces can run representative integration tests concurrently without interference.
+- CI calls the same containerized verification entry points used by agents locally, rather than maintaining a divergent host-native test path.
 
 ## Explicit non-goals for P0
 
@@ -256,4 +332,4 @@ Ask for product input only if a proposed change would alter the committed Echo s
 
 ## Definition of done
 
-The task is done when all P0 acceptance criteria are implemented and verified, the local two-browser scene is reproducible, and repository task state contains enough evidence and commands for another Codex session to continue without rediscovery.
+The task is done when all P0 acceptance criteria are implemented and verified entirely through containers, the local two-browser scene is reproducible with containerized application/browser processes, at least two isolated agent stacks can run concurrently without interference, and repository task state contains enough evidence and commands for another Codex session to continue without rediscovery.

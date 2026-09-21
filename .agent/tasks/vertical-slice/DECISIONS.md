@@ -94,6 +94,32 @@ Cross-browser support is not a P0 blocker.
 
 **Decision:** primitive/procedural geometry is sufficient for the vertical slice. Do not block network/gameplay proof on an asset pipeline.
 
+### A11 — Container-only project execution
+
+**Decision:** every project build, codegen, run, test, lint, typecheck, relay, authority, web-server, browser, and WebGPU verification process runs inside containers.
+
+The host is not part of the application toolchain. It may provide Git, Codex/agent tooling, and the container runtime/orchestrator. A host-native test result is not accepted verification evidence.
+
+**Rationale:** eliminates host drift, makes agent environments reproducible, and lets CI exercise the same execution path as local agents.
+
+### A12 — Per-agent runtime isolation
+
+**Decision:** each concurrent agent uses an isolated worktree/checkout and an independently namespaced container stack, including its own network, writable volumes/caches, relay, authority, test data, certificates, browser profile, and test artifacts.
+
+Automated tests must not require fixed host ports or hard-coded container names. A stack teardown must never affect another agent.
+
+**Rationale:** agents must be able to implement and verify concurrently without serializing on shared runtime infrastructure.
+
+### A13 — Contract-first parallel implementation
+
+**Decision:** shared source-of-truth contracts such as protobuf schemas are explicit synchronization boundaries. Establish/freeze the minimum viable contract before a parallel implementation wave. After that, components must build/test independently from the checked-out contract. Contract changes are serialized and versioned/verified before parallel work resumes.
+
+**Rationale:** true parallel writes cannot safely mutate a shared schema simultaneously; isolating that narrow synchronization boundary maximizes parallel implementation everywhere else without creating integration ambiguity.
+
+### A14 — Containerized browser/WebGPU verification
+
+**Decision:** Chromium used for E2E, manual acceptance, and WebGPU smoke tests runs inside a container. Use a verified software GPU/Vulkan implementation or container GPU passthrough; do not fall back to host Chromium as the acceptance path.
+
 ## Reversible choices delegated to Codex
 
 Codex may choose and later revise without asking the user:
@@ -108,7 +134,11 @@ Codex may choose and later revise without asking the user:
 - ECS vs simple structs;
 - math library;
 - shader organization;
-- development process topology, subagent count, worktrees, and PR shape.
+- development process topology, subagent count, worktrees, and PR shape;
+- exact OCI base images and Dockerfiles;
+- Docker Compose file decomposition and helper command names;
+- software WebGPU implementation versus available GPU passthrough, provided Chromium itself remains containerized;
+- cache implementation, provided writable state is isolated across concurrent agents.
 
 Record a new decision here when a reversible choice becomes a durable repository constraint.
 
@@ -122,6 +152,8 @@ Record a new decision here when a reversible choice becomes a durable repository
 - raw WebGPU requirement;
 - server-authoritative gameplay;
 - MoQ as the actual realtime data plane;
-- world not rewinding with the Echo.
+- world not rewinding with the Echo;
+- container-only project execution and verification;
+- per-agent isolated runtime stacks suitable for concurrent implementation/testing.
 
 Do not ask for input merely because an API/tooling choice is uncertain; investigate and choose the least-complex verified path instead.
