@@ -1,0 +1,15 @@
+#!/bin/sh
+# Host-side orchestration only. All project processes run in Compose services.
+set -eu
+agent_id=${1:?Usage: sh container AGENT_RUN_ID COMPOSE_ARGUMENTS...}
+shift
+case "$agent_id" in
+  ''|*[!a-z0-9-]*) echo 'AGENT_RUN_ID must contain only a-z, 0-9, and hyphens' >&2; exit 2 ;;
+esac
+if [ -d /Applications/Docker.app/Contents/Resources/bin ]; then
+  PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"
+  export PATH
+fi
+TH_AGENT_ID="$agent_id"
+export TH_AGENT_ID
+exec docker compose --project-name "th-$agent_id" --file compose.yaml "$@"

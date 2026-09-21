@@ -1,0 +1,7 @@
+.git
+.agent
+.agents
+.codex
+node_modules
+target
+dist

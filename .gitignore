@@ -7,3 +7,10 @@
 
 # OS
 .DS_Store
+
+# Container-generated build outputs
+node_modules/
+target/
+dist/
+test-results/
+playwright-report/
