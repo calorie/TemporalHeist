@@ -1,6 +1,7 @@
 import { chromium } from '@playwright/test';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
+import { captureScreenshot } from '../tests/screenshot.mjs';
 
 const artifacts = `/artifacts/visual-${process.env.TH_AGENT_ID}`;
 const viewport = { width: 1280, height: 720 };
@@ -34,7 +35,6 @@ const context = await chromium.launchPersistentContext('/browser-profile', {
     '--use-angle=vulkan',
     '--use-vulkan=swiftshader',
     '--enable-features=Vulkan',
-    '--disable-vulkan-surface',
     '--enable-unsafe-swiftshader',
     '--unsafely-treat-insecure-origin-as-secure=http://web:5173',
   ],
@@ -52,7 +52,7 @@ await page.waitForFunction(
 );
 
 const file = `player-${player}-lobby.png`;
-await page.screenshot({ path: `${artifacts}/${file}` });
+await captureScreenshot(page, `${artifacts}/${file}`);
 const capture = await page.evaluate(({ file, pageErrors, player }) => ({
     file,
     player,
@@ -67,7 +67,9 @@ const capture = await page.evaluate(({ file, pageErrors, player }) => ({
       phase: document.querySelector('#phase')?.textContent,
       objective: document.querySelector('#objective')?.textContent,
       echo: document.querySelector('#echo-status')?.textContent,
+      guard: document.querySelector('#guard-status')?.textContent,
     },
+    guards: window.th.snapshot()?.guards ?? [],
     renderer: window.th.rendererInfo(),
     errors: [...pageErrors, ...window.th.errors()],
   }), { file, pageErrors, player });

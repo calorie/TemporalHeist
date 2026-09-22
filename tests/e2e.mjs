@@ -1,6 +1,7 @@
 import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { captureScreenshot } from './screenshot.mjs';
 
 const artifacts = `/artifacts/e2e-${process.env.TH_AGENT_ID}`;
 await mkdir(artifacts, { recursive: true });
@@ -17,7 +18,6 @@ const flags = [
   '--use-angle=vulkan',
   '--use-vulkan=swiftshader',
   '--enable-features=Vulkan',
-  '--disable-vulkan-surface',
   '--enable-unsafe-swiftshader',
   '--unsafely-treat-insecure-origin-as-secure=http://web:5173',
 ];
@@ -30,7 +30,9 @@ const evidence = {
   screenshots: [],
 };
 const RoomPhase = Object.freeze({ LOBBY: 1, ACTIVE: 2, WON: 3, FAILED: 4 });
-const FailureReason = Object.freeze({ UNSPECIFIED: 0, TIMEOUT: 1, SURVEILLANCE: 2 });
+const FailureReason = Object.freeze({ UNSPECIFIED: 0, TIMEOUT: 1, SURVEILLANCE: 2, GUARD: 3 });
+const GuardState = Object.freeze({ PATROL: 1, INVESTIGATE: 2, RETURN: 3 });
+const browserErrors = [[], []];
 const camera41 = Object.freeze({ x: 4500, z: 7500, directionX: 0, directionZ: -1000,
   range: 2200, halfWidth: 1200 });
 
@@ -51,6 +53,7 @@ async function uiState(page) {
   return page.evaluate(() => ({
     briefing: document.querySelector('#briefing')?.textContent?.trim(),
     echoStatus: document.querySelector('#echo-status')?.textContent?.trim(),
+    guardStatus: document.querySelector('#guard-status')?.textContent?.trim(),
     hudPhase: document.querySelector('#hud')?.getAttribute('data-phase'),
     mutePressed: document.querySelector('#mute')?.getAttribute('aria-pressed'),
     objective: document.querySelector('#objective')?.textContent?.trim(),
@@ -99,6 +102,7 @@ async function assertOnboarding(page) {
     /10.SECONDS|00:10/i,
     /DOOR/i,
     /SURVEILLANCE|CAMERA/i,
+    /GUARD.*HUMAN.*ECHO/i,
     /EXTRACTION/i,
     /RESTART|RETRY/i,
   ]) assert.match(briefing, expected);
@@ -117,16 +121,19 @@ async function useVisibleControl(page, selector, key) {
 
 async function capture(page, player, label) {
   const file = `player-${player}-${label}.png`;
-  await page.screenshot({ path: `${artifacts}/${file}` });
-  evidence.screenshots.push({ file, player, label, ui: await uiState(page) });
+  const scenePixel = await captureScreenshot(page, `${artifacts}/${file}`);
+  evidence.screenshots.push({ file, player, label, scenePixel, ui: await uiState(page) });
+  console.log(JSON.stringify({ event: 'screenshot-captured', player, label }));
 }
 
-async function moveTo(page, playerId, x, z, timeout = moveTimeout) {
+async function moveTo(page, playerId, x, z, timeout = moveTimeout, axis = movementAxis) {
   const deadline = Date.now() + timeout;
   let lastState;
   while (Date.now() < deadline) {
     const state = await snapshot(page);
     lastState = state;
+    assert.notEqual(state?.room?.phase, RoomPhase.FAILED,
+      `movement failed: ${JSON.stringify(state?.room)}`);
     const pose = state?.players.find((candidate) => candidate.playerId === playerId);
     if (
       state?.room?.phase === RoomPhase.WON &&
@@ -146,8 +153,8 @@ async function moveTo(page, playerId, x, z, timeout = moveTimeout) {
       await new Promise((resolve) => setTimeout(resolve, 50));
       continue;
     }
-    const dx = Math.abs(pose.xMm - x) <= 120 ? 0 : Math.sign(x - pose.xMm) * movementAxis;
-    const dz = Math.abs(pose.zMm - z) <= 120 ? 0 : Math.sign(z - pose.zMm) * movementAxis;
+    const dx = Math.abs(pose.xMm - x) <= 120 ? 0 : Math.sign(x - pose.xMm) * Math.min(axis, Math.abs(x - pose.xMm) / 600);
+    const dz = Math.abs(pose.zMm - z) <= 120 ? 0 : Math.sign(z - pose.zMm) * Math.min(axis, Math.abs(z - pose.zMm) / 600);
     await page.evaluate(([mx, mz]) => window.th.move(mx, mz), [dx, dz]);
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
@@ -242,6 +249,7 @@ async function enterSurveillance(page, playerId, x, z, timeout = moveTimeout) {
     tick: lastState?.serverTick,
     pose: lastState?.players.find((candidate) => candidate.playerId === playerId),
     room: lastState?.room,
+    guards: lastState?.guards,
   })}`);
 }
 
@@ -304,6 +312,118 @@ async function recordEchoPlate(pageA, plateId, doorId, x, z, whileLive) {
   return echoed;
 }
 
+const guardOf = (state) => state.guards.find((guard) => guard.id === 51);
+const positions = (state) => state.players.map(({ playerId, xMm, zMm }) => ({ playerId, xMm, zMm }));
+const dash = (page, player, x, z) => moveTo(page, player, x, z, moveTimeout, 1);
+
+async function guardPixel(page, expectedState) {
+  // Sample well inside the triangle, offset from its route/body centerline.
+  const guard = guardOf(await snapshot(page));
+  assert.equal(guard.state, expectedState);
+  const length = Math.hypot(guard.facingX, guard.facingZ);
+  const fx = guard.facingX / length, fz = guard.facingZ / length;
+  const x = guard.xMm + fx * 1000 - fz * 250;
+  const z = guard.zMm + fz * 1000 + fx * 250;
+  const pixel = [((x - 12000) / 13000 + 1) * 640,
+    (1 - ((4000 - z) / 5200) * (1280 / 720)) * 360];
+  const rgba = await page.evaluate(([x, y]) => window.th.rendererPixel(x, y), pixel);
+  if (expectedState === GuardState.PATROL)
+    assert(rgba[1] > rgba[0] + 15, `patrol cone must be teal: ${rgba}`);
+  else assert(rgba[0] > rgba[1] + 30, `investigation cone must be red: ${rgba}`);
+  evidence.events.push({ event: 'guard-cone-pixel', state: expectedState, pixel, rgba });
+}
+
+async function safeGuardEntry(page, player) {
+  // Keep the waiting position beyond the guard's maximum range. Aim through
+  // the doorway center so input/observation lag cannot clip its lower wall.
+  await dash(page, player, 14200, 4000);
+  await waitFor(page, (state) => {
+    const guard = guardOf(state);
+    return guard.state === GuardState.PATROL && guard.xMm >= 19000 && guard.xMm <= 19400 && guard.facingX > 0;
+  }, 'guard facing away from the second doorway');
+  await dash(page, player, 15800, 4000);
+  await dash(page, player, 15800, 6000);
+}
+
+async function guardDiversion(pageA, pageB) {
+  await dash(pageB, 2, 18000, 6000);
+  await waitFor(pageA, (state) => {
+    const guard = guardOf(state);
+    return guard.state === GuardState.PATROL && guard.xMm >= 19000 && guard.xMm <= 19400 && guard.facingX > 0;
+  }, 'safe route to the upper decoy lane');
+  await dash(pageA, 1, 15800, 2200);
+  await dash(pageA, 1, 21500, 2200);
+  await waitFor(pageA, (state) => {
+    const guard = guardOf(state);
+    return guard.state === GuardState.PATROL && guard.xMm <= 20400 && guard.xMm >= 20100 && guard.facingX < 0;
+  }, 'guard moving away before recording the decoy');
+  const sourceStart = await snapshot(pageA);
+  await dash(pageA, 1, 21500, 3500);
+  const lure = await snapshot(pageA);
+  evidence.events.push({ event: 'guard-decoy-recorded', sourceStartTick: sourceStart.serverTick,
+    tick: lure.serverTick, pose: lure.players.find((pose) => pose.playerId === 1), guard: guardOf(lure) });
+  await dash(pageA, 1, 21500, 2200);
+  await dash(pageA, 1, 19500, 1500);
+  const investigating = await waitFor(pageA, (state) => {
+    assert.equal(state.room.phase, RoomPhase.ACTIVE);
+    const guard = guardOf(state);
+    if (state.serverTick < sourceStart.serverTick + 600)
+      assert.equal(guard.state, GuardState.PATROL, 'guard investigated before the recorded Echo');
+    return guard.state === GuardState.INVESTIGATE;
+  }, 'the exact-600-tick Echo diversion', 20000);
+  const guard = guardOf(investigating);
+  const echo = investigating.echoes.find((pose) => pose.playerId === 1);
+  assert.equal(investigating.serverTick - echo.sourceTick, 600);
+  assert(guard.stateEnteredTick >= sourceStart.serverTick + 600);
+  assert(guard.stateEnteredTick <= lure.serverTick + 600 + 60);
+  assert(guard.investigationTarget);
+  // Snapshots arrive every three ticks. A target retained across the 30-tick
+  // observation boundary may precede the current Echo by at most that sample.
+  assert(Math.abs(guard.investigationTarget.xMm - echo.xMm) <= 180);
+  assert(Math.abs(guard.investigationTarget.zMm - echo.zMm) <= 180);
+  assert.equal(guard.investigationTarget.xMm, echo.xMm);
+  const observedB = await waitFor(pageB, (state) =>
+    guardOf(state).stateEnteredTick === guard.stateEnteredTick,
+  'client B observing the same guard investigation');
+  assert.equal(guardOf(observedB).state, GuardState.INVESTIGATE);
+  await Promise.all([pageA, pageB].map((page) => waitForText(page, '#guard-status', /INVESTIGATING.*CROSS NOW/, 'visible crossing cue')));
+  evidence.events.push({ event: 'guard-echo-investigating', sourceStartTick: sourceStart.serverTick,
+    lureTick: lure.serverTick, tick: investigating.serverTick, echo, guard,
+    canonicalDelayTicks: investigating.serverTick - echo.sourceTick });
+  // SwiftShader screenshots can take longer than the search window. Freeze
+  // only presentation after readback, while real MoQ input and authority ticks
+  // continue and B crosses. No gameplay state or clock is paused.
+  const visuals = (async () => {
+    await guardPixel(pageA, GuardState.INVESTIGATE);
+    await Promise.all([pageA, pageB].map((page) => page.evaluate(() => window.th.setPresentationPaused(true))));
+    try {
+      for (const page of [pageA, pageB])
+        assert.match((await uiState(page)).guardStatus, /INVESTIGATING.*CROSS NOW/);
+      await Promise.all([capture(pageA, 1, 'guard-investigation'), capture(pageB, 2, 'guard-investigation')]);
+    } finally {
+      await Promise.all([pageA, pageB].map((page) => page.evaluate(() => window.th.setPresentationPaused(false))));
+    }
+  })();
+  const crossing = (async () => {
+    await dash(pageB, 2, 18000, 4700);
+    const entered = await dash(pageB, 2, 19000, 4700);
+    const crossed = await dash(pageB, 2, 20100, 4700);
+    // Move clear before waiting for software-rendered evidence to finish.
+    await dash(pageB, 2, 21500, 6000);
+    return { entered, crossed };
+  })();
+  const [, { entered, crossed }] = await Promise.all([visuals, crossing]);
+  for (const state of [entered, crossed]) {
+    assert.equal(state.room.phase, RoomPhase.ACTIVE);
+    assert.equal(guardOf(state).state, GuardState.INVESTIGATE);
+  }
+  const pose = entered.players.find((pose) => pose.playerId === 2);
+  assert(pose.xMm >= 18500 && pose.xMm <= 19500 && pose.zMm >= 3000 && pose.zMm <= 5000);
+  evidence.events.push({ event: 'guard-crossed', tick: crossed.serverTick, passagePose: pose,
+    exitPose: crossed.players.find((pose) => pose.playerId === 2), guard: guardOf(crossed) });
+  await Promise.all([capture(pageA, 1, 'guard-crossed'), capture(pageB, 2, 'guard-crossed')]);
+}
+
 try {
   for (const player of [1, 2]) {
     const context = await chromium.launchPersistentContext(`${artifacts}/client-${player}`, {
@@ -311,6 +431,7 @@ try {
     });
     contexts.push(context);
     const page = context.pages()[0] ?? await context.newPage();
+    page.on('pageerror', (error) => browserErrors[player - 1].push(error.message));
     await page.goto(`http://web:5173/?player=${player}&room=${process.env.TH_ROOM_ID}`);
     await page.waitForFunction(() => window.th?.joined(), undefined, { timeout: 45_000 });
   }
@@ -363,7 +484,7 @@ try {
   for (const page of [pageA, pageB]) {
     const ui = await waitForPresentation(page, 'active', 'none');
     assert.match(ui.phase ?? '', /ACTIVE.*ATTEMPT 1/i);
-    assert.match(ui.objective ?? '', /ECHO PRESENCE/i);
+    assert.match(ui.objective ?? '', /ECHO.*GUARD 51/i);
     assert.match(ui.timer ?? '', /^0[0-5]:[0-5][0-9]$/);
     assert.match(ui.readiness ?? '', /2\/2/);
     await waitForText(page, '#echo-status', /^ECHO IN 00:[0-9]{2}$/,
@@ -373,6 +494,39 @@ try {
     event: 'attempt-started', attempt: activeA.room.attempt,
     startedTick: activeA.room.startedTick, deadlineTick: activeA.room.deadlineTick,
   });
+
+  await guardPixel(pageA, GuardState.PATROL);
+  // First demonstrate that a human cannot simply walk through the patrol.
+  await recordEchoPlate(pageA, 21, 11, 4500, 2500,
+    () => moveRightPast(pageB, 2, 8000, 4000));
+  await moveRightPast(pageA, 1, 8000, 4000);
+  await recordEchoPlate(pageA, 22, 12, 12500, 2500);
+  const guardFailedA = await enterSurveillance(pageA, 1, 19000, 4000);
+  const guardFailedB = await waitForPhase(pageB, RoomPhase.FAILED, 'guard failure on client B');
+  for (const failed of [guardFailedA, guardFailedB]) {
+    assert.equal(failed.room.failureReason, FailureReason.GUARD);
+    assert.equal(failed.room.failureGuardId, 51);
+    assert.equal(failed.room.failureHazardId, 0);
+  }
+  assert.deepEqual(guardFailedA.room, guardFailedB.room);
+  assert.deepEqual(guardFailedA.guards, guardFailedB.guards);
+  assert.deepEqual(positions(guardFailedA), positions(guardFailedB));
+  await Promise.all([pageA, pageB].map((page) => waitForPresentation(page, 'failed', 'failure', /GUARD 51/i)));
+  evidence.events.push({ event: 'guard-human-failed', room: guardFailedA.room, guard: guardOf(guardFailedA) });
+  await Promise.all([capture(pageA, 1, 'guard-human-failed'), capture(pageB, 2, 'guard-human-failed')]);
+  await useVisibleControl(pageA, '#restart');
+  for (const page of [pageA, pageB]) {
+    const reset = await waitForPhase(page, RoomPhase.LOBBY, 'guard reset lobby');
+    assert.deepEqual(reset.guards, lobby.guards);
+    assert.equal(reset.room.failureGuardId, 0);
+    assert.equal(reset.room.failureReason, FailureReason.UNSPECIFIED);
+    assert.equal(reset.room.readyPlayers, 0);
+    assert.equal(reset.echoes.length, 0);
+  }
+  evidence.events.push({ event: 'guard-reset', guards: (await snapshot(pageA)).guards });
+  await useVisibleControl(pageA, '#ready');
+  await useVisibleControl(pageB, '#ready');
+  await Promise.all([pageA, pageB].map((page) => waitForPhase(page, RoomPhase.ACTIVE, 'second attempt after guard reset')));
 
   // A new MoQ publication for the same browser session must be consumed without
   // restarting the authority or disturbing the other player.
@@ -394,14 +548,20 @@ try {
 
   // Zone 2: repeat the delayed-presence lesson so both players reach the proof room.
   await recordEchoPlate(pageA, 22, 12, 12500, 2500,
-    () => moveRightPast(pageB, 2, 16000, 4000));
-  await moveRightPast(pageA, 1, 16000, 4000);
+    () => safeGuardEntry(pageB, 2));
+  await safeGuardEntry(pageA, 1);
+  await guardDiversion(pageA, pageB);
 
   // Zone 3 acceptance: A leaves its plate; exactly 600 authority ticks later its
   // Echo opens the current door, and B crosses while A remains elsewhere.
-  await moveTo(pageB, 2, 21500, 4000);
   const finalOpen = await recordEchoPlate(pageA, 23, 13, 19500, 2500);
-  await moveRightPast(pageB, 2, 23000, 4000);
+  await dash(pageA, 1, 21500, 2200);
+  await waitFor(pageB, (state) => guardOf(state).xMm < 18500 && guardOf(state).facingX < 0,
+    'guard away from the extraction approach');
+  await dash(pageB, 2, 21500, 4000);
+  // The near edge of extraction is still inside the patrol's maximum range.
+  // B waits farther inside while A uses the next safe crossing window.
+  await dash(pageB, 2, 23500, 4000);
   const finalA = await waitFor(pageA,
     (state) => state.players.find((player) => player.playerId === 2)?.xMm > 22400,
     'client A observing player B beyond the co-op door');
@@ -425,10 +585,15 @@ try {
   // Aim well inside extraction so the movement tolerance cannot accept a pose
   // before x=22800. The terminal-state branch handles authority's immediate
   // movement freeze once both players qualify.
-  await moveRightPast(pageA, 1, 23000, 4000);
+  await waitFor(pageA, (state) => guardOf(state).xMm < 18500 && guardOf(state).facingX < 0,
+    'guard away from player A extraction');
+  await dash(pageA, 1, 21500, 4000);
+  await dash(pageA, 1, 23000, 4000);
   const wonA = await waitForPhase(pageA, RoomPhase.WON, 'won result on client A');
   const wonB = await waitForPhase(pageB, RoomPhase.WON, 'won result on client B');
-  assert.equal(wonA.room.attempt, 1);
+  assert.equal(wonA.room.attempt, 2);
+  assert.deepEqual(wonA.guards, wonB.guards);
+  assert.deepEqual(wonA.room, wonB.room);
   assert.equal(wonA.room.extractionPlayers, 2);
   assert.equal(wonB.room.extractionPlayers, 2);
   assert.equal(wonA.room.echoOpenedFinalDoor, true);
@@ -444,7 +609,7 @@ try {
     extractionPlayers: wonA.room.extractionPlayers,
   });
 
-  await Promise.all([capture(pageA, 1, 'attempt-1-won'), capture(pageB, 2, 'attempt-1-won')]);
+  await Promise.all([capture(pageA, 1, 'attempt-2-won'), capture(pageB, 2, 'attempt-2-won')]);
 
   // One player may restart a terminal attempt. Restart clears transient attempt
   // state and readiness, so the next attempt cannot begin until both ready again.
@@ -452,7 +617,7 @@ try {
   const resetA = await waitForPhase(pageA, RoomPhase.LOBBY, 'reset lobby on client A');
   const resetB = await waitForPhase(pageB, RoomPhase.LOBBY, 'reset lobby on client B');
   for (const reset of [resetA, resetB]) {
-    assert.equal(reset.room.attempt, 2);
+    assert.equal(reset.room.attempt, 3);
     assert.equal(reset.room.readyPlayers, 0);
     assert.equal(reset.room.extractionPlayers, 0);
     assert.equal(reset.room.echoOpenedFinalDoor, false);
@@ -466,12 +631,12 @@ try {
   const waitingForB = await waitFor(pageA, (state) =>
     state.room?.phase === RoomPhase.LOBBY && state.room.readyPlayers === 1,
   'second attempt waiting for player B');
-  assert.equal(waitingForB.room.attempt, 2);
+  assert.equal(waitingForB.room.attempt, 3);
   await useVisibleControl(pageB, '#ready');
   const secondActiveA = await waitForPhase(pageA, RoomPhase.ACTIVE, 'second attempt on client A');
   const secondActiveB = await waitForPhase(pageB, RoomPhase.ACTIVE, 'second attempt on client B');
-  assert.equal(secondActiveA.room.attempt, 2);
-  assert.equal(secondActiveB.room.attempt, 2);
+  assert.equal(secondActiveA.room.attempt, 3);
+  assert.equal(secondActiveB.room.attempt, 3);
   assert.equal(secondActiveA.room.startedTick, secondActiveB.room.startedTick);
   assert(secondActiveA.room.startedTick > wonA.room.endedTick);
   evidence.events.push({
@@ -503,7 +668,7 @@ try {
   const failedB = await waitForPhase(pageB, RoomPhase.FAILED,
     'surveillance failure on client B');
   for (const failed of [failedA, failedB]) {
-    assert.equal(failed.room.attempt, 2);
+    assert.equal(failed.room.attempt, 3);
     assert.equal(failed.room.failureReason, FailureReason.SURVEILLANCE);
     assert.equal(failed.room.failureHazardId, 41);
     const camera = failed.hazards.find((hazard) => hazard.id === 41);
@@ -533,7 +698,6 @@ try {
   const frozenB = await waitFor(pageB,
     (state) => state.serverTick >= failedB.serverTick + 12,
     'post-failure frozen snapshot on client B');
-  const positions = (state) => state.players.map(({playerId, xMm, zMm}) => ({playerId, xMm, zMm}));
   assert.deepEqual(positions(frozenA), positions(failedA));
   assert.deepEqual(positions(frozenB), positions(failedB));
   assert.deepEqual(positions(frozenA), positions(frozenB));
@@ -544,8 +708,8 @@ try {
   });
 
   await Promise.all([
-    capture(pageA, 1, 'attempt-2-surveillance-failed'),
-    capture(pageB, 2, 'attempt-2-surveillance-failed'),
+    capture(pageA, 1, 'attempt-3-surveillance-failed'),
+    capture(pageB, 2, 'attempt-3-surveillance-failed'),
   ]);
 
   await useVisibleControl(pageB, '#restart', 'r');
@@ -554,7 +718,7 @@ try {
   const cleanLobbyB = await waitForPhase(pageB, RoomPhase.LOBBY,
     'clean lobby after surveillance failure on client B');
   for (const clean of [cleanLobbyA, cleanLobbyB]) {
-    assert.equal(clean.room.attempt, 3);
+    assert.equal(clean.room.attempt, 4);
     assert.equal(clean.room.readyPlayers, 0);
     assert.equal(clean.room.failureReason, FailureReason.UNSPECIFIED);
     assert.equal(clean.room.failureHazardId, 0);
@@ -573,15 +737,23 @@ try {
   evidence.finalSnapshot = cleanLobbyA;
   evidence.renderers = await Promise.all([pageA, pageB].map((page) => page.evaluate(() => window.th.rendererInfo())));
   evidence.errors = await Promise.all([pageA, pageB].map((page) => page.evaluate(() => window.th.errors())));
+  evidence.browserErrors = browserErrors;
   evidence.finalUi = await Promise.all([pageA, pageB].map(uiState));
   assert(evidence.renderers.every((renderer) => renderer?.backend === 'webgpu'));
   assert(evidence.renderers.every((renderer) => renderer?.adapter?.vendor));
   assert(wonA.echoes.some((echo) => echo.playerId === 1));
   assert(wonB.echoes.some((echo) => echo.playerId === 1));
   assert(evidence.errors.every((errors) => errors.length === 0));
-  await Promise.all([capture(pageA, 1, 'attempt-3-clean-lobby'), capture(pageB, 2, 'attempt-3-clean-lobby')]);
+  assert(browserErrors.every((errors) => errors.length === 0));
+  await Promise.all([capture(pageA, 1, 'attempt-4-clean-lobby'), capture(pageB, 2, 'attempt-4-clean-lobby')]);
   await writeFile(`${artifacts}/evidence.json`, `${JSON.stringify(evidence, null, 2)}\n`);
-  console.log(JSON.stringify({ event: 'p1-game-loop-passed', ...evidence }));
+  console.log(JSON.stringify({ event: 'p2-game-loop-passed', ...evidence }));
+} catch (error) {
+  evidence.failure = String(error);
+  evidence.lastSnapshots = await Promise.all(contexts.map((context) => snapshot(context.pages().at(-1))));
+  await writeFile(`${artifacts}/failure.json`, `${JSON.stringify(evidence, null, 2)}\n`);
+  console.error(JSON.stringify({ event: 'p2-acceptance-failed', ...evidence }));
+  throw error;
 } finally {
   await Promise.all(contexts.map((context) => context.close()));
 }
