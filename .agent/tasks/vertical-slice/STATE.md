@@ -23,11 +23,20 @@ Resumed by the user's explicit implementation request on 2026-09-22.
   Additional 11-second delayed fetch also PASSED for both clients.
 - Container-only infrastructure check passed. CI agentic-contract workflow now
   invokes the same container entry point; full game CI remains to be implemented.
-- Initial full-stack isolation is in progress in `/private/tmp/th-isolation-0922`
-  (project `th-isolation-0922`). Its private dependencies/native build passed.
-  Immutable relay image build from `containers/Relay.Dockerfile` is in progress.
-- Component worktrees prepared: `/private/tmp/th-sim-0922`, `/private/tmp/th-web-0922`.
-  They are in read-only preparation until isolation proof and contract freeze.
+- PASSED two-stack isolation: `th-spike-main-0922` and `th-isolation-0922`
+  concurrently ran relay + Rust process + web + two independent Chromium clients.
+  Network IDs were `d452dcfb...` and `3c4ed7f0...`; each had seven separately
+  prefixed writable volumes, distinct generated relay certificates and profiles,
+  zero published host ports. Both pairs passed WebTransport reply and group fetch.
+- PASSED teardown independence: deleting `th-spike-main-0922` with volumes left
+  all four isolation containers/network members running; its certificate endpoint
+  remained reachable. A fresh two-browser run then passed in the surviving stack.
+  Finally `th-isolation-0922` removed its own containers, network and volumes.
+  Reproducible harness/evidence: `spikes/isolation/`.
+- Frozen shared contract in `docs/CONTRACT_V1.md` after all initial spikes. Started
+  parallel component implementation in `/private/tmp/th-sim-0922`,
+  `/private/tmp/th-web-0922`, and `/private/tmp/th-authority-0922`, each with its own
+  run ID and private Compose resources.
 - Broad implementation and game acceptance remain NOT completed. The status below
   is historical unless superseded by this milestone.
 
