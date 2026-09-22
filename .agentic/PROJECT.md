@@ -9,6 +9,7 @@ lowercase run ID for every checkout or concurrent run. The stable entry points a
 sh container <run-id> bootstrap
 sh container <run-id> verify
 sh container <run-id> acceptance
+sh container <run-id> visual
 sh container <run-id> up -d relay authority web
 sh container <run-id> --profile test run --rm browser
 sh container <run-id> down --volumes --remove-orphans

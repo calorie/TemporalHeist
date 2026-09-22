@@ -199,6 +199,18 @@ The finalized entry points are `sh container <run-id> bootstrap`, `verify`, and
 `acceptance`. Raw Compose operations remain available after the run ID. Complete
 cleanup is `sh container <run-id> down --volumes --remove-orphans`.
 
+Manual visual inspection uses `sh container <run-id> visual`. It starts the private
+relay, authority, web service, and a container-owned Chromium, then prints a URL like
+`http://127.0.0.1:60448/json/list`. The port is allocated by the container runtime;
+it is not stable between runs. In desktop Chromium, open `chrome://inspect`, choose
+**Configure**, add the printed `127.0.0.1:<port>`, and inspect the game target.
+
+The remote-debugging client is the only host-side UI. Game execution, Chromium,
+its persistent profile, and WebGPU remain inside the run-ID Compose project. This
+surface provides DevTools inspection rather than a shared desktop; use automated
+screenshots for unattended evidence. Remove the stack and its profile with the
+standard `down --volumes --remove-orphans` command.
+
 ## CI
 
 CI invokes the same containerized commands.
