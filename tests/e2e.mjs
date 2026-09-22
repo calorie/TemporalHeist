@@ -419,8 +419,8 @@ try {
   // Approach from the cone's east side. Both waypoints remain outside the
   // triangle even when transport-delayed input overshoots, then one westward
   // command crosses the visible edge deterministically.
-  await moveTo(pageA, 1, 6500, 2500);
-  await moveTo(pageA, 1, 6500, 6000);
+  await moveTo(pageA, 1, 6750, 2500);
+  await moveTo(pageA, 1, 6750, 6000);
   await pageA.evaluate(() => window.th.move(-1, 0));
   const failedA = await waitForPhase(pageA, RoomPhase.FAILED,
     'surveillance failure on client A');
