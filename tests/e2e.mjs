@@ -123,6 +123,8 @@ async function capture(page, player, label) {
 async function moveTo(page, playerId, x, z, timeout = moveTimeout) {
   const deadline = Date.now() + timeout;
   let lastState;
+  let settledTicks = 0;
+  let lastSettledTick = -1;
   while (Date.now() < deadline) {
     const state = await snapshot(page);
     lastState = state;
@@ -139,8 +141,17 @@ async function moveTo(page, playerId, x, z, timeout = moveTimeout) {
     }
     if (pose && Math.abs(pose.xMm - x) <= 180 && Math.abs(pose.zMm - z) <= 180) {
       await page.evaluate(() => window.th.move(0, 0));
-      return state;
+      if (state.serverTick !== lastSettledTick) {
+        settledTicks += 1;
+        lastSettledTick = state.serverTick;
+      }
+      // Keep sending stop long enough for delayed input publications to drain.
+      if (settledTicks >= 10) return state;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      continue;
     }
+    settledTicks = 0;
+    lastSettledTick = -1;
     if (!pose) {
       await new Promise((resolve) => setTimeout(resolve, 50));
       continue;
