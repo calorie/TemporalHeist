@@ -3,7 +3,8 @@
 ## Status
 
 P1.1 is merged on `main` at `4b6f89a`. P1.2 is merged on `main` at `a0fa12e`.
-The P1.3 playability and presentation contract is frozen for implementation.
+P1.3 implementation and all local container verification are complete on
+`p1/playability-presentation`; PR publication and CI are next.
 
 ## Completed
 
@@ -29,6 +30,12 @@ The P1.3 playability and presentation contract is frozen for implementation.
   telegraphy/HUD, and two-client E2E in three isolated worktrees.
 - Integrated live-human detection, Echo immunity, terminal pose freezing,
   surveillance diagnostics, and clean restart to attempt 3.
+- Implemented P1.3 onboarding, visible controls, authority-tick Echo status,
+  phase/result feedback, blur-safe input, synthesized audio, and mute control.
+- Added raw WebGPU extraction and authoritative success/failure presentation.
+- Extended the two-client E2E to assert the human-facing UI and labeled evidence.
+- Split visual clients into separate Chromium services, profile volumes, and
+  ephemeral CDP endpoints after independent review found shared profile state.
 
 ## Verification
 
@@ -83,12 +90,24 @@ Passed in containers on 2026-09-22:
   and eight minutes respectively.
 - Audited P1.3 UI, renderer/audio, E2E, and visual workflows. Frozen a client-only
   boundary with no protocol, authority, simulation, or map-data changes.
+- `sh container p13-integrated-0922 acceptance`: both clients passed visible
+  readiness, three doors, exact 600-tick Echo timing, Echo-held final-door
+  crossing, extraction/win, surveillance failure, and restart to clean attempt 3.
+- Both acceptance clients reported raw WebGPU on Google SwiftShader fallback,
+  `rgba8unorm`, with empty browser/renderer error arrays.
+- `sh container p13-integrated-0922 visual`: separate A/B Chromium profiles and
+  ephemeral CDP endpoints each produced a labeled 1280x720 screenshot and
+  metadata with SwiftShader WebGPU and no page/renderer errors.
+- Final `sh container p13-integrated-0922 verify`: codegen consistency,
+  cross-language protocol, 25 Rust tests, rustfmt, clippy, TypeScript, Biome,
+  six browser test suites, Vite production build, and containerized Chromium
+  WebGPU/WGSL validation all passed. The probe used Mesa llvmpipe Vulkan with a
+  SwiftShader WebGPU adapter, `rgba8unorm`, and zero shader/validation errors.
 
 ## Current work
 
-1. Implement P1.3 UI/audio, raw WebGPU extraction presentation, and human-facing
-   E2E/visual evidence in isolated worktrees.
-2. Integrate, independently review, and run full container verification.
+1. Commit, push, open the P1.3 PR, and monitor container-only CI.
+2. After merge, begin P1.4 release-candidate verification.
 
 ## Blockers
 
@@ -96,4 +115,4 @@ None.
 
 ## Next action
 
-Commit the P1.3 presentation contract, then begin the parallel implementation wave.
+Publish the P1.3 PR and monitor its container-only CI.

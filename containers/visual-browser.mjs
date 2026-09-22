@@ -4,6 +4,8 @@ import net from 'node:net';
 
 const artifacts = `/artifacts/visual-${process.env.TH_AGENT_ID}`;
 const viewport = { width: 1280, height: 720 };
+const player = Number(process.env.TH_PLAYER_ID);
+if (![1, 2].includes(player)) throw new Error('TH_PLAYER_ID must be 1 or 2');
 
 await Promise.all(['SingletonLock', 'SingletonCookie', 'SingletonSocket']
   .map((name) => rm(`/browser-profile/${name}`, { force: true })));
@@ -38,29 +40,20 @@ const context = await chromium.launchPersistentContext('/browser-profile', {
   ],
 });
 
-const clients = [];
-for (const player of [1, 2]) {
-  const page = player === 1
-    ? context.pages()[0] ?? await context.newPage()
-    : await context.newPage();
-  const pageErrors = [];
-  page.on('pageerror', (error) => pageErrors.push(error.message));
-  await page.goto(`http://web:5173/?player=${player}&room=${process.env.TH_ROOM_ID}`);
-  await page.waitForFunction(() => window.th?.joined(), undefined, { timeout: 45_000 });
-  clients.push({ page, pageErrors, player });
-}
-
-await Promise.all(clients.map(({ page }) => page.waitForFunction(
+const page = context.pages()[0] ?? await context.newPage();
+const pageErrors = [];
+page.on('pageerror', (error) => pageErrors.push(error.message));
+await page.goto(`http://web:5173/?player=${player}&room=${process.env.TH_ROOM_ID}`);
+await page.waitForFunction(() => window.th?.joined(), undefined, { timeout: 45_000 });
+await page.waitForFunction(
   () => window.th?.snapshot()?.sessions.filter((session) => session.connected).length === 2,
   undefined,
   { timeout: 45_000 },
-)));
+);
 
-const captures = [];
-for (const { page, pageErrors, player } of clients) {
-  const file = `player-${player}-lobby.png`;
-  await page.screenshot({ path: `${artifacts}/${file}` });
-  captures.push(await page.evaluate(({ file, pageErrors, player }) => ({
+const file = `player-${player}-lobby.png`;
+await page.screenshot({ path: `${artifacts}/${file}` });
+const capture = await page.evaluate(({ file, pageErrors, player }) => ({
     file,
     player,
     title: document.title,
@@ -77,14 +70,13 @@ for (const { page, pageErrors, player } of clients) {
     },
     renderer: window.th.rendererInfo(),
     errors: [...pageErrors, ...window.th.errors()],
-  }), { file, pageErrors, player }));
-}
-await writeFile(`${artifacts}/metadata.json`, `${JSON.stringify({
+  }), { file, pageErrors, player });
+await writeFile(`${artifacts}/player-${player}-metadata.json`, `${JSON.stringify({
   agent: process.env.TH_AGENT_ID,
   room: process.env.TH_ROOM_ID,
-  captures,
+  capture,
 }, null, 2)}\n`);
-console.log(JSON.stringify({ event: 'visual-evidence-ready', artifacts, captures }));
+console.log(JSON.stringify({ event: 'visual-evidence-ready', artifacts, capture }));
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, async () => {

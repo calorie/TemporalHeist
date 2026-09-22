@@ -18,7 +18,9 @@ sh container <run-id> down --volumes --remove-orphans
 `container` also passes other arguments directly to Compose. It derives the Compose
 project, room, Buildx state, network, volumes, browser profiles and artifacts from
 the run ID. Only commands recorded as passed in the task `STATE.md` are verification
-evidence. Host commands may orchestrate Docker and Git only.
+evidence. The `visual` command starts player A and B as separate Chromium services
+with separate persistent profiles and ephemeral CDP ports. Host commands may
+orchestrate Docker and Git only.
 
 ## Dependency / toolchain
 

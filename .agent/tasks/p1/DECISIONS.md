@@ -80,3 +80,18 @@ Automated acceptance must exercise visible ready/restart controls and assert the
 human-facing UI; test-only state remains an oracle for deterministic movement and
 authority timing. Manual visual mode opens both player pages in containerized
 Chromium and preserves labeled evidence before stack cleanup.
+
+## 2026-09-23 — P1.3 browser isolation and E2E movement
+
+Run visual player A and B as separate Compose services. Each has its own
+persistent-profile volume and ephemeral CDP host port while sharing only the
+room data plane and read-only application inputs. The visual checker runs inside
+each browser container and requires its screenshot, metadata, raw WebGPU backend,
+adapter identity, and empty renderer/page error list.
+
+The browser E2E records plate occupancy long enough for cold software-GPU CI and
+moves the other player through the first two gates while live presence holds
+them. It reserves the final gate for the required proof: player B crosses while
+player A's exact 600-tick Echo supplies Presence. Camera detection approaches
+the cone laterally from an outside waypoint so delayed movement messages cannot
+trigger the terminal state before the assertion begins.
