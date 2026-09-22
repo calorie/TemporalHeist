@@ -24,6 +24,15 @@ worktree_b=$(cd "$worktree_b" && pwd -P)
 [ "$worktree_a" != "$worktree_b" ] || { echo 'Worktrees resolve to the same path' >&2; exit 2; }
 head_a=$(git -C "$worktree_a" rev-parse HEAD)
 head_b=$(git -C "$worktree_b" rev-parse HEAD)
+[ "$head_a" = "$head_b" ] || { echo 'Worktrees must be at the same revision' >&2; exit 2; }
+[ -z "$(git -C "$worktree_a" status --porcelain)" ] || {
+  echo 'Worktree A must be clean' >&2
+  exit 2
+}
+[ -z "$(git -C "$worktree_b" status --porcelain)" ] || {
+  echo 'Worktree B must be clean' >&2
+  exit 2
+}
 
 if [ -d /Applications/Docker.app/Contents/Resources/bin ]; then
   PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"

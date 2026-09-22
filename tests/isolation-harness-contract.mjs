@@ -20,6 +20,8 @@ assert.match(harness, /down --volumes --remove-orphans/);
 assert.match(harness, /fetch\('http:\/\/web:5173\/healthz'/);
 assert.match(harness, /evidence\.json/);
 assert.match(harness, /git -C "\$worktree_a" rev-parse HEAD/);
+assert.match(harness, /"\$head_a" = "\$head_b"/);
+assert.equal(harness.match(/status --porcelain/g)?.length, 2);
 assert.match(harness, /"worktrees": \[/);
 assert.match(harness, /"room_id": "\$run_a"/);
 assert.match(harness, /acceptance-a\.log/);
