@@ -2,8 +2,8 @@
 
 ## Status
 
-Design approved in conversation. Written design and task contract are ready for
-review before implementation planning.
+Design and written specification are approved. The implementation plan is complete
+and contract implementation is next.
 
 ## Completed
 
@@ -19,10 +19,9 @@ task state only.
 
 ## Blockers
 
-Written-spec review is the current process gate.
+None.
 
 ## Next action
 
-After written-spec approval, create the implementation plan, freeze the shared
-protocol/map contract, and begin isolated parallel component implementation.
-
+Implement and container-verify the shared protocol/map contract, commit the frozen
+boundary, then begin isolated parallel component implementation.

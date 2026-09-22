@@ -17,3 +17,8 @@ Human detection takes priority over Echo investigation on the same tick. Continu
 visibility of one Echo replay segment is deduplicated so it cannot hold the guard
 in an indefinitely refreshed state. Restart restores all guard state.
 
+Use a 30-tick Echo observation window keyed by source player and
+`source_tick / 30`. A continuous replay segment may update its last-seen position
+inside that window but cannot refresh the guard's state-entry or search-expiry tick.
+Use an optional protobuf `GuardTarget` message so a valid target on coordinate zero
+is distinguishable from the absence of an investigation target.
