@@ -949,7 +949,7 @@ fn move_toward(x: &mut i32, z: &mut i32, tx: i32, tz: i32, step: i32) -> bool {
     let distance = distance_squared.isqrt() as i64;
     *x += (dx * i64::from(step) / distance) as i32;
     *z += (dz * i64::from(step) / distance) as i32;
-    false
+    (*x, *z) == (tx, tz)
 }
 fn visible(
     origin: (i32, i32),
@@ -1561,6 +1561,16 @@ mod tests {
                 x,
                 z,
             });
+    }
+
+    #[test]
+    fn move_toward_reports_exact_diagonal_arrival() {
+        let (mut x, mut z) = (0, 0);
+
+        let arrived = move_toward(&mut x, &mut z, 20, 1, 20);
+
+        assert_eq!((x, z), (20, 1));
+        assert!(arrived);
     }
 
     #[test]

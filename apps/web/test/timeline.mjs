@@ -68,6 +68,23 @@ assert.deepEqual(guardTimeline.presentation(105).guards, [
   }),
 ]);
 
+const reorderedGuardTimeline = new Timeline();
+reorderedGuardTimeline.add(snapshot('reordered-guards', 100, [], [
+  guard({ id: 51, xMm: 100, zMm: 0 }),
+  guard({ id: 52, xMm: 1000, zMm: 1000 }),
+]));
+reorderedGuardTimeline.add(snapshot('reordered-guards', 110, [], [
+  guard({ id: 52, xMm: 1200, zMm: 1200 }),
+  guard({ id: 51, xMm: 300, zMm: 100 }),
+]));
+assert.deepEqual(
+  reorderedGuardTimeline.presentation(105).guards.map(({ id, xMm, zMm }) => ({ id, xMm, zMm })),
+  [
+    { id: 52, xMm: 1100, zMm: 1100 },
+    { id: 51, xMm: 200, zMm: 50 },
+  ],
+);
+
 const legacyTimeline = new Timeline();
 legacyTimeline.add(snapshot('legacy', 1, []));
 assert.deepEqual(legacyTimeline.presentation().guards, []);
