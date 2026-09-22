@@ -3,25 +3,21 @@
 ## Build / test / lint / typecheck
 
 Every project process runs in containers. From the repository root use a unique
-lowercase run ID for every checkout or concurrent run:
+lowercase run ID for every checkout or concurrent run. The stable entry points are:
 
 ```sh
-sh container <run-id> build dev
-sh container <run-id> run --rm dev npm ci
-sh container <run-id> run --rm dev sh containers/codegen.sh
-sh container <run-id> run --rm dev sh spikes/protocol/check.sh
-sh container <run-id> run --rm dev cargo fmt --all --check
-sh container <run-id> run --rm dev cargo clippy --workspace --all-targets -- -D warnings
-sh container <run-id> run --rm dev cargo test --workspace
-sh container <run-id> run --rm dev npx tsc -p apps/web/tsconfig.json
-sh container <run-id> run --rm dev npx biome check apps/web/src
-sh container <run-id> run --rm dev node spikes/gpu/test.mjs
+sh container <run-id> bootstrap
+sh container <run-id> verify
+sh container <run-id> acceptance
+sh container <run-id> up -d relay authority web
+sh container <run-id> --profile test run --rm browser
 sh container <run-id> down --volumes --remove-orphans
 ```
 
-Full game/E2E entry points are added and verified by the active vertical-slice task.
-Only commands recorded as passed in `.agent/tasks/vertical-slice/STATE.md` are
-verification evidence. Host commands may orchestrate Docker and Git only.
+`container` also passes other arguments directly to Compose. It derives the Compose
+project, room, Buildx state, network, volumes, browser profiles and artifacts from
+the run ID. Only commands recorded as passed in the task `STATE.md` are verification
+evidence. Host commands may orchestrate Docker and Git only.
 
 ## Dependency / toolchain
 

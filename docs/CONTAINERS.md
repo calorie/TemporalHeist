@@ -195,6 +195,10 @@ These names are illustrative. The implementation may use `make`, `just`, shell w
 
 Record the finalized commands in `.agentic/PROJECT.md`.
 
+The finalized entry points are `sh container <run-id> bootstrap`, `verify`, and
+`acceptance`. Raw Compose operations remain available after the run ID. Complete
+cleanup is `sh container <run-id> down --volumes --remove-orphans`.
+
 ## CI
 
 CI invokes the same containerized commands.

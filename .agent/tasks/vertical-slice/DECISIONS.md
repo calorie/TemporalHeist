@@ -147,6 +147,19 @@ JavaScript's maximum safe integer. P0 rejects values outside safe wire limits.
 Protocol major, epoch, session and per-kind input sequences define compatibility
 and idempotency; no zero/unknown input kind is interpreted as join.
 
+### A18 — Final replication and verification shape
+
+Authority simulation runs at 60 Hz and publishes independently decodable full
+snapshots at 20 Hz. E2E permits up to two ticks of observation latency at a Presence
+transition while still requiring every Echo pose to identify the exact canonical
+`source_tick = server_tick - 600`. Deterministic simulation tests own the exact
+per-tick `T + 600` assertion.
+
+The root `container` wrapper is the local and CI contract. `verify` runs all static,
+protocol, unit, and production-build checks. `acceptance` prebuilds authority into
+the run-private target volume before launching services, preventing a clean-cache
+compile from racing the browser join timeout.
+
 Codex may choose and later revise without asking the user:
 
 - exact workspace/package-manager layout;

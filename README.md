@@ -67,4 +67,17 @@ That scene, running through the real relay/authority/browser path and rendered w
 
 ## Status
 
-Design bootstrap is complete. Application code has not been bootstrapped yet; the active task is ready for Codex to begin implementation.
+The P0 vertical slice is implemented. Bootstrap and run every project command through
+the container wrapper:
+
+~~~sh
+sh container local bootstrap
+sh container local verify
+sh container local acceptance
+sh container local down --volumes --remove-orphans
+~~~
+
+`acceptance` runs a private relay, Rust authority, Vite server, and two containerized
+Chromium clients. It records JSON evidence and both client screenshots in that run's
+private `artifacts` volume. Use a different lowercase run ID for each checkout or
+concurrent stack.
