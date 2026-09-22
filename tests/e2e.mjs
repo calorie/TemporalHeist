@@ -8,6 +8,7 @@ const viewport = { width: 1280, height: 720 };
 const stateTimeout = 30_000;
 const moveTimeout = Number(process.env.TH_E2E_MOVE_TIMEOUT_MS ?? 45_000);
 const startDelay = Number(process.env.TH_E2E_START_DELAY_MS ?? 0);
+const movementAxis = 0.25;
 assert(Number.isSafeInteger(moveTimeout) && moveTimeout >= 45_000);
 assert(Number.isSafeInteger(startDelay) && startDelay >= 0);
 const flags = [
@@ -145,8 +146,8 @@ async function moveTo(page, playerId, x, z, timeout = moveTimeout) {
       await new Promise((resolve) => setTimeout(resolve, 50));
       continue;
     }
-    const dx = Math.abs(pose.xMm - x) <= 120 ? 0 : Math.sign(x - pose.xMm);
-    const dz = Math.abs(pose.zMm - z) <= 120 ? 0 : Math.sign(z - pose.zMm);
+    const dx = Math.abs(pose.xMm - x) <= 120 ? 0 : Math.sign(x - pose.xMm) * movementAxis;
+    const dz = Math.abs(pose.zMm - z) <= 120 ? 0 : Math.sign(z - pose.zMm) * movementAxis;
     await page.evaluate(([mx, mz]) => window.th.move(mx, mz), [dx, dz]);
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
@@ -175,8 +176,8 @@ async function occupyPlate(page, playerId, plateId, x, z, timeout = moveTimeout)
       if (consecutivePresence >= 10) return state;
     } else if (pose) {
       consecutivePresence = 0;
-      const dx = Math.abs(pose.xMm - x) <= 120 ? 0 : Math.sign(x - pose.xMm);
-      const dz = Math.abs(pose.zMm - z) <= 120 ? 0 : Math.sign(z - pose.zMm);
+      const dx = Math.abs(pose.xMm - x) <= 120 ? 0 : Math.sign(x - pose.xMm) * movementAxis;
+      const dz = Math.abs(pose.zMm - z) <= 120 ? 0 : Math.sign(z - pose.zMm) * movementAxis;
       await page.evaluate(([mx, mz]) => window.th.move(mx, mz), [dx, dz]);
     }
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -210,8 +211,8 @@ async function moveRightPast(page, playerId, x, z, timeout = moveTimeout) {
       return state;
     }
     if (pose) {
-      const dx = pose.xMm >= x ? 0 : 1;
-      const dz = Math.abs(pose.zMm - z) <= 120 ? 0 : Math.sign(z - pose.zMm);
+      const dx = pose.xMm >= x ? 0 : movementAxis;
+      const dz = Math.abs(pose.zMm - z) <= 120 ? 0 : Math.sign(z - pose.zMm) * movementAxis;
       await page.evaluate(([mx, mz]) => window.th.move(mx, mz), [dx, dz]);
     }
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -231,8 +232,8 @@ async function enterSurveillance(page, playerId, x, z, timeout = moveTimeout) {
     if (state?.room?.phase === RoomPhase.FAILED) return state;
     const pose = state?.players.find((candidate) => candidate.playerId === playerId);
     if (pose) {
-      const dx = Math.abs(pose.xMm - x) <= 120 ? 0 : Math.sign(x - pose.xMm);
-      const dz = Math.abs(pose.zMm - z) <= 120 ? 0 : Math.sign(z - pose.zMm);
+      const dx = Math.abs(pose.xMm - x) <= 120 ? 0 : Math.sign(x - pose.xMm) * movementAxis;
+      const dz = Math.abs(pose.zMm - z) <= 120 ? 0 : Math.sign(z - pose.zMm) * movementAxis;
       await page.evaluate(([mx, mz]) => window.th.move(mx, mz), [dx, dz]);
     }
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -275,7 +276,7 @@ async function recordEchoPlate(pageA, plateId, doorId, x, z, whileLive) {
   await waitFor(pageA, (state) => state.serverTick >= entered.serverTick + 1_200,
     `recording window on plate ${plateId}`, 25_000);
   if (whileLive) await whileLive();
-  await pageA.evaluate(() => window.th.move(-1, 0));
+  await pageA.evaluate((axis) => window.th.move(-axis, 0), movementAxis);
   const left = await waitFor(pageA,
     (state) => state.plates.find((plate) => plate.id === plateId)?.livePresence === 0,
     `live player release of plate ${plateId}`);
