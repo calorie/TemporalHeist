@@ -347,7 +347,7 @@ try {
   assert(beforePose, 'player 1 missing before reconnect');
   await pageA.evaluate(() => window.th.reconnect());
   await pageA.waitForFunction(() => window.th?.joined(), { timeout: 30000 });
-  await moveTo(pageA, 1, beforePose.xMm + 500, beforePose.zMm);
+  await moveRightPast(pageA, 1, beforePose.xMm + 500, beforePose.zMm);
   await waitFor(pageB,
     (state) => (state.players.find((player) => player.playerId === 1)?.xMm ?? 0) >= beforePose.xMm + 320,
     'client B observing player A after MoQ reconnect');
@@ -391,7 +391,7 @@ try {
   // Aim well inside extraction so the movement tolerance cannot accept a pose
   // before x=22800. The terminal-state branch handles authority's immediate
   // movement freeze once both players qualify.
-  await moveTo(pageA, 1, 23500, 4000);
+  await moveRightPast(pageA, 1, 23000, 4000);
   const wonA = await waitForPhase(pageA, RoomPhase.WON, 'won result on client A');
   const wonB = await waitForPhase(pageB, RoomPhase.WON, 'won result on client B');
   assert.equal(wonA.room.attempt, 1);
