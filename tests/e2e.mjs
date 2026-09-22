@@ -185,12 +185,14 @@ async function waitForPhase(page, phase, description, timeout = stateTimeout) {
 async function recordEchoPlate(pageA, plateId, doorId, x, z, whileLive) {
   const outside = await moveTo(pageA, 1, x - 1000, z);
   assert.equal(outside.plates.find((plate) => plate.id === plateId)?.active, false);
-  await pageA.evaluate(() => window.th.move(1, 0));
+  // Drive to the plate using authoritative position feedback. A single held
+  // input can skip across the trigger between sparse browser observations on
+  // a heavily contended software-GPU runner.
+  await moveTo(pageA, 1, x, z);
   const entered = await waitFor(pageA,
     (state) => state.plates.find((plate) => plate.id === plateId)?.livePresence > 0,
     `live presence on plate ${plateId}`);
   evidence.events.push({ event: 'live-plate', plateId, tick: entered.serverTick });
-  await moveTo(pageA, 1, x, z);
   // Record twenty seconds so a cold CI runner still observes a useful replay window.
   await waitFor(pageA, (state) => state.serverTick >= entered.serverTick + 1_200,
     `recording window on plate ${plateId}`, 25_000);
