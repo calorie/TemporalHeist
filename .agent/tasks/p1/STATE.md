@@ -2,8 +2,8 @@
 
 ## Status
 
-P1.1 is merged on `main` at `4b6f89a`. P1.2 surveillance implementation,
-independent review remediation, and integrated acceptance verification pass.
+P1.1 is merged on `main` at `4b6f89a`. P1.2 is merged on `main` at `a0fa12e`.
+The P1.3 playability and presentation contract is frozen for implementation.
 
 ## Completed
 
@@ -79,11 +79,16 @@ Passed in containers on 2026-09-22:
   Compose namespaces and superseded runs are cancelled. The failed serial run
   took 20m09s for components plus 9m02s for acceptance; expected wall time is
   now bounded by the slower parallel job rather than their sum.
+- PR #6 merged as `a0fa12e`; its parallel CI jobs passed in approximately four
+  and eight minutes respectively.
+- Audited P1.3 UI, renderer/audio, E2E, and visual workflows. Frozen a client-only
+  boundary with no protocol, authority, simulation, or map-data changes.
 
 ## Current work
 
-1. Push the PR #6 CI correction and monitor both parallel jobs.
-2. Begin P1.3 onboarding and presentation after integration.
+1. Implement P1.3 UI/audio, raw WebGPU extraction presentation, and human-facing
+   E2E/visual evidence in isolated worktrees.
+2. Integrate, independently review, and run full container verification.
 
 ## Blockers
 
@@ -91,4 +96,4 @@ None.
 
 ## Next action
 
-Push the CI correction and verify both PR #6 jobs pass.
+Commit the P1.3 presentation contract, then begin the parallel implementation wave.

@@ -67,3 +67,16 @@ with unique Compose namespaces. Both still invoke the repository `container`
 entry point and clean their own networks and volumes. Parallel jobs reduce wall
 time from the sum of two cold container builds to the slower job, and workflow
 concurrency cancels obsolete runs for superseded commits.
+
+## 2026-09-22 — P1.3 presentation boundary
+
+Keep P1.3 entirely client-side. Derive onboarding, the first-Echo countdown,
+feedback transitions, and extraction presentation from existing authoritative
+snapshots and facility geometry. Use the browser Web Audio API for short synthesized
+cues and raw WebGPU primitives for extraction and state feedback. Add no protocol,
+simulation, map-data, UI-framework, audio-file, or renderer-authority dependency.
+
+Automated acceptance must exercise visible ready/restart controls and assert the
+human-facing UI; test-only state remains an oracle for deterministic movement and
+authority timing. Manual visual mode opens both player pages in containerized
+Chromium and preserves labeled evidence before stack cleanup.
