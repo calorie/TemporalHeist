@@ -9,3 +9,4 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl git openssl mesa-vulkan-drivers \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /workspace
+RUN rustup component add rustfmt clippy

@@ -1,0 +1,8 @@
+services:
+  relay:
+    build: !reset null
+    image: temporal-heist-relay:0.14.18
+    init: true
+    volumes: !override
+      - ./spikes/transport/relay.toml:/config/relay.toml:ro
+    command: /config/relay.toml

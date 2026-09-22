@@ -1,0 +1,710 @@
+use serde::Deserialize;
+use std::collections::{BTreeMap, VecDeque};
+use th_protocol::{
+    AppliedAction, ECHO_DELAY_TICKS, HISTORY_TICKS, Input, InputKind, Mechanism, PROTOCOL_MAJOR,
+    Pose, Session, Snapshot,
+};
+
+const MOTION_TIMEOUT: u64 = 30;
+const SESSION_TIMEOUT: u64 = 300;
+const ACTION_LOG: u64 = 3_600;
+const ACTION_RANGE: i32 = 1_000;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Map {
+    bounds: Bounds,
+    radius: i32,
+    speed_per_tick: i32,
+    spawns: Vec<Spawn>,
+    walls: Vec<Rect>,
+    doors: Vec<Rect>,
+    plates: Vec<Plate>,
+    terminals: Vec<Terminal>,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Bounds {
+    min_x: i32,
+    max_x: i32,
+    min_z: i32,
+    max_z: i32,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Spawn {
+    player_id: u32,
+    x: i32,
+    z: i32,
+}
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Rect {
+    id: u32,
+    min_x: i32,
+    max_x: i32,
+    min_z: i32,
+    max_z: i32,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Plate {
+    id: u32,
+    door_id: u32,
+    x: i32,
+    z: i32,
+    radius: i32,
+    capability: Capability,
+}
+#[derive(Deserialize)]
+struct Terminal {
+    id: u32,
+    x: i32,
+    z: i32,
+    capability: Capability,
+}
+#[derive(Clone, Copy, Deserialize, PartialEq)]
+enum Capability {
+    None,
+    Presence,
+    Action,
+}
+
+#[derive(Default)]
+struct Marks {
+    join: Option<u64>,
+    motion: Option<u64>,
+    action: Option<u64>,
+    leave: Option<u64>,
+}
+impl Marks {
+    fn accept(&mut self, kind: InputKind, seq: u64) -> bool {
+        let mark = match kind {
+            InputKind::Join => &mut self.join,
+            InputKind::Motion => &mut self.motion,
+            InputKind::Action => &mut self.action,
+            InputKind::Leave => &mut self.leave,
+            InputKind::Unspecified => return false,
+        };
+        if mark.is_some_and(|old| seq <= old) {
+            return false;
+        }
+        *mark = Some(seq);
+        true
+    }
+}
+struct Player {
+    session: String,
+    connected: bool,
+    x: i32,
+    z: i32,
+    mx: i32,
+    mz: i32,
+    last_motion: u64,
+    last_input: u64,
+    marks: Marks,
+    history: VecDeque<History>,
+}
+#[derive(Clone, Copy)]
+struct History {
+    tick: u64,
+    x: i32,
+    z: i32,
+}
+struct Scheduled {
+    player_id: u32,
+    target_id: u32,
+    acceptance_tick: u64,
+}
+
+pub struct World {
+    epoch: String,
+    tick: u64,
+    map: Map,
+    players: BTreeMap<u32, Player>,
+    scheduled: BTreeMap<u64, Vec<Scheduled>>,
+    actions: VecDeque<AppliedAction>,
+    next_action_id: u64,
+    plates: Vec<Mechanism>,
+    doors: Vec<Mechanism>,
+}
+
+impl World {
+    pub fn new(epoch: String) -> Self {
+        let map: Map = serde_json::from_str(include_str!("../../../map/facility.json"))
+            .expect("valid facility map");
+        let plates = map
+            .plates
+            .iter()
+            .map(|p| Mechanism {
+                id: p.id,
+                ..Default::default()
+            })
+            .collect();
+        let doors = map
+            .doors
+            .iter()
+            .map(|d| Mechanism {
+                id: d.id,
+                ..Default::default()
+            })
+            .collect();
+        Self {
+            epoch,
+            tick: 0,
+            map,
+            players: BTreeMap::new(),
+            scheduled: BTreeMap::new(),
+            actions: VecDeque::new(),
+            next_action_id: 1,
+            plates,
+            doors,
+        }
+    }
+    pub fn step(&mut self, inputs: &[Input]) -> Snapshot {
+        self.tick += 1;
+        for input in inputs {
+            self.apply(input);
+        }
+        self.expire();
+        self.move_players();
+        self.commit_history();
+        self.replay_actions();
+        self.presence();
+        self.trim_actions();
+        self.snapshot()
+    }
+    pub fn snapshot(&self) -> Snapshot {
+        let players = self
+            .players
+            .iter()
+            .filter(|(_, p)| p.connected)
+            .map(|(&id, p)| Pose {
+                player_id: id,
+                x_mm: p.x,
+                z_mm: p.z,
+                source_tick: self.tick,
+                echo: false,
+            })
+            .collect();
+        let sessions = self
+            .players
+            .iter()
+            .map(|(&id, p)| Session {
+                player_id: id,
+                session_id: p.session.clone(),
+                connected: p.connected,
+            })
+            .collect();
+        Snapshot {
+            protocol_major: PROTOCOL_MAJOR,
+            room_epoch: self.epoch.clone(),
+            server_tick: self.tick,
+            players,
+            echoes: self.echoes(),
+            plates: self.plates.clone(),
+            doors: self.doors.clone(),
+            actions: self.actions.iter().cloned().collect(),
+            sessions,
+        }
+    }
+    fn apply(&mut self, i: &Input) {
+        if i.protocol_major != PROTOCOL_MAJOR
+            || i.room_epoch != self.epoch
+            || !(1..=2).contains(&i.player_id)
+            || i.session_id.is_empty()
+        {
+            return;
+        }
+        let Ok(kind) = InputKind::try_from(i.kind) else {
+            return;
+        };
+        if kind == InputKind::Unspecified {
+            return;
+        }
+        if kind == InputKind::Join {
+            self.join(i);
+            return;
+        }
+        let Some(p) = self.players.get_mut(&i.player_id) else {
+            return;
+        };
+        if !p.connected || p.session != i.session_id || !p.marks.accept(kind, i.sequence) {
+            return;
+        }
+        match kind {
+            InputKind::Motion
+                if (-1000..=1000).contains(&i.move_x) && (-1000..=1000).contains(&i.move_z) =>
+            {
+                p.mx = i.move_x;
+                p.mz = i.move_z;
+                p.last_motion = self.tick;
+                p.last_input = self.tick;
+            }
+            InputKind::Action => {
+                p.last_input = self.tick;
+                self.accept_action(i.player_id, i.target_id);
+            }
+            InputKind::Leave => {
+                p.last_input = self.tick;
+                p.connected = false;
+                p.mx = 0;
+                p.mz = 0;
+            }
+            _ => {}
+        }
+    }
+    fn join(&mut self, i: &Input) {
+        if let Some(p) = self.players.get_mut(&i.player_id) {
+            if p.session == i.session_id {
+                if p.marks.accept(InputKind::Join, i.sequence) {
+                    p.connected = true;
+                    p.last_input = self.tick;
+                }
+                return;
+            }
+            if p.connected {
+                return;
+            }
+        }
+        let Some(s) = self.map.spawns.iter().find(|s| s.player_id == i.player_id) else {
+            return;
+        };
+        let mut marks = Marks::default();
+        marks.accept(InputKind::Join, i.sequence);
+        self.players.insert(
+            i.player_id,
+            Player {
+                session: i.session_id.clone(),
+                connected: true,
+                x: s.x,
+                z: s.z,
+                mx: 0,
+                mz: 0,
+                last_motion: self.tick,
+                last_input: self.tick,
+                marks,
+                history: VecDeque::with_capacity(HISTORY_TICKS),
+            },
+        );
+    }
+    fn accept_action(&mut self, player_id: u32, target_id: u32) {
+        let Some(p) = self.players.get(&player_id) else {
+            return;
+        };
+        let Some(t) = self.map.terminals.iter().find(|t| t.id == target_id) else {
+            return;
+        };
+        let dx = i64::from(p.x - t.x);
+        let dz = i64::from(p.z - t.z);
+        if dx * dx + dz * dz > i64::from(ACTION_RANGE).pow(2) {
+            return;
+        }
+        let capable = t.capability == Capability::Action;
+        self.push_action(player_id, target_id, self.tick, capable, false);
+        if capable {
+            self.scheduled
+                .entry(self.tick + ECHO_DELAY_TICKS)
+                .or_default()
+                .push(Scheduled {
+                    player_id,
+                    target_id,
+                    acceptance_tick: self.tick,
+                });
+        }
+    }
+    fn push_action(
+        &mut self,
+        player_id: u32,
+        target_id: u32,
+        acceptance_tick: u64,
+        echo_capable: bool,
+        echo_pulse: bool,
+    ) {
+        self.actions.push_back(AppliedAction {
+            id: self.next_action_id,
+            player_id,
+            target_id,
+            acceptance_tick,
+            echo_capable,
+            echo_pulse,
+        });
+        self.next_action_id += 1;
+    }
+    fn replay_actions(&mut self) {
+        for a in self.scheduled.remove(&self.tick).unwrap_or_default() {
+            if self
+                .map
+                .terminals
+                .iter()
+                .any(|t| t.id == a.target_id && t.capability == Capability::Action)
+            {
+                self.push_action(a.player_id, a.target_id, a.acceptance_tick, true, true)
+            }
+        }
+    }
+    fn expire(&mut self) {
+        for p in self.players.values_mut().filter(|p| p.connected) {
+            if self.tick.saturating_sub(p.last_motion) >= MOTION_TIMEOUT {
+                p.mx = 0;
+                p.mz = 0
+            }
+            if self.tick.saturating_sub(p.last_input) >= SESSION_TIMEOUT {
+                p.connected = false;
+                p.mx = 0;
+                p.mz = 0
+            }
+        }
+    }
+    fn move_players(&mut self) {
+        let closed: Vec<Rect> = self
+            .map
+            .doors
+            .iter()
+            .copied()
+            .filter(|d| !self.doors.iter().any(|s| s.id == d.id && s.active))
+            .collect();
+        for p in self.players.values_mut().filter(|p| p.connected) {
+            let dx = p.mx * self.map.speed_per_tick / 1000;
+            let dz = p.mz * self.map.speed_per_tick / 1000;
+            if !collides(&self.map, &closed, p.x + dx, p.z) {
+                p.x += dx
+            }
+            if !collides(&self.map, &closed, p.x, p.z + dz) {
+                p.z += dz
+            }
+        }
+    }
+    fn commit_history(&mut self) {
+        for p in self.players.values_mut().filter(|p| p.connected) {
+            p.history.push_back(History {
+                tick: self.tick,
+                x: p.x,
+                z: p.z,
+            });
+            while p.history.len() > HISTORY_TICKS {
+                p.history.pop_front();
+            }
+        }
+    }
+    fn echoes(&self) -> Vec<Pose> {
+        let Some(source) = self.tick.checked_sub(ECHO_DELAY_TICKS) else {
+            return vec![];
+        };
+        self.players
+            .iter()
+            .filter(|(_, p)| p.connected)
+            .filter_map(|(&id, p)| {
+                p.history.iter().find(|h| h.tick == source).map(|h| Pose {
+                    player_id: id,
+                    x_mm: h.x,
+                    z_mm: h.z,
+                    source_tick: source,
+                    echo: true,
+                })
+            })
+            .collect()
+    }
+    fn presence(&mut self) {
+        let live: Vec<_> = self
+            .players
+            .values()
+            .filter(|p| p.connected)
+            .map(|p| (p.x, p.z))
+            .collect();
+        let echoes: Vec<_> = self.echoes().iter().map(|p| (p.x_mm, p.z_mm)).collect();
+        for (plate, state) in self.map.plates.iter().zip(&mut self.plates) {
+            state.live_presence = live
+                .iter()
+                .filter(|&&(x, z)| inside(x, z, plate.x, plate.z, plate.radius))
+                .count() as u32;
+            state.echo_presence = if plate.capability == Capability::Presence {
+                echoes
+                    .iter()
+                    .filter(|&&(x, z)| inside(x, z, plate.x, plate.z, plate.radius))
+                    .count() as u32
+            } else {
+                0
+            };
+            state.active = state.live_presence + state.echo_presence > 0;
+        }
+        for door in &mut self.doors {
+            let (l, e) = self
+                .map
+                .plates
+                .iter()
+                .zip(&self.plates)
+                .filter(|(p, _)| p.door_id == door.id)
+                .fold((0, 0), |(l, e), (_, p)| {
+                    (l + p.live_presence, e + p.echo_presence)
+                });
+            door.live_presence = l;
+            door.echo_presence = e;
+            door.active = l + e > 0;
+        }
+    }
+    fn trim_actions(&mut self) {
+        while self
+            .actions
+            .front()
+            .is_some_and(|a| self.tick.saturating_sub(a.acceptance_tick) > ACTION_LOG)
+        {
+            self.actions.pop_front();
+        }
+    }
+}
+fn collides(map: &Map, doors: &[Rect], x: i32, z: i32) -> bool {
+    let r = map.radius;
+    if x - r < map.bounds.min_x
+        || x + r > map.bounds.max_x
+        || z - r < map.bounds.min_z
+        || z + r > map.bounds.max_z
+    {
+        return true;
+    }
+    map.walls.iter().chain(doors).any(|b| {
+        let dx = i64::from(x - x.clamp(b.min_x, b.max_x));
+        let dz = i64::from(z - z.clamp(b.min_z, b.max_z));
+        dx * dx + dz * dz < i64::from(r).pow(2)
+    })
+}
+fn inside(x: i32, z: i32, cx: i32, cz: i32, r: i32) -> bool {
+    let dx = i64::from(x - cx);
+    let dz = i64::from(z - cz);
+    dx * dx + dz * dz <= i64::from(r).pow(2)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use prost::Message;
+
+    fn input(kind: InputKind, seq: u64) -> Input {
+        Input {
+            protocol_major: PROTOCOL_MAJOR,
+            room_epoch: "e".into(),
+            player_id: 1,
+            session_id: "a".into(),
+            sequence: seq,
+            kind: kind as i32,
+            ..Default::default()
+        }
+    }
+    fn join(w: &mut World) {
+        w.step(&[input(InputKind::Join, 1)]);
+    }
+    fn until(w: &mut World, t: u64) -> Snapshot {
+        while w.tick < t {
+            w.step(&[]);
+        }
+        w.snapshot()
+    }
+    fn until_alive(w: &mut World, t: u64) -> Snapshot {
+        let mut seq = 2;
+        while w.tick < t {
+            if w.tick.is_multiple_of(100) {
+                w.step(&[input(InputKind::Join, seq)]);
+                seq += 1
+            } else {
+                w.step(&[]);
+            }
+        }
+        w.snapshot()
+    }
+    fn pose(s: &Snapshot) -> &Pose {
+        s.players.iter().find(|p| p.player_id == 1).unwrap()
+    }
+
+    #[test]
+    fn closed_door_blocks_human() {
+        let mut w = World::new("e".into());
+        join(&mut w);
+        {
+            let p = w.players.get_mut(&1).unwrap();
+            p.x = 6700;
+            p.z = 4000;
+        }
+        let mut m = input(InputKind::Motion, 1);
+        m.move_x = 1000;
+        for seq in 1..20 {
+            m.sequence = seq;
+            w.step(&[m.clone()]);
+        }
+        assert_eq!(pose(&w.snapshot()).x_mm, 6700);
+    }
+
+    #[test]
+    fn live_then_echo_presence_opens_door_and_echo_pose_ignores_current_collision() {
+        let mut w = World::new("e".into());
+        join(&mut w);
+        {
+            let p = w.players.get_mut(&1).unwrap();
+            p.x = 4500;
+            p.z = 2500;
+        }
+        let live = w.step(&[]);
+        let t = live.server_tick;
+        assert!(live.plates.iter().find(|p| p.id == 21).unwrap().active);
+        assert!(live.doors.iter().find(|d| d.id == 11).unwrap().active);
+        {
+            let p = w.players.get_mut(&1).unwrap();
+            p.x = 8000;
+            p.z = 2500;
+        }
+        let echo = until_alive(&mut w, t + ECHO_DELAY_TICKS);
+        let p = echo.echoes.iter().find(|p| p.player_id == 1).unwrap();
+        assert_eq!((p.x_mm, p.z_mm, p.source_tick), (4500, 2500, t));
+        assert_eq!(
+            echo.plates
+                .iter()
+                .find(|p| p.id == 21)
+                .unwrap()
+                .echo_presence,
+            1
+        );
+        assert!(echo.doors.iter().find(|d| d.id == 11).unwrap().active);
+        w.doors.iter_mut().find(|d| d.id == 11).unwrap().active = false;
+        assert_eq!(w.echoes()[0].x_mm, 4500);
+    }
+
+    #[test]
+    fn echo_historical_pose_inside_a_now_closed_door_is_not_redirected() {
+        let mut w = World::new("e".into());
+        join(&mut w);
+        {
+            let p = w.players.get_mut(&1).unwrap();
+            p.x = 7200;
+            p.z = 4000;
+        }
+        let source_tick = w.step(&[]).server_tick;
+        {
+            let p = w.players.get_mut(&1).unwrap();
+            p.x = 8000;
+            p.z = 4000;
+        }
+        let snapshot = until_alive(&mut w, source_tick + ECHO_DELAY_TICKS);
+        let echo = snapshot.echoes.iter().find(|p| p.player_id == 1).unwrap();
+        assert_eq!((echo.x_mm, echo.z_mm), (7200, 4000));
+        assert!(!snapshot.doors.iter().find(|d| d.id == 11).unwrap().active);
+    }
+
+    #[test]
+    fn echo_action_is_once_nonrecursive_and_none_has_no_echo_effect() {
+        let mut w = World::new("e".into());
+        join(&mut w);
+        {
+            let p = w.players.get_mut(&1).unwrap();
+            p.x = 2500;
+            p.z = 6000;
+        }
+        let mut a = input(InputKind::Action, 1);
+        a.target_id = 31;
+        let t = w.step(&[a.clone(), a.clone()]).server_tick;
+        assert_eq!(w.actions.len(), 1);
+        until(&mut w, t + 600);
+        assert_eq!(w.actions.iter().filter(|a| a.echo_pulse).count(), 1);
+        until(&mut w, t + 1200);
+        assert_eq!(w.actions.iter().filter(|a| a.echo_pulse).count(), 1);
+        {
+            let p = w.players.get_mut(&1).unwrap();
+            p.x = 3500;
+            p.z = 6000;
+        }
+        a.sequence = 2;
+        a.target_id = 32;
+        let n = w.step(&[a]).server_tick;
+        until(&mut w, n + 600);
+        assert!(!w.actions.iter().any(|a| a.target_id == 32 && a.echo_pulse));
+    }
+
+    #[test]
+    fn validation_watermarks_and_independent_snapshot_boundary() {
+        let mut w = World::new("e".into());
+        let mut bad = input(InputKind::Join, 1);
+        bad.room_epoch = "old".into();
+        w.step(&[bad]);
+        let mut bad = input(InputKind::Join, 1);
+        bad.protocol_major = 2;
+        w.step(&[bad]);
+        assert!(w.snapshot().players.is_empty());
+        join(&mut w);
+        let mut m = input(InputKind::Motion, 1);
+        m.move_x = 1001;
+        let x = pose(&w.step(&[m])).x_mm;
+        assert_eq!(pose(&w.step(&[])).x_mm, x);
+        {
+            let p = w.players.get_mut(&1).unwrap();
+            p.x = 2500;
+            p.z = 6000;
+        }
+        let mut a = input(InputKind::Action, 4);
+        a.target_id = 999;
+        w.step(&[a.clone()]);
+        a.target_id = 31;
+        w.step(&[a]);
+        assert!(w.actions.is_empty());
+        let mut m = input(InputKind::Motion, 2);
+        m.move_x = 1000;
+        let mut a = input(InputKind::Action, 5);
+        a.target_id = 31;
+        let s = w.step(&[m, a]);
+        assert_eq!(s.actions.len(), 1);
+        assert_eq!(Snapshot::decode(s.encode_to_vec().as_slice()).unwrap(), s);
+    }
+
+    #[test]
+    fn disconnect_lifecycle_keeps_scheduled_action_and_new_session_has_no_history() {
+        let mut w = World::new("e".into());
+        join(&mut w);
+        {
+            let p = w.players.get_mut(&1).unwrap();
+            p.x = 2500;
+            p.z = 6000;
+        }
+        let mut a = input(InputKind::Action, 1);
+        a.target_id = 31;
+        let t = w.step(&[a]).server_tick;
+        let left = w.step(&[input(InputKind::Leave, 1)]);
+        assert!(left.players.is_empty() && left.echoes.is_empty() && !left.sessions[0].connected);
+        until(&mut w, t + 600);
+        assert_eq!(w.actions.iter().filter(|a| a.echo_pulse).count(), 1);
+        let same = w.step(&[input(InputKind::Join, 2)]);
+        assert!(same.sessions[0].connected);
+        w.step(&[input(InputKind::Leave, 2)]);
+        let mut replacement = input(InputKind::Join, 1);
+        replacement.session_id = "b".into();
+        let replaced = w.step(&[replacement]);
+        assert_eq!(replaced.sessions[0].session_id, "b");
+        assert!(w.players.get(&1).unwrap().history.len() <= 1);
+    }
+
+    #[test]
+    fn motion_and_session_expire_on_contract_boundaries_and_plate23_counts_are_exposed() {
+        let mut w = World::new("e".into());
+        join(&mut w);
+        let mut m = input(InputKind::Motion, 1);
+        m.move_x = 1000;
+        let t = w.step(&[m]).server_tick;
+        until(&mut w, t + MOTION_TIMEOUT);
+        let x = pose(&w.snapshot()).x_mm;
+        assert_eq!(pose(&w.step(&[])).x_mm, x);
+        until(&mut w, t + SESSION_TIMEOUT);
+        assert!(w.snapshot().players.is_empty());
+        let mut w = World::new("e".into());
+        join(&mut w);
+        {
+            let p = w.players.get_mut(&1).unwrap();
+            p.x = 19500;
+            p.z = 2500;
+        }
+        let s = w.step(&[]);
+        assert_eq!(
+            s.plates.iter().find(|p| p.id == 23).unwrap().live_presence,
+            1
+        );
+        assert_eq!(
+            s.doors.iter().find(|d| d.id == 13).unwrap().live_presence,
+            1
+        );
+    }
+}

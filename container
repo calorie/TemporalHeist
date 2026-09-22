@@ -12,4 +12,31 @@ if [ -d /Applications/Docker.app/Contents/Resources/bin ]; then
 fi
 TH_AGENT_ID="$agent_id"
 export TH_AGENT_ID
-exec docker compose --project-name "th-$agent_id" --file compose.yaml "$@"
+BUILDX_CONFIG=${BUILDX_CONFIG:-/tmp/th-buildx-$agent_id}
+export BUILDX_CONFIG
+mkdir -p "$BUILDX_CONFIG"
+
+compose() {
+  docker compose --project-name "th-$agent_id" --file compose.yaml "$@"
+}
+
+command=${1:-}
+case "$command" in
+  bootstrap)
+    compose build dev relay
+    compose run --rm dev npm ci
+    ;;
+  verify)
+    compose build dev
+    compose run --rm dev npm ci
+    compose run --rm dev sh containers/verify.sh
+    ;;
+  acceptance)
+    compose build dev relay
+    compose run --rm dev npm ci
+    compose run --rm dev cargo build --locked -p th-authority
+    compose up -d relay authority web
+    compose --profile test run --rm browser
+    ;;
+  *) exec docker compose --project-name "th-$agent_id" --file compose.yaml "$@" ;;
+esac

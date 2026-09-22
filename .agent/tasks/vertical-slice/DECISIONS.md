@@ -122,6 +122,59 @@ Automated tests must not require fixed host ports or hard-coded container names.
 
 ## Reversible choices delegated to Codex
 
+### A15 — Verified transport and browser baseline
+
+Selected `@moq/net` 0.3.5, `moq-net` 0.2.22, `moq-native` 0.19.19 and
+`moq-relay` 0.14.18. The container spike verified WebTransport with `moq-lite-05`,
+two concurrent browser publishers, Rust replies, and real group fetch. Explicit
+30-second track/subscriber latency is required instead of the five-second default.
+Use bounded authority-origin history bootstrap for gameplay late join so correctness
+does not rely on relay retention. Keep protocol types outside transport adapters.
+
+### A16 — Software WebGPU validation
+
+Full containerized Chromium 153.0.8010.12 from Playwright 1.63.0 initializes a
+Google SwiftShader fallback WebGPU adapter. Explicit ANGLE/Vulkan/SwiftShader
+flags are recorded in `spikes/gpu/test.mjs`; WGSL compilation, GPU pixel readback
+and validation checks pass. The compositor separately reports Mesa llvmpipe.
+No host browser or GPU-derived authority is used.
+
+### A17 — Generated protocol bindings
+
+Use prost/prost-build 0.14.4 for Rust and ts-proto 2.12.4 for TypeScript, generated
+from one protobuf schema. Container compatibility test includes negative axes and
+JavaScript's maximum safe integer. P0 rejects values outside safe wire limits.
+Protocol major, epoch, session and per-kind input sequences define compatibility
+and idempotency; no zero/unknown input kind is interpreted as join.
+
+### A18 — Final replication and verification shape
+
+Authority simulation runs at 60 Hz and publishes independently decodable full
+snapshots at 20 Hz. E2E permits up to two ticks of observation latency at a Presence
+transition while still requiring every Echo pose to identify the exact canonical
+`source_tick = server_tick - 600`. Deterministic simulation tests own the exact
+per-tick `T + 600` assertion.
+
+The root `container` wrapper is the local and CI contract. `verify` runs all static,
+protocol, unit, and production-build checks. `acceptance` prebuilds authority into
+the run-private target volume before launching services, preventing a clean-cache
+compile from racing the browser join timeout.
+
+Each authority input subscription carries the player identity derived from its MoQ
+broadcast path. The adapter rejects frames whose protobuf `player_id` differs before
+they reach simulation. Session IDs remain replicated correlation values so a client
+can distinguish its accepted Join; they are not authentication credentials. Relay
+authorization and hostile-client authentication remain outside P0.
+
+The authority loop gives a ready simulation tick priority over input receipt and caps
+pending decoded frames at 1024 between ticks. Excess frames are rejected and logged;
+canonical room time cannot be starved by a continuously ready publisher.
+
+Replication handoff is nonblocking. When its bounded channel is full, the authority
+drops and logs that replication frame instead of delaying simulation; later full
+snapshots and authority-origin history restore client state. A closed consumer ends
+the room process normally.
+
 Codex may choose and later revise without asking the user:
 
 - exact workspace/package-manager layout;

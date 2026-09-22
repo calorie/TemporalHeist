@@ -1,0 +1,21 @@
+{
+  "agent": "isolation-0922",
+  "started": "2026-09-22T08:11:00.062Z",
+  "ended": "2026-09-22T08:11:01.175Z",
+  "results": [
+    {
+      "id": "1",
+      "transport": "webtransport",
+      "version": "moq-lite-05",
+      "payload": "rust-to-browser",
+      "fetched": "rust-to-browser"
+    },
+    {
+      "id": "2",
+      "transport": "webtransport",
+      "version": "moq-lite-05",
+      "payload": "rust-to-browser",
+      "fetched": "rust-to-browser"
+    }
+  ]
+}

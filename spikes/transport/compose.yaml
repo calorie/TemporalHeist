@@ -1,5 +1,8 @@
 services:
   relay:
+    build:
+      dockerfile: containers/Dockerfile
+    entrypoint: []
     extends:
       file: compose.yaml
       service: dev
