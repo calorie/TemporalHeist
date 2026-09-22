@@ -37,12 +37,14 @@ sh container <run-id> down --volumes --remove-orphans
 
 - `sh container final-verify verify` passed from an isolated fresh namespace:
   deterministic code generation, TS→Rust→TS protobuf vectors, rustfmt, workspace
-  clippy with warnings denied, 11 Rust tests, TypeScript typecheck, Biome, timeline
+  clippy with warnings denied, 12 Rust tests, TypeScript typecheck, Biome, timeline
   tests, and Vite production build.
 - Simulation tests cover closed-door collision, collision-independent historical Echo
   poses, live and Echo Presence, exact `T + 600` Action/Presence behavior, single
   Action pulse, no Echo recursion, None targets, stale epoch/session rejection,
   per-kind duplicate sequence rejection, timeouts and independent snapshot decoding.
+- Authority input adapters bind each MoQ input path to its expected player ID and
+  reject a payload that claims another player, including forged high sequences.
 - Integrated two-client E2E passed all three plate/door pairs at the 600-tick canonical
   offset. B crossed door 13, both clients received the same authoritative outcome,
   and both WebGPU renderers reported no transport or GPU errors.

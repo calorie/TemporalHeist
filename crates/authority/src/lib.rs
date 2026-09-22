@@ -102,6 +102,17 @@ pub fn decode_input(bytes: &[u8]) -> anyhow::Result<Input> {
     Input::decode(bytes).map_err(Into::into)
 }
 
+pub fn decode_input_for_player(bytes: &[u8], expected_player_id: u32) -> anyhow::Result<Input> {
+    let input = decode_input(bytes)?;
+    if input.player_id != expected_player_id {
+        anyhow::bail!(
+            "player track {expected_player_id} rejected payload for player {}",
+            input.player_id
+        );
+    }
+    Ok(input)
+}
+
 pub fn encode_snapshot(snapshot: &Snapshot) -> Vec<u8> {
     snapshot.encode_to_vec()
 }
@@ -206,6 +217,24 @@ mod tests {
     #[test]
     fn oversized_input_is_rejected_before_decode() {
         assert!(decode_input(&vec![0; MAX_INPUT_BYTES + 1]).is_err());
+    }
+
+    #[test]
+    fn player_track_rejects_a_payload_claiming_another_player() {
+        let forged = Input {
+            protocol_major: PROTOCOL_MAJOR,
+            room_epoch: "epoch-test".into(),
+            player_id: 2,
+            session_id: "stolen-session".into(),
+            sequence: u64::MAX,
+            move_x: 1000,
+            move_z: 0,
+            kind: InputKind::Motion as i32,
+            target_id: 0,
+        }
+        .encode_to_vec();
+        assert!(decode_input_for_player(&forged, 1).is_err());
+        assert_eq!(decode_input_for_player(&forged, 2).unwrap().player_id, 2);
     }
 
     #[test]

@@ -160,6 +160,12 @@ protocol, unit, and production-build checks. `acceptance` prebuilds authority in
 the run-private target volume before launching services, preventing a clean-cache
 compile from racing the browser join timeout.
 
+Each authority input subscription carries the player identity derived from its MoQ
+broadcast path. The adapter rejects frames whose protobuf `player_id` differs before
+they reach simulation. Session IDs remain replicated correlation values so a client
+can distinguish its accepted Join; they are not authentication credentials. Relay
+authorization and hostile-client authentication remain outside P0.
+
 Codex may choose and later revise without asking the user:
 
 - exact workspace/package-manager layout;

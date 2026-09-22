@@ -5,8 +5,8 @@ use moq_net::track::{Info, Subscription};
 use tokio::sync::mpsc;
 
 use th_authority::{
-    GROUP_INTERVAL_TICKS, PublishedTick, TRACK_RETENTION, TrackNames, encode_history,
-    encode_snapshot,
+    GROUP_INTERVAL_TICKS, PublishedTick, TRACK_RETENTION, TrackNames, decode_input_for_player,
+    encode_history, encode_snapshot,
 };
 
 pub async fn run(
@@ -43,12 +43,13 @@ pub async fn run(
         .context("create history track")?;
 
     let mut readers = tokio::task::JoinSet::new();
-    for player in names.player_inputs {
+    for (index, player) in names.player_inputs.into_iter().enumerate() {
         for track in [player.motion, player.actions] {
             readers.spawn(read_track(
                 incoming.clone(),
                 player.broadcast.clone(),
                 track,
+                index as u32 + 1,
                 input_tx.clone(),
             ));
         }
@@ -92,6 +93,7 @@ async fn read_track(
     incoming: moq_net::origin::Producer,
     broadcast_path: String,
     track_name: &'static str,
+    expected_player_id: u32,
     input_tx: mpsc::Sender<Vec<u8>>,
 ) -> anyhow::Result<()> {
     let broadcast = incoming
@@ -115,6 +117,15 @@ async fn read_track(
     );
     while let Some(mut group) = subscription.recv_group().await? {
         while let Some(frame) = group.read_frame().await? {
+            if let Err(error) = decode_input_for_player(&frame.payload, expected_player_id) {
+                tracing::warn!(
+                    error = %error,
+                    broadcast = broadcast_path,
+                    track = track_name,
+                    "rejected input on mismatched player track"
+                );
+                continue;
+            }
             input_tx
                 .send(frame.payload.to_vec())
                 .await
