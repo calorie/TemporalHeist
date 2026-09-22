@@ -2,8 +2,8 @@
 
 ## Status
 
-P1.1 implementation and integrated verification pass. Independent review is in
-progress before the branch is published. P1.2 stealth pressure is next.
+P1.1 is implemented, independently reviewed, and published as PR #5. Local and
+GitHub container verification pass. P1.2 stealth pressure is next.
 
 ## Completed
 
@@ -19,6 +19,9 @@ progress before the branch is published. P1.2 stealth pressure is next.
   and two-client E2E in three isolated worktrees.
 - Integrated lobby, ready, active, won, failed, restart, attempt timing, Echo
   proof, extraction, and inactive-phase gameplay freezing.
+- Independent review found a lobby pre-positioning bypass. ACTIVE-only gameplay
+  advancement and clearing held lobby motion fixed it with regression coverage.
+- Published `p1/game-loop-foundation` as PR #5.
 
 ## Verification
 
@@ -37,12 +40,13 @@ Passed in containers on 2026-09-22:
   both-player extraction, won, restart/reset, and second active attempt.
 - Acceptance WebGPU adapters: both clients reported Google/SwiftShader fallback,
   `rgba8unorm`, with no captured browser or renderer errors.
+- GitHub PR #5: `validate` passed in 1m15s and `container-verification` passed in
+  13m25s using the repository container entry points.
 
 ## Current work
 
-1. Complete independent review and address material findings.
-2. Publish the merge-ready P1.1 branch and PR.
-3. Begin P1.2 authority-owned surveillance failure as the next isolated slice.
+1. Merge PR #5 after explicit user approval.
+2. Begin P1.2 authority-owned surveillance failure as the next isolated slice.
 
 ## Blockers
 
@@ -50,4 +54,4 @@ None.
 
 ## Next action
 
-Finish review, publish P1.1, then freeze the minimal P1.2 hazard contract.
+Freeze the minimal P1.2 hazard contract after P1.1 integration.
