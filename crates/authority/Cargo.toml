@@ -1,0 +1,19 @@
+[package]
+name = "th-authority"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow = "1"
+moq-native = "=0.19.19"
+moq-net = "=0.2.22"
+prost.workspace = true
+th-protocol.workspace = true
+th-sim = { path = "../sim" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+url = "2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["test-util"] }

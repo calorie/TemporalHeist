@@ -1,0 +1,227 @@
+use std::{collections::VecDeque, time::Duration};
+
+use prost::Message;
+use th_protocol::{Input, MAX_INPUT_BYTES, PROTOCOL_MAJOR, Snapshot, TICK_RATE, TimelineChunk};
+use tokio::sync::mpsc;
+
+pub const SNAPSHOT_INTERVAL_TICKS: u64 = 3;
+pub const NETWORK_HISTORY_TICKS: u64 = 660;
+pub const GROUP_INTERVAL_TICKS: u64 = TICK_RATE;
+pub const TRACK_RETENTION: Duration = Duration::from_secs(30);
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TrackNames {
+    pub authority_broadcast: String,
+    pub world: &'static str,
+    pub history: &'static str,
+    pub player_inputs: [PlayerInputTracks; 2],
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PlayerInputTracks {
+    pub broadcast: String,
+    pub motion: &'static str,
+    pub actions: &'static str,
+}
+
+impl TrackNames {
+    pub fn for_room(room_id: &str) -> anyhow::Result<Self> {
+        if room_id.is_empty() || room_id.contains('/') {
+            anyhow::bail!("TH_ROOM_ID must be non-empty and contain no slash");
+        }
+        let input = |player_id| PlayerInputTracks {
+            broadcast: format!("th/room/{room_id}/input/{player_id}"),
+            motion: "motion",
+            actions: "actions",
+        };
+        Ok(Self {
+            authority_broadcast: format!("th/room/{room_id}/authority"),
+            world: "world",
+            history: "history",
+            player_inputs: [input(1), input(2)],
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct PublishedTick {
+    pub snapshot: Snapshot,
+    pub history: Option<TimelineChunk>,
+}
+
+/// Network-free authority core. Simulation owns gameplay and idempotency;
+/// authority owns the 60 Hz cadence and replication sampling.
+pub struct Authority {
+    world: th_sim::World,
+    pending: Vec<Input>,
+    network_history: VecDeque<Snapshot>,
+}
+
+impl Authority {
+    pub fn new(epoch: String) -> Self {
+        Self {
+            world: th_sim::World::new(epoch),
+            pending: Vec::new(),
+            network_history: VecDeque::new(),
+        }
+    }
+
+    pub fn accept_frame(&mut self, bytes: &[u8]) -> anyhow::Result<()> {
+        self.pending.push(decode_input(bytes)?);
+        Ok(())
+    }
+
+    pub fn tick(&mut self) -> Option<PublishedTick> {
+        let snapshot = self.world.step(&self.pending);
+        self.pending.clear();
+        if !snapshot.server_tick.is_multiple_of(SNAPSHOT_INTERVAL_TICKS) {
+            return None;
+        }
+        self.network_history.push_back(snapshot.clone());
+        while self.network_history.front().is_some_and(|sample| {
+            sample.server_tick.saturating_add(NETWORK_HISTORY_TICKS) < snapshot.server_tick
+        }) {
+            self.network_history.pop_front();
+        }
+        let history = snapshot
+            .server_tick
+            .is_multiple_of(GROUP_INTERVAL_TICKS)
+            .then(|| TimelineChunk {
+                protocol_major: PROTOCOL_MAJOR,
+                room_epoch: snapshot.room_epoch.clone(),
+                samples: self.network_history.iter().cloned().collect(),
+            });
+        Some(PublishedTick { snapshot, history })
+    }
+}
+
+pub fn decode_input(bytes: &[u8]) -> anyhow::Result<Input> {
+    if bytes.len() > MAX_INPUT_BYTES {
+        anyhow::bail!("input frame exceeds {MAX_INPUT_BYTES} bytes");
+    }
+    Input::decode(bytes).map_err(Into::into)
+}
+
+pub fn encode_snapshot(snapshot: &Snapshot) -> Vec<u8> {
+    snapshot.encode_to_vec()
+}
+pub fn encode_history(history: &TimelineChunk) -> Vec<u8> {
+    history.encode_to_vec()
+}
+
+pub async fn run_authority(
+    epoch: String,
+    mut input: mpsc::Receiver<Vec<u8>>,
+    output: mpsc::Sender<PublishedTick>,
+) -> anyhow::Result<()> {
+    let mut authority = Authority::new(epoch);
+    let mut ticker = tokio::time::interval(Duration::from_secs_f64(1.0 / TICK_RATE as f64));
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Burst);
+    loop {
+        tokio::select! {
+            biased;
+            frame = input.recv() => match frame {
+                Some(frame) => if let Err(error) = authority.accept_frame(&frame) {
+                    tracing::warn!(error = %error, bytes = frame.len(), "rejected input frame");
+                },
+                None => return Ok(()),
+            },
+            _ = ticker.tick() => if let Some(published) = authority.tick()
+                && output.send(published).await.is_err() { return Ok(()); }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use th_protocol::{InputKind, Session};
+
+    fn snapshot(tick: u64) -> Snapshot {
+        Snapshot {
+            protocol_major: PROTOCOL_MAJOR,
+            room_epoch: "epoch-test".into(),
+            server_tick: tick,
+            players: vec![],
+            echoes: vec![],
+            plates: vec![],
+            doors: vec![],
+            actions: vec![],
+            sessions: vec![Session {
+                player_id: 1,
+                session_id: "s".into(),
+                connected: true,
+            }],
+        }
+    }
+
+    #[test]
+    fn exact_track_names() {
+        let names = TrackNames::for_room("acceptance").unwrap();
+        assert_eq!(names.authority_broadcast, "th/room/acceptance/authority");
+        assert_eq!(
+            names.player_inputs[1].broadcast,
+            "th/room/acceptance/input/2"
+        );
+        assert_eq!((names.world, names.history), ("world", "history"));
+        assert_eq!(
+            (
+                names.player_inputs[0].motion,
+                names.player_inputs[0].actions
+            ),
+            ("motion", "actions")
+        );
+        assert!(TrackNames::for_room("bad/room").is_err());
+    }
+
+    #[test]
+    fn protobuf_frames_are_independently_decodable() {
+        let input = Input {
+            protocol_major: PROTOCOL_MAJOR,
+            room_epoch: "epoch-test".into(),
+            player_id: 1,
+            session_id: "s".into(),
+            sequence: 9,
+            move_x: -1000,
+            move_z: 1000,
+            kind: InputKind::Motion as i32,
+            target_id: 0,
+        };
+        assert_eq!(decode_input(&input.encode_to_vec()).unwrap(), input);
+        assert_eq!(
+            Snapshot::decode(encode_snapshot(&snapshot(3)).as_slice()).unwrap(),
+            snapshot(3)
+        );
+        let chunk = TimelineChunk {
+            protocol_major: PROTOCOL_MAJOR,
+            room_epoch: "epoch-test".into(),
+            samples: vec![snapshot(3)],
+        };
+        assert_eq!(
+            TimelineChunk::decode(encode_history(&chunk).as_slice()).unwrap(),
+            chunk
+        );
+    }
+
+    #[test]
+    fn oversized_input_is_rejected_before_decode() {
+        assert!(decode_input(&vec![0; MAX_INPUT_BYTES + 1]).is_err());
+    }
+
+    #[test]
+    fn network_history_is_bounded_by_660_ticks() {
+        let mut samples = VecDeque::new();
+        for tick in (3..=900).step_by(SNAPSHOT_INTERVAL_TICKS as usize) {
+            samples.push_back(snapshot(tick));
+            while samples
+                .front()
+                .is_some_and(|s| s.server_tick + NETWORK_HISTORY_TICKS < tick)
+            {
+                samples.pop_front();
+            }
+        }
+        assert_eq!(samples.front().unwrap().server_tick, 240);
+        assert_eq!(samples.back().unwrap().server_tick, 900);
+        assert_eq!(samples.len(), 221);
+    }
+}
