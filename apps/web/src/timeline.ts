@@ -1,4 +1,4 @@
-import type { Pose, Snapshot } from './generated/temporal_heist.ts';
+import type { Guard, Pose, Snapshot } from './generated/temporal_heist.ts';
 export interface VisualPose {
   playerId: number;
   xMm: number;
@@ -9,8 +9,10 @@ export interface Presentation {
   snapshot?: Snapshot;
   live: VisualPose[];
   echoes: VisualPose[];
+  guards: VisualGuard[];
   renderTick: number;
 }
+export type VisualGuard = Guard;
 const lerp = (a: number, b: number, amount: number) => a + (b - a) * amount;
 export class Timeline {
   readonly capacity: number;
@@ -56,6 +58,7 @@ export class Timeline {
       snapshot: this.latest,
       live: this.#interpolate(renderTick, false),
       echoes: this.#interpolate(renderTick - 600, true),
+      guards: this.#interpolateGuards(renderTick),
       renderTick,
     };
   }
@@ -99,5 +102,29 @@ export class Timeline {
   }
   #visual(pose: Pose, tick: number): VisualPose {
     return { playerId: pose.playerId, xMm: pose.xMm, zMm: pose.zMm, sourceTick: tick };
+  }
+  #interpolateGuards(tick: number): VisualGuard[] {
+    if (tick < 0 || this.#samples.length === 0) return [];
+    const first = this.#samples[0];
+    const last = this.#samples.at(-1);
+    if (!first || !last || tick < first.serverTick) return [];
+    if (tick >= last.serverTick) return last.guards ?? [];
+    const upper = this.#samples.findIndex((sample) => sample.serverTick >= tick);
+    const after = this.#samples[upper];
+    if (!after) return [];
+    if (after.serverTick === tick || upper === 0) return after.guards ?? [];
+    const before = this.#samples[upper - 1];
+    if (!before) return [];
+    const amount = (tick - before.serverTick) / (after.serverTick - before.serverTick);
+    return (after.guards ?? []).map((guard) => {
+      const start = before.guards?.find((item) => item.id === guard.id);
+      return start
+        ? {
+            ...guard,
+            xMm: lerp(start.xMm, guard.xMm, amount),
+            zMm: lerp(start.zMm, guard.zMm, amount),
+          }
+        : guard;
+    });
   }
 }

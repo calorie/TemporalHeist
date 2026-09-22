@@ -17,14 +17,25 @@ export interface Camera extends Point {
   range: number;
   halfWidth: number;
 }
+export interface GuardConfig extends Point {
+  facingX: number;
+  facingZ: number;
+  speedPerTick: number;
+  range: number;
+  halfWidth: number;
+  searchTicks: number;
+  waypoints: Point[];
+}
 export interface Facility {
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
   extraction: { minX: number; maxX: number; minZ: number; maxZ: number };
+  guardedPassage: { minX: number; maxX: number; minZ: number; maxZ: number };
   zones: { name: string; x: number }[];
   walls: Box[];
   doors: Box[];
   plates: (Point & { doorId: number; radius: number; capability: string })[];
   terminals: (Point & { capability: string })[];
   cameras: Camera[];
+  guards: GuardConfig[];
 }
 export const map = facility as Facility;
