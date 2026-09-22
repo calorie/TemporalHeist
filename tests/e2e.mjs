@@ -76,8 +76,10 @@ async function recordEchoPlate(pageA, plateId, doorId, x, z) {
   const observedDelay = echoed.serverTick - entered.serverTick;
   const echo = echoed.echoes.find((candidate) => candidate.playerId === 1);
   assert.equal(echo?.sourceTick, echoed.serverTick - 600);
-  assert(Math.abs(echo.sourceTick - entered.serverTick) <= 6,
-    `replicated transition differs from Echo source by ${echo.sourceTick - entered.serverTick} ticks`);
+  assert(echo.sourceTick >= entered.serverTick,
+    `Echo source ${echo.sourceTick} predates observed live occupancy ${entered.serverTick}`);
+  assert(echo.sourceTick <= left.serverTick,
+    `Echo source ${echo.sourceTick} follows observed live occupancy ${left.serverTick}`);
   evidence.events.push({
     event: 'echo-door-open', plateId, doorId, enteredTick: entered.serverTick,
     openedTick: echoed.serverTick, observedDelayTicks: observedDelay,
