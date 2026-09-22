@@ -71,6 +71,7 @@ export class MoqTransport {
         for (;;) {
           const frame = await group.readFrame();
           if (!frame) break;
+          if (this.#closed) return;
           decode(frame.payload);
         }
       }
