@@ -35,6 +35,9 @@ sh container <run-id> down --volumes --remove-orphans
 
 ## Passed verification evidence
 
+- `sh container ci-fix verify` passed after changing generated-code drift detection
+  to compare against a temporary codegen output. The CI path no longer requires Git
+  metadata inside the verification container.
 - `sh container final-verify verify` passed from an isolated fresh namespace:
   deterministic code generation, TS→Rust→TS protobuf vectors, rustfmt, workspace
   clippy with warnings denied, 14 Rust tests, TypeScript typecheck, Biome, timeline
@@ -93,6 +96,6 @@ Earlier spike isolation details remain reproducible in `spikes/isolation/`.
 
 ## Recommended next action
 
-Review the feature branch and open one focused pull request. After P0, the highest
-value follow-up is authority reconnect/restart hardening plus a container-owned remote
-debugging or noVNC surface for interactive visual QA.
+Review pull request #2. After P0, the highest value follow-up is authority
+reconnect/restart hardening plus a container-owned remote debugging or noVNC surface
+for interactive visual QA.
