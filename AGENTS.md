@@ -6,18 +6,42 @@ The user should normally provide only the engineering objective. Automatically o
 
 ## Automatic optimization
 
-For every substantive task, automatically decide:
+For every substantive task, first plan review topology for the full objective, then automatically decide:
 
-1. the minimum useful reasoning/effort level;
-2. what should remain in the primary context;
-3. what should be delegated to fresh subagents;
-4. what independent work should run in parallel;
-5. whether isolated worktrees/checkouts are required;
-6. whether durable task state is required;
-7. what verification evidence is sufficient;
-8. whether the result should be one PR, independent PRs, or a Stacked PR.
+1. the review dependency graph and PR topology for the full objective;
+2. the minimum useful reasoning/effort level;
+3. what should remain in the primary context;
+4. what should be delegated to fresh subagents;
+5. what independent work should run in parallel;
+6. whether isolated worktrees/checkouts are required;
+7. whether durable task state is required;
+8. what verification evidence is sufficient.
 
 Do not ask the user to make orchestration decisions unless a real product, authorization, or irreversible-action decision requires input.
+
+## Review dependency graph
+
+Immediately after receiving a substantive objective, before broad implementation begins, derive the review dependency graph for the **full objective**.
+
+Partition the objective into the smallest useful units that are independently reviewable and independently verifiable.
+
+Choose review topology before implementation:
+
+- one focused reviewable unit -> one PR;
+- multiple independent reviewable units -> independent PRs;
+- multiple dependent, independently reviewable and independently verifiable units -> GitHub Stacked PRs.
+
+When the objective already defines dependent milestones or phases, treat that as strong evidence for a stack unless those milestones cannot produce meaningful intermediate review states.
+
+If stack conditions are met, initialize the stack before implementing dependent upper layers.
+
+Once a lower layer's contract is stable and locally verified, continue the dependent upper layer on top of it without waiting for the lower PR to merge.
+
+Do not turn a dependent milestone sequence into a series of PRs all based on the default branch merely because the milestones are implemented one at a time.
+
+Do not create stacks merely to increase PR count. Each layer must reduce review risk, unblock later work, or remove merge-wait time from the critical path.
+
+Preserve the selected topology during execution unless scope or dependencies materially change.
 
 ## Effort
 
@@ -143,15 +167,17 @@ Deduplicate equivalent verification across the runtime, Superpowers, and other t
 
 Do not declare completion while relevant verification is failing unless the failure is explicitly reported as a blocker.
 
-## Review topology
+## Review topology during execution
 
-Choose automatically:
+Preserve the review topology selected at objective intake.
 
-- one focused reviewable change -> one PR;
-- independent reviewable changes -> independent PRs;
-- dependent but independently reviewable changes -> GitHub Stacked PRs.
+For a stack:
 
-Use Stacked PRs when they improve reviewability without adding unnecessary coordination cost.
+- keep dependency order explicit;
+- stabilize and verify a lower layer before building dependent behavior on top;
+- do not wait for lower-layer merge when the upper layer can safely proceed against the stable lower-layer contract;
+- fix lower-layer defects in the lower layer and propagate/rebase upward;
+- do not collapse later dependent milestones into sequential default-branch-based PRs.
 
 Execution topology does not determine PR topology.
 
