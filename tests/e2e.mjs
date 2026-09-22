@@ -195,6 +195,16 @@ async function moveRightPast(page, playerId, x, z, timeout = moveTimeout) {
     const state = await snapshot(page);
     lastState = state;
     const pose = state?.players.find((candidate) => candidate.playerId === playerId);
+    if (
+      state?.room?.phase === RoomPhase.WON &&
+      x >= 22_800 &&
+      pose?.xMm >= 22_800 &&
+      pose.zMm >= 3_000 &&
+      pose.zMm <= 5_000
+    ) {
+      await page.evaluate(() => window.th.move(0, 0));
+      return state;
+    }
     if (pose?.xMm >= x && Math.abs(pose.zMm - z) <= 180) {
       await page.evaluate(() => window.th.move(0, 0));
       return state;
