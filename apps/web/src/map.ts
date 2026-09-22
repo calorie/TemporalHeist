@@ -19,6 +19,7 @@ export interface Camera extends Point {
 }
 export interface Facility {
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
+  extraction: { minX: number; maxX: number; minZ: number; maxZ: number };
   zones: { name: string; x: number }[];
   walls: Box[];
   doors: Box[];

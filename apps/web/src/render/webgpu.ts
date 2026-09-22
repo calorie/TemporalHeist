@@ -1,5 +1,13 @@
 import type { Facility } from '../map.ts';
 import {
+  extractionVisual,
+  sceneClearColor,
+  WORLD_CENTER_X,
+  WORLD_CENTER_Z,
+  WORLD_HALF_DEPTH,
+  WORLD_HALF_WIDTH,
+} from '../presentation-view.ts';
+import {
   surveillanceVisuals,
   WORLD_DEPTH_OFFSET,
   WORLD_DEPTH_SCALE,
@@ -132,6 +140,7 @@ export class WebGpuRenderer {
     this.#resize();
     const objects: Instance[] = [
       { x: 12000, y: -120, z: 4000, sx: 12000, sy: 100, sz: 4000, color: [0.035, 0.09, 0.12, 1] },
+      extractionVisual(map, p.snapshot),
     ];
     for (const w of map.walls) objects.push(this.#box(w, 650, [0.12, 0.25, 0.31, 1]));
     for (const d of map.doors) {
@@ -221,7 +230,7 @@ export class WebGpuRenderer {
         sz: 250,
         color: pose.playerId === 1 ? [0.25, 0.85, 1, 0.35] : [1, 0.55, 0.8, 0.35],
       });
-    this.#draw(cones, objects);
+    this.#draw(cones, objects, sceneClearColor(p.snapshot));
   }
   info() {
     return {
@@ -288,12 +297,12 @@ export class WebGpuRenderer {
     });
     return data;
   }
-  #draw(cones: Instance[], objects: Instance[]) {
+  #draw(cones: Instance[], objects: Instance[], clearColor: [number, number, number, number]) {
     const depth = this.#depth;
     if (!depth) return;
     const aspect = this.canvas.width / this.canvas.height;
-    const sx = 1 / 13000,
-      sz = 1 / 5200;
+    const sx = 1 / WORLD_HALF_WIDTH,
+      sz = 1 / WORLD_HALF_DEPTH;
     const view = new Float32Array([
       sx,
       0,
@@ -307,8 +316,8 @@ export class WebGpuRenderer {
       -sz * aspect,
       0,
       0,
-      -12000 * sx,
-      4000 * sz * aspect,
+      -WORLD_CENTER_X * sx,
+      WORLD_CENTER_Z * sz * aspect,
       WORLD_DEPTH_OFFSET,
       1,
     ]);
@@ -327,7 +336,12 @@ export class WebGpuRenderer {
       colorAttachments: [
         {
           view: surface.createView(),
-          clearValue: { r: 0.015, g: 0.035, b: 0.055, a: 1 },
+          clearValue: {
+            r: clearColor[0],
+            g: clearColor[1],
+            b: clearColor[2],
+            a: clearColor[3],
+          },
           loadOp: 'clear',
           storeOp: 'store',
         },
