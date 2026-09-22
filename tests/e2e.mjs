@@ -100,6 +100,19 @@ try {
   }
   const [pageA, pageB] = contexts.map((context) => context.pages().at(-1));
 
+  // A new MoQ publication for the same browser session must be consumed without
+  // restarting the authority or disturbing the other player.
+  const beforeReconnect = await snapshot(pageA);
+  const beforePose = beforeReconnect.players.find((player) => player.playerId === 1);
+  assert(beforePose, 'player 1 missing before reconnect');
+  await pageA.evaluate(() => window.th.reconnect());
+  await pageA.waitForFunction(() => window.th?.joined(), { timeout: 30000 });
+  await moveTo(pageA, 1, beforePose.xMm + 500, beforePose.zMm);
+  await waitFor(pageB,
+    (state) => (state.players.find((player) => player.playerId === 1)?.xMm ?? 0) >= beforePose.xMm + 320,
+    'client B observing player A after MoQ reconnect');
+  evidence.events.push({ event: 'input-reconnected', playerId: 1 });
+
   // Zone 1: A records the tutorial plate; B crosses, then A's Echo frees A.
   await recordEchoPlate(pageA, 21, 11, 4500, 2500);
   await moveTo(pageA, 1, 8000, 4000);
