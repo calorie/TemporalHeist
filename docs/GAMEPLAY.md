@@ -237,3 +237,19 @@ Echoes do not trigger surveillance. This keeps the historical projection useful
 for temporal planning and ensures that the new stealth rule does not change Echo
 trajectory or effect semantics. Timeout and surveillance remain distinct failure
 reasons and both use the same deterministic restart flow.
+
+## P1 playability and presentation
+
+The lobby presents a short briefing for movement, interaction, readiness, the
+plate → leave → ten-second Echo → door loop, surveillance, extraction, and retry.
+Players use the visible Ready and Restart controls or their displayed keyboard
+shortcuts. Losing browser focus clears held movement so returning to the page
+does not continue a stale input.
+
+During an attempt, the HUD derives its timer and first-Echo countdown from the
+authority's server tick. After the first 600 ticks it states that Echoes replay
+exactly ten seconds behind. Raw WebGPU renders the extraction marker and changes
+the scene for authoritative success and failure; these colors never feed back
+into gameplay. Short synthesized Web Audio cues announce Echo, door, success,
+and failure transitions after user interaction unlocks audio. The mute control
+is local presentation state and has no gameplay effect.

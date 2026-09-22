@@ -67,3 +67,31 @@ with unique Compose namespaces. Both still invoke the repository `container`
 entry point and clean their own networks and volumes. Parallel jobs reduce wall
 time from the sum of two cold container builds to the slower job, and workflow
 concurrency cancels obsolete runs for superseded commits.
+
+## 2026-09-22 — P1.3 presentation boundary
+
+Keep P1.3 entirely client-side. Derive onboarding, the first-Echo countdown,
+feedback transitions, and extraction presentation from existing authoritative
+snapshots and facility geometry. Use the browser Web Audio API for short synthesized
+cues and raw WebGPU primitives for extraction and state feedback. Add no protocol,
+simulation, map-data, UI-framework, audio-file, or renderer-authority dependency.
+
+Automated acceptance must exercise visible ready/restart controls and assert the
+human-facing UI; test-only state remains an oracle for deterministic movement and
+authority timing. Manual visual mode opens both player pages in containerized
+Chromium and preserves labeled evidence before stack cleanup.
+
+## 2026-09-23 — P1.3 browser isolation and E2E movement
+
+Run visual player A and B as separate Compose services. Each has its own
+persistent-profile volume and ephemeral CDP host port while sharing only the
+room data plane and read-only application inputs. The visual checker runs inside
+each browser container and requires its screenshot, metadata, raw WebGPU backend,
+adapter identity, and empty renderer/page error list.
+
+The browser E2E records plate occupancy long enough for cold software-GPU CI and
+moves the other player through the first two gates while live presence holds
+them. It reserves the final gate for the required proof: player B crosses while
+player A's exact 600-tick Echo supplies Presence. Camera detection approaches
+the cone laterally from an outside waypoint so delayed movement messages cannot
+trigger the terminal state before the assertion begins.

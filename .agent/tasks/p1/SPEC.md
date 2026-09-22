@@ -34,6 +34,26 @@ authority, timing, transport, WebGPU, or container-isolation guarantees.
   assets and raw WebGPU rendering.
 - Complete a containerized manual visual pass and automated two-client E2E.
 
+P1.3 is accepted when:
+
+- the visible UI explains movement, interaction, readiness, the plate → leave →
+  10-second Echo replay → door loop, surveillance avoidance, extraction, and retry;
+- an authority-tick-derived indicator counts down the first Echo and then states
+  that the Echo is replaying exactly 10 seconds behind;
+- the extraction zone is visibly rendered by raw WebGPU and success/failure have
+  distinct presentation states;
+- native Web Audio synthesis provides user-unlocked, muteable cues for meaningful
+  Echo, door, success, and failure transitions without affecting gameplay;
+- two containerized clients use visible keyboard/button controls for ready and
+  retry, assert the human-facing HUD states, and retain the existing canonical
+  gameplay and GPU assertions;
+- the containerized visual route exposes both player pages and records labeled
+  screenshots plus renderer/error metadata for review.
+
+P1.3 does not change protobuf, authority simulation, Echo semantics, or the map
+source of truth. Presentation derives only from existing authoritative snapshots
+and checked-in facility geometry.
+
 ### P1.4 — Release candidate
 
 - Run format, lint, typecheck, unit, protocol, transport, integration, E2E,

@@ -24,10 +24,13 @@ function phaseName(phase: number) {
 
 export interface RoomHud {
   phase: string;
+  phaseState: 'connecting' | 'lobby' | 'active' | 'won' | 'failed';
   objective: string;
   timer: string;
+  echoStatus: string;
   readiness: string;
   result: string;
+  resultState: 'none' | 'success' | 'failure';
   canReady: boolean;
   canRestart: boolean;
 }
@@ -42,10 +45,13 @@ export function roomHud(snapshot: Snapshot | undefined, playerId: number): RoomH
   if (!snapshot || !room) {
     return {
       phase: 'CONNECTING',
+      phaseState: 'connecting',
       objective: 'Waiting for authority',
       timer: '--:--',
+      echoStatus: 'ECHO · WAITING FOR ATTEMPT',
       readiness: 'Players ready: 0/2',
       result: '',
+      resultState: 'none',
       canReady: false,
       canRestart: false,
     };
@@ -55,6 +61,7 @@ export function roomHud(snapshot: Snapshot | undefined, playerId: number): RoomH
   const phase = phaseName(room.phase);
   const active = room.phase === ACTIVE;
   const terminal = room.phase === WON || room.phase === FAILED;
+  const echoTicks = room.startedTick + 600 - snapshot.serverTick;
   let objective = 'Ready up with your partner';
   if (active && !room.echoOpenedFinalDoor) objective = 'Open the final door with Echo Presence';
   if (active && room.echoOpenedFinalDoor)
@@ -70,8 +77,14 @@ export function roomHud(snapshot: Snapshot | undefined, playerId: number): RoomH
 
   return {
     phase: `${phase} · ATTEMPT ${room.attempt}`,
+    phaseState: phase.toLowerCase() as RoomHud['phaseState'],
     objective,
     timer: active ? clock(room.deadlineTick - snapshot.serverTick) : '--:--',
+    echoStatus: active
+      ? echoTicks > 0
+        ? `ECHO IN ${clock(echoTicks)}`
+        : 'ECHO REPLAYING · 10 SECONDS BEHIND'
+      : 'ECHO · STARTS 10 SECONDS AFTER LAUNCH',
     readiness: `Players ready: ${room.readyPlayers}/2${ownSession?.ready ? ' · YOU ARE READY' : ''}`,
     result:
       room.phase === WON
@@ -79,6 +92,7 @@ export function roomHud(snapshot: Snapshot | undefined, playerId: number): RoomH
         : room.phase === FAILED
           ? failure
           : '',
+    resultState: room.phase === WON ? 'success' : room.phase === FAILED ? 'failure' : 'none',
     canReady: room.phase === LOBBY && Boolean(ownSession?.connected && !ownSession.ready),
     canRestart: terminal,
   };

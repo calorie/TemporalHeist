@@ -2,8 +2,9 @@
 
 ## Status
 
-P1.1 is merged on `main` at `4b6f89a`. P1.2 surveillance implementation,
-independent review remediation, and integrated acceptance verification pass.
+P1.1 is merged on `main` at `4b6f89a`. P1.2 is merged on `main` at `a0fa12e`.
+P1.3 implementation and all local container verification are complete on
+`p1/playability-presentation`; PR publication and CI are next.
 
 ## Completed
 
@@ -29,6 +30,12 @@ independent review remediation, and integrated acceptance verification pass.
   telegraphy/HUD, and two-client E2E in three isolated worktrees.
 - Integrated live-human detection, Echo immunity, terminal pose freezing,
   surveillance diagnostics, and clean restart to attempt 3.
+- Implemented P1.3 onboarding, visible controls, authority-tick Echo status,
+  phase/result feedback, blur-safe input, synthesized audio, and mute control.
+- Added raw WebGPU extraction and authoritative success/failure presentation.
+- Extended the two-client E2E to assert the human-facing UI and labeled evidence.
+- Split visual clients into separate Chromium services, profile volumes, and
+  ephemeral CDP endpoints after independent review found shared profile state.
 
 ## Verification
 
@@ -79,11 +86,28 @@ Passed in containers on 2026-09-22:
   Compose namespaces and superseded runs are cancelled. The failed serial run
   took 20m09s for components plus 9m02s for acceptance; expected wall time is
   now bounded by the slower parallel job rather than their sum.
+- PR #6 merged as `a0fa12e`; its parallel CI jobs passed in approximately four
+  and eight minutes respectively.
+- Audited P1.3 UI, renderer/audio, E2E, and visual workflows. Frozen a client-only
+  boundary with no protocol, authority, simulation, or map-data changes.
+- `sh container p13-integrated-0922 acceptance`: both clients passed visible
+  readiness, three doors, exact 600-tick Echo timing, Echo-held final-door
+  crossing, extraction/win, surveillance failure, and restart to clean attempt 3.
+- Both acceptance clients reported raw WebGPU on Google SwiftShader fallback,
+  `rgba8unorm`, with empty browser/renderer error arrays.
+- `sh container p13-integrated-0922 visual`: separate A/B Chromium profiles and
+  ephemeral CDP endpoints each produced a labeled 1280x720 screenshot and
+  metadata with SwiftShader WebGPU and no page/renderer errors.
+- Final `sh container p13-integrated-0922 verify`: codegen consistency,
+  cross-language protocol, 25 Rust tests, rustfmt, clippy, TypeScript, Biome,
+  six browser test suites, Vite production build, and containerized Chromium
+  WebGPU/WGSL validation all passed. The probe used Mesa llvmpipe Vulkan with a
+  SwiftShader WebGPU adapter, `rgba8unorm`, and zero shader/validation errors.
 
 ## Current work
 
-1. Push the PR #6 CI correction and monitor both parallel jobs.
-2. Begin P1.3 onboarding and presentation after integration.
+1. Commit, push, open the P1.3 PR, and monitor container-only CI.
+2. After merge, begin P1.4 release-candidate verification.
 
 ## Blockers
 
@@ -91,4 +115,4 @@ None.
 
 ## Next action
 
-Push the CI correction and verify both PR #6 jobs pass.
+Publish the P1.3 PR and monitor its container-only CI.
