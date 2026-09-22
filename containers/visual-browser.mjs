@@ -77,6 +77,8 @@ await writeFile(`${artifacts}/player-${player}-metadata.json`, `${JSON.stringify
   capture,
 }, null, 2)}\n`);
 console.log(JSON.stringify({ event: 'visual-evidence-ready', artifacts, capture }));
+await page.evaluate(() => window.th.setPresentationPaused(true));
+console.log(JSON.stringify({ event: 'visual-rendering-paused', player }));
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, async () => {

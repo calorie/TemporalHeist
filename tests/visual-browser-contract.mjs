@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 
 const compose = await readFile('compose.yaml', 'utf8');
 const wrapper = await readFile('container', 'utf8');
+const browser = await readFile('containers/visual-browser.mjs', 'utf8');
 
 assert.match(compose, /^  visual-browser-a: &visual-browser\n/m);
 assert.match(compose, /^  visual-browser-b:\n/m);
@@ -20,5 +21,7 @@ assert.match(wrapper, /compose exec -T visual-browser-b node containers\/visual-
 assert.match(wrapper, /compose port visual-browser-a 9222/);
 assert.match(wrapper, /compose port visual-browser-b 9222/);
 assert.match(wrapper, /--profile test --profile visual down/);
+assert.match(wrapper, /Cleanup: sh container \$agent_id down/);
+assert.match(browser, /setPresentationPaused\(true\)/);
 
 console.log('Manual browser container contract passed');

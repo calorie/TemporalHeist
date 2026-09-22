@@ -3,8 +3,8 @@
 ## Status
 
 P1.1 is merged at `4b6f89a`, P1.2 at `a0fa12e`, and P1.3 at `57a44e8`.
-P1.4 release-candidate implementation and local container verification are
-complete on `p1/release-candidate`; publication and CI are next.
+P1.4 is merged. Container build and idle-runtime efficiency work is in progress on
+`p1/container-efficiency`.
 
 ## Completed
 
@@ -147,9 +147,8 @@ Passed in containers on 2026-09-23:
 
 ## Current work
 
-1. Run the final container verification at the release executable revision,
-   commit this evidence-only state update, and publish the release-candidate PR.
-2. Monitor its container-only CI.
+1. Verify two concurrent worktree stacks on the split runtime images.
+2. Publish the container-efficiency PR and monitor container-only CI.
 
 ## Blockers
 
@@ -169,4 +168,32 @@ None.
 
 ## Next action
 
-Publish the P1.4 release-candidate PR and monitor its container-only CI.
+Finish verification, publish the container-efficiency PR, and monitor its CI.
+
+## 2026-09-23 container efficiency
+
+- Diagnosed the immediate CPU spike as three forgotten visual/E2E stacks. Three
+  software-GPU Chromium processes alone consumed roughly 7.4 host CPU cores. All
+  stale projects and their volumes were removed.
+- Replaced per-project source compilation of `moq-relay` with the official
+  digest-pinned `moqdev/moq-relay:0.14.18` multi-architecture image.
+- Split production execution into release authority (153 MB), nginx web (93 MB),
+  and browser runner (4.06 GB, including Chromium and Mesa/SwiftShader) images.
+  The former universal development image is 5.33 GB and remains only for component
+  and cross-language verification.
+- A cold authority/web/browser build completed in 3m26s with relay compilation
+  removed. Subsequent builds reused BuildKit layers.
+- `sh container efficiency acceptance` passed the complete two-client game loop.
+  Both clients reported raw WebGPU on Google SwiftShader fallback, `rgba8unorm`,
+  with empty error arrays.
+- Final `sh container efficiency verify` passed code generation, cross-language
+  protocol, rustfmt, clippy, 25 Rust tests, TypeScript, Biome, browser/contract
+  suites, Vite production build, and containerized WebGPU/WGSL validation.
+- Final `sh container efficiency acceptance` passed again after the render-loop
+  and pull-policy optimizations, through win, surveillance failure, and restart.
+- `sh container efficiency visual` passed for both independent Chromium profiles.
+  After evidence capture the clients pause presentation; measured browser CPU was
+  32–33% each, versus 220–276% each in the stale unpaused stacks. The full visual
+  stack measured below one host core rather than about 7.4 cores.
+- The official relay avoids recurring Rust compilation and maximizes cold-start
+  efficiency, but its image is larger than the former custom 179 MB runtime image.

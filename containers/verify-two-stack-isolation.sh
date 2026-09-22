@@ -160,8 +160,7 @@ compose_a down --volumes --remove-orphans >/dev/null
 [ "$networks_b_before" = "$(project_networks "$project_b")" ]
 [ "$volumes_b_before" = "$(project_volumes "$project_b")" ]
 
-compose_b exec -T web node -e \
-  "fetch('http://web:5173/healthz').then(r => { if (!r.ok) throw new Error(String(r.status)) })"
+compose_b exec -T web wget -qO- http://web:5173/healthz >/dev/null
 
 cat >"$evidence_dir/evidence.json" <<EOF
 {

@@ -6,7 +6,7 @@ ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo
 ENV PATH=/usr/local/cargo/bin:$PATH
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential pkg-config libssl-dev protobuf-compiler cmake clang \
-    ca-certificates curl git openssl mesa-vulkan-drivers \
+    ca-certificates mesa-vulkan-drivers \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /workspace
 RUN rustup component add rustfmt clippy

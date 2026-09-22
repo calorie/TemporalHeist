@@ -78,7 +78,7 @@ sh container local visual
 sh container local down --volumes --remove-orphans
 ~~~
 
-`acceptance` runs a private relay, Rust authority, Vite server, and two containerized
+`acceptance` runs a private relay, release Rust authority, nginx static server, and two containerized
 Chromium clients. It records JSON evidence and both client screenshots in that run's
 private `artifacts` volume. Use a different lowercase run ID for each checkout or
 concurrent stack.

@@ -115,3 +115,21 @@ occupancy, forward-only door crossings, extraction, and surveillance entry.
 This keeps browser observation delay below the facility's narrow trigger and
 door widths on contended software-GPU hosts. Gameplay clients retain full-speed
 input; only deterministic automation uses the reduced axis value.
+
+## 2026-09-23 — Runtime images and CPU efficiency
+
+Use the digest-pinned official `moqdev/moq-relay:0.14.18` image instead of compiling
+the relay in every clean project. It is larger than the former custom runtime image,
+but removes the most expensive unrelated Rust build from local acceptance and CI.
+Build latency and CPU are the priority for this development workflow; the digest
+keeps the selected multi-architecture artifact reproducible.
+
+Use multi-stage targets for the release authority, static web server, and browser
+runner. Only `verify` uses the combined Rust/Node development image because it must
+run code generation and cross-language checks. Browser images retain Mesa Vulkan:
+containerized SwiftShader WebGPU fails to initialize without it.
+
+Visual Chromium remains available over ephemeral CDP ports after evidence capture,
+but pauses the game's presentation loop. This preserves the inspectable container
+browser while avoiding an unbounded full-rate raw-WebGPU render loop. Operators
+must tear visual projects down with their volumes when inspection ends.

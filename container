@@ -23,7 +23,8 @@ compose() {
 command=${1:-}
 case "$command" in
   bootstrap)
-    compose build dev relay
+    compose build dev
+    compose pull --policy missing relay
     compose run --rm dev npm ci
     ;;
   verify)
@@ -32,16 +33,14 @@ case "$command" in
     compose run --rm dev sh containers/verify.sh
     ;;
   acceptance)
-    compose build dev relay
-    compose run --rm dev npm ci
-    compose run --rm dev cargo build --locked -p th-authority
+    compose pull --policy missing relay
+    compose build authority web browser
     compose up -d relay authority web
     compose --profile test run --rm browser
     ;;
   visual)
-    compose build dev relay
-    compose run --rm dev npm ci
-    compose run --rm dev cargo build --locked -p th-authority
+    compose pull --policy missing relay
+    compose build authority web visual-browser-a visual-browser-b
     compose --profile visual up -d relay authority web visual-browser-a visual-browser-b
     compose exec -T visual-browser-a node containers/visual-browser-check.mjs
     compose exec -T visual-browser-b node containers/visual-browser-check.mjs
@@ -49,6 +48,7 @@ case "$command" in
     published_b=$(compose port visual-browser-b 9222)
     echo "Chromium A CDP: http://$published_a/json/list"
     echo "Chromium B CDP: http://$published_b/json/list"
+    echo "Cleanup: sh container $agent_id down --volumes --remove-orphans"
     ;;
   down)
     shift

@@ -18,7 +18,7 @@ assert.match(harness, /\.HostConfig\.PortBindings/);
 assert.match(harness, /docker network ls/);
 assert.match(harness, /docker volume ls/);
 assert.match(harness, /down --volumes --remove-orphans/);
-assert.match(harness, /fetch\('http:\/\/web:5173\/healthz'/);
+assert.match(harness, /wget -qO- http:\/\/web:5173\/healthz/);
 assert.match(harness, /evidence\.json/);
 assert.match(harness, /git -C "\$worktree_a" rev-parse HEAD/);
 assert.match(harness, /"\$head_a" = "\$head_b"/);

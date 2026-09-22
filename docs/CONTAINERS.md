@@ -199,6 +199,14 @@ The finalized entry points are `sh container <run-id> bootstrap`, `verify`, and
 `acceptance`. Raw Compose operations remain available after the run ID. Complete
 cleanup is `sh container <run-id> down --volumes --remove-orphans`.
 
+`verify` uses the combined development image for Rust/TypeScript compilation,
+protobuf generation, and cross-language tests. `acceptance` and `visual` instead
+use multi-stage runtime images containing only the release authority, built web
+assets served by nginx, or the Chromium test runtime. They pull the digest-pinned
+official `moqdev/moq-relay:0.14.18` image rather than compiling a relay. BuildKit
+layers may be immutable-cache shared, while every writable Compose volume remains
+private to its run ID.
+
 Manual visual inspection uses `sh container <run-id> visual`. It starts the private
 relay, authority, web service, and separate container-owned Chromium A/B services.
 Each browser has its own `visual-profile-a` or `visual-profile-b` volume and an
@@ -212,6 +220,11 @@ project. Labeled screenshots and renderer/error metadata are stored in the run's
 artifact volume. This surface provides DevTools inspection rather than a shared
 desktop; use automated screenshots for unattended evidence. Remove the stack and
 both profiles with the standard `down --volumes --remove-orphans` command.
+
+After screenshots and metadata are written, visual clients stop scheduling render
+frames to reduce software-GPU CPU use while waiting for inspection. The printed
+cleanup command remains required because CDP ports and container processes stay
+alive until it is run.
 
 ## CI
 

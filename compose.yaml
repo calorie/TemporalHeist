@@ -24,45 +24,55 @@ services:
       - certificates:/certificates
     shm_size: 1gb
   relay:
-    build:
-      context: .
-      dockerfile: containers/Relay.Dockerfile
+    image: moqdev/moq-relay:0.14.18@sha256:3302517b2364ad8297772cbdcb8fe227da966e4d2cc48c6cea9faae5946889fb
     command: ["/config/relay.toml"]
     volumes:
       - ./spikes/transport/relay.toml:/config/relay.toml:ro
     init: true
   authority:
-    <<: *dev
-    command: ["cargo", "run", "--locked", "-p", "th-authority"]
+    build:
+      context: .
+      dockerfile: containers/Runtime.Dockerfile
+      target: authority
+    environment:
+      TH_ROOM_ID: ${TH_AGENT_ID:?Use sh container AGENT_RUN_ID ...}
     depends_on: [relay]
     restart: on-failure
   web:
-    <<: *dev
-    command: ["npx", "vite", "apps/web", "--host", "0.0.0.0"]
+    build:
+      context: .
+      dockerfile: containers/Runtime.Dockerfile
+      target: web
   browser:
-    <<: *dev
+    build: &browser-build
+      context: .
+      dockerfile: containers/Runtime.Dockerfile
+      target: browser
     profiles: ["test"]
     command: ["node", "tests/e2e.mjs"]
-  visual-browser-a: &visual-browser
-    <<: *dev
-    profiles: ["visual"]
-    command: ["node", "containers/visual-browser.mjs"]
-    depends_on: [web]
-    environment:
+    init: true
+    shm_size: 1gb
+    environment: &browser-environment
       TH_AGENT_ID: ${TH_AGENT_ID:?Use sh container AGENT_RUN_ID ...}
       TH_ROOM_ID: ${TH_AGENT_ID}
+      TH_E2E_MOVE_TIMEOUT_MS: ${TH_E2E_MOVE_TIMEOUT_MS:-45000}
+      TH_E2E_START_DELAY_MS: ${TH_E2E_START_DELAY_MS:-0}
+    volumes:
+      - artifacts:/artifacts
+  visual-browser-a: &visual-browser
+    build: *browser-build
+    profiles: ["visual"]
+    command: ["node", "containers/visual-browser.mjs"]
+    init: true
+    shm_size: 1gb
+    depends_on: [web]
+    environment:
+      <<: *browser-environment
       TH_PLAYER_ID: "1"
     ports:
       - "127.0.0.1::9222"
     volumes:
-      - .:/workspace
-      - cargo-registry:/usr/local/cargo/registry
-      - cargo-git:/usr/local/cargo/git
-      - target:/build/target
-      - node-modules:/workspace/node_modules
-      - npm-cache:/cache/npm
       - artifacts:/artifacts
-      - certificates:/certificates
       - visual-profile-a:/browser-profile
   visual-browser-b:
     <<: *visual-browser
@@ -71,14 +81,7 @@ services:
       TH_ROOM_ID: ${TH_AGENT_ID}
       TH_PLAYER_ID: "2"
     volumes:
-      - .:/workspace
-      - cargo-registry:/usr/local/cargo/registry
-      - cargo-git:/usr/local/cargo/git
-      - target:/build/target
-      - node-modules:/workspace/node_modules
-      - npm-cache:/cache/npm
       - artifacts:/artifacts
-      - certificates:/certificates
       - visual-profile-b:/browser-profile
 volumes:
   cargo-registry:
