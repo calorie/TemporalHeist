@@ -13,3 +13,4 @@ npx tsc -p apps/web/tsconfig.json
 npx biome check apps/web/src
 node apps/web/test/timeline.mjs
 npx vite build apps/web
+node spikes/gpu/test.mjs

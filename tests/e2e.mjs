@@ -128,6 +128,10 @@ try {
   evidence.finalSnapshot = finalA;
   evidence.renderers = await Promise.all([pageA, pageB].map((page) => page.evaluate(() => window.th.rendererInfo())));
   evidence.errors = await Promise.all([pageA, pageB].map((page) => page.evaluate(() => window.th.errors())));
+  assert(evidence.renderers.every((renderer) => renderer?.backend === 'webgpu'));
+  assert(evidence.renderers.every((renderer) => renderer?.adapter?.vendor));
+  assert(finalA.echoes.some((echo) => echo.playerId === 1));
+  assert(finalB.echoes.some((echo) => echo.playerId === 1));
   assert(evidence.errors.every((errors) => errors.length === 0));
   await Promise.all([pageA, pageB].map((page, index) => page.screenshot({ path: `${artifacts}/client-${index + 1}.png` })));
   await writeFile(`${artifacts}/evidence.json`, `${JSON.stringify(evidence, null, 2)}\n`);
