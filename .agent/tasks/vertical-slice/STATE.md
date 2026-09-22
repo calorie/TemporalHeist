@@ -2,9 +2,9 @@
 
 ## Status
 
-P0 was merged to `main` in PR #2 on 2026-09-22. Post-merge hardening is active on
-branch `postp0/integration`: MoQ reconnect recovery, CI-owned WebGPU pixel evidence,
-and a container-owned manual Chromium inspection path are implemented and verified.
+Complete on `main` as of 2026-09-22. PR #2 delivered the P0 vertical slice and PR #3
+delivered MoQ reconnect recovery, CI-owned WebGPU pixel evidence, and the
+container-owned manual Chromium inspection path. Both merge-time CI runs passed.
 
 ## Implemented
 
@@ -111,5 +111,5 @@ Earlier spike isolation details remain reproducible in `spikes/isolation/`.
 
 ## Recommended next action
 
-Review the post-merge hardening pull request. Further product work should be selected
-from the explicit P0 non-goals under a newly scoped task.
+Close this task. Further product work should be selected from the explicit P0
+non-goals under a newly scoped task.
