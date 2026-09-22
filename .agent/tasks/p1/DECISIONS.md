@@ -59,3 +59,11 @@ depth range. The E2E harness verifies the rendered warning through a one-pixel
 surface readback at a stable point inside the cone: green dominates while idle
 and red dominates after authoritative detection. This supplements screenshots
 with a deterministic assertion against the actual containerized GPU output.
+
+## 2026-09-22 — Parallel CI verification
+
+Run component verification and full-stack acceptance as independent GitHub jobs
+with unique Compose namespaces. Both still invoke the repository `container`
+entry point and clean their own networks and volumes. Parallel jobs reduce wall
+time from the sum of two cold container builds to the slower job, and workflow
+concurrency cancels obsolete runs for superseded commits.

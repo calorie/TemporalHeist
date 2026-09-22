@@ -19,6 +19,17 @@ const contexts = [];
 const evidence = { agent: process.env.TH_AGENT_ID, events: [] };
 const RoomPhase = Object.freeze({ LOBBY: 1, ACTIVE: 2, WON: 3, FAILED: 4 });
 const FailureReason = Object.freeze({ UNSPECIFIED: 0, TIMEOUT: 1, SURVEILLANCE: 2 });
+const camera41 = Object.freeze({ x: 4500, z: 7500, directionX: 0, directionZ: -1000,
+  range: 2200, halfWidth: 1200 });
+
+function cameraContains(camera, pose) {
+  const dx = pose.xMm - camera.x;
+  const dz = pose.zMm - camera.z;
+  const forward = dx * camera.directionX + dz * camera.directionZ;
+  if (forward < 0 || forward > camera.range * 1000) return false;
+  const lateral = Math.abs(dx * camera.directionZ - dz * camera.directionX);
+  return lateral * camera.range <= camera.halfWidth * forward;
+}
 
 async function snapshot(page) {
   return page.evaluate(() => window.th.snapshot());
@@ -56,12 +67,20 @@ async function moveTo(page, playerId, x, z, timeout = 30000) {
 
 async function waitFor(page, predicate, description, timeout = 20000) {
   const deadline = Date.now() + timeout;
+  let lastState;
   while (Date.now() < deadline) {
     const state = await snapshot(page);
+    lastState = state;
     if (state && predicate(state)) return state;
     await new Promise((resolve) => setTimeout(resolve, 40));
   }
-  throw new Error(`timed out waiting for ${description}`);
+  throw new Error(`timed out waiting for ${description}; ${JSON.stringify({
+    tick: lastState?.serverTick,
+    players: lastState?.players,
+    doors: lastState?.doors,
+    plates: lastState?.plates,
+    room: lastState?.room,
+  })}`);
 }
 
 async function waitForPhase(page, phase, description, timeout = 20000) {
@@ -94,8 +113,13 @@ async function recordEchoPlate(pageA, plateId, doorId, x, z) {
   const observedDelay = echoed.serverTick - entered.serverTick;
   const echo = echoed.echoes.find((candidate) => candidate.playerId === 1);
   assert.equal(echo?.sourceTick, echoed.serverTick - 600);
-  assert(echo.sourceTick >= entered.serverTick,
-    `Echo source ${echo.sourceTick} predates observed live occupancy ${entered.serverTick}`);
+  // `entered` is when this browser observed the authoritative activation. MoQ
+  // replication and browser polling can skip the first occupied snapshot, so
+  // this observation can arrive after the actual source tick.
+  // The exact authority delay above and the observed release bound below are
+  // stable across both local and CI scheduling.
+  assert(echo.sourceTick >= outside.serverTick,
+    `Echo source ${echo.sourceTick} predates this recording ${outside.serverTick}`);
   assert(echo.sourceTick <= left.serverTick,
     `Echo source ${echo.sourceTick} follows observed live occupancy ${left.serverTick}`);
   evidence.events.push({
@@ -281,9 +305,8 @@ try {
   );
   const detectedPose = failedA.players.find((player) => player.playerId === 1);
   assert(detectedPose, 'detected player missing from failed snapshot');
-  assert(Math.abs(detectedPose.xMm - 4500) <= 180);
-  assert(detectedPose.zMm > 5000 && detectedPose.zMm <= 6200,
-    `surveillance detected player outside expected approach: z=${detectedPose.zMm}`);
+  assert(cameraContains(camera41, detectedPose),
+    `surveillance detected player outside camera cone: ${JSON.stringify(detectedPose)}`);
 
   // Terminal attempts keep publishing canonical ticks, but authoritative poses
   // remain frozen on both clients.

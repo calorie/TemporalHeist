@@ -68,10 +68,21 @@ Passed in containers on 2026-09-22:
 - Final `sh container p12-integrated-0922 acceptance` passed the complete
   two-client game loop through attempt 3, including GPU surface color assertions,
   with both clients on SwiftShader and no captured errors.
+- PR #6's first CI run exposed an invalid E2E assumption: the browser observed
+  plate activation 30 ticks after the authoritative Echo source tick. The test
+  now brackets the source with the pre-recording and observed-release ticks while
+  retaining the exact canonical `echoed.serverTick - sourceTick == 600` check.
+- Fresh `sh container ci-fix-0922 acceptance` passed after the fix. It exercised
+  a 603-tick browser-observed delay while still proving the exact 600-tick
+  authority delay, then completed surveillance failure and reset without errors.
+- CI component and acceptance verification now run concurrently in isolated
+  Compose namespaces and superseded runs are cancelled. The failed serial run
+  took 20m09s for components plus 9m02s for acceptance; expected wall time is
+  now bounded by the slower parallel job rather than their sum.
 
 ## Current work
 
-1. Publish the P1.2 PR and monitor CI.
+1. Push the PR #6 CI correction and monitor both parallel jobs.
 2. Begin P1.3 onboarding and presentation after integration.
 
 ## Blockers
@@ -80,4 +91,4 @@ None.
 
 ## Next action
 
-Publish the merge-ready P1.2 branch and monitor CI.
+Push the CI correction and verify both PR #6 jobs pass.
