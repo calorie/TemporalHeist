@@ -28,7 +28,7 @@ Passed in containers on 2026-09-22:
   Ready input decoded by Rust; Rust P1 room state decoded and asserted by
   TypeScript.
 - `sh container p1-integrated-0922 verify`: codegen consistency, protocol spike,
-  Rust fmt/clippy/tests (19 tests), TypeScript typecheck, Biome, browser unit and
+  Rust fmt/clippy/tests (19 tests at integration, 20 after phase-freeze coverage), TypeScript typecheck, Biome, browser unit and
   contract tests, Vite build, and containerized Chromium WebGPU probe all passed.
 - `sh container p1-integrated-0922 run --rm dev ... th-sim ...`: after phase
   freezing, fmt/clippy and 12 simulation tests passed.

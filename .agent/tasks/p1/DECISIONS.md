@@ -35,4 +35,6 @@ Lobby and terminal phases accept connection, readiness, restart, and heartbeat
 inputs but do not advance movement, history, actions, Echoes, or mechanisms. This
 prevents pre-positioning before an attempt and keeps the authoritative result
 stable while players read it. Starting an attempt clears prior motion history;
-reset also respawns both connected players and clears transient gameplay state.
+it also zeroes any motion intent sent while waiting so held lobby input cannot
+move a player on the start tick. Reset respawns both connected players and clears
+transient gameplay state.

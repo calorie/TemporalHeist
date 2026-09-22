@@ -376,6 +376,9 @@ impl World {
             self.actions.clear();
             for p in self.players.values_mut() {
                 p.history.clear();
+                p.mx = 0;
+                p.mz = 0;
+                p.last_motion = self.tick;
             }
         }
     }
@@ -931,10 +934,12 @@ mod tests {
         assert_eq!((pose(&lobby).x_mm, pose(&lobby).z_mm), spawn);
         assert!(w.players.get(&1).unwrap().history.is_empty());
 
-        w.step(&[
+        let started = w.step(&[
             player_input(1, "a", InputKind::Ready, 1),
             player_input(2, "b", InputKind::Ready, 1),
         ]);
+        assert_eq!((pose(&started).x_mm, pose(&started).z_mm), spawn);
+        motion.sequence = 2;
         let active = w.step(&[motion]);
         assert!(pose(&active).x_mm > spawn.0);
         w.room_phase = RoomPhase::Won;

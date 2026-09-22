@@ -67,9 +67,9 @@ async function recordEchoPlate(pageA, plateId, doorId, x, z) {
     `live presence on plate ${plateId}`);
   evidence.events.push({ event: 'live-plate', plateId, tick: entered.serverTick });
   await moveTo(pageA, 1, x, z);
-  // Record four seconds of plate occupancy, leaving enough delayed Echo window
+  // Record six seconds of plate occupancy, leaving enough delayed Echo window
   // for two live players to traverse an authority-controlled door in sequence.
-  await waitFor(pageA, (state) => state.serverTick >= entered.serverTick + 240,
+  await waitFor(pageA, (state) => state.serverTick >= entered.serverTick + 360,
     `recording window on plate ${plateId}`, 6000);
   await moveTo(pageA, 1, x - 1200, z);
   const left = await waitFor(pageA,
@@ -178,7 +178,9 @@ try {
 
   // Both live players must enter extraction after Echo Presence has opened the
   // final door. The authority, rather than either renderer, decides the result.
-  await moveTo(pageA, 1, 23000, 4000);
+  // Winning freezes authoritative movement as soon as A crosses x=22800, so
+  // target the extraction threshold instead of a point beyond the frozen pose.
+  await moveTo(pageA, 1, 22850, 4000);
   const wonA = await waitForPhase(pageA, RoomPhase.WON, 'won result on client A');
   const wonB = await waitForPhase(pageB, RoomPhase.WON, 'won result on client B');
   assert.equal(wonA.room.attempt, 1);
