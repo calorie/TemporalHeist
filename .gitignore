@@ -4,6 +4,7 @@
 
 # Local agent scratch
 .agent/tmp/
+.worktrees/
 
 # OS
 .DS_Store
