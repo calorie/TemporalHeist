@@ -118,6 +118,15 @@ E2E and visual browser launches made the actual PNG match `[4,9,14,255]`.
   Handoff artifacts are preserved under the Task 5 checkout's untracked
   `.superpowers/sdd/p2/artifacts/` directory.
 
+Task 5 review fix 1 replaced the state/entry-tick-only investigation check with
+complete guard comparison at a shared canonical tick. A regression first showed
+that the old validation accepted a divergent X coordinate. The new guard
+agreement and existing visual-browser contract checks passed in the `p2-e2e`
+browser container, and `sh container p2-e2e acceptance` passed again. Both complete
+guard snapshots are retained at tick 10242 in the investigation event's
+`agreement` field; both clients won at tick 12395 with empty browser/renderer
+error arrays. The guard-agreement regression is registered in standard verify.
+
 ## Blockers
 
 Visual inspection now exposes a pre-existing cube-mesh defect: floor/wall/body

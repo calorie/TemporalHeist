@@ -2,6 +2,7 @@ import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { captureScreenshot } from './screenshot.mjs';
+import { guardAgreement } from './guard-agreement.mjs';
 
 const artifacts = `/artifacts/e2e-${process.env.TH_AGENT_ID}`;
 await mkdir(artifacts, { recursive: true });
@@ -316,6 +317,25 @@ const guardOf = (state) => state.guards.find((guard) => guard.id === 51);
 const positions = (state) => state.players.map(({ playerId, xMm, zMm }) => ({ playerId, xMm, zMm }));
 const dash = (page, player, x, z) => moveTo(page, player, x, z, moveTimeout, 1);
 
+async function sharedGuardSnapshot(pageA, pageB, investigating) {
+  const samples = [new Map([[investigating.serverTick, investigating]]), new Map()];
+  const enteredTick = guardOf(investigating).stateEnteredTick;
+  const deadline = Date.now() + stateTimeout;
+  while (Date.now() < deadline) {
+    const latest = await Promise.all([snapshot(pageA), snapshot(pageB)]);
+    for (const [index, state] of latest.entries())
+      if (state) samples[index].set(state.serverTick, state);
+    for (const [tick, clientA] of samples[0]) {
+      const clientB = samples[1].get(tick);
+      const guard = guardOf(clientA);
+      if (clientB && guard?.state === GuardState.INVESTIGATE && guard.stateEnteredTick === enteredTick)
+        return guardAgreement(clientA, clientB);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error('No shared canonical tick observed during the guard investigation');
+}
+
 async function guardPixel(page, expectedState) {
   // Sample well inside the triangle, offset from its route/body centerline.
   const guard = guardOf(await snapshot(page));
@@ -382,13 +402,10 @@ async function guardDiversion(pageA, pageB) {
   assert(Math.abs(guard.investigationTarget.xMm - echo.xMm) <= 180);
   assert(Math.abs(guard.investigationTarget.zMm - echo.zMm) <= 180);
   assert.equal(guard.investigationTarget.xMm, echo.xMm);
-  const observedB = await waitFor(pageB, (state) =>
-    guardOf(state).stateEnteredTick === guard.stateEnteredTick,
-  'client B observing the same guard investigation');
-  assert.equal(guardOf(observedB).state, GuardState.INVESTIGATE);
+  const agreement = await sharedGuardSnapshot(pageA, pageB, investigating);
   await Promise.all([pageA, pageB].map((page) => waitForText(page, '#guard-status', /INVESTIGATING.*CROSS NOW/, 'visible crossing cue')));
   evidence.events.push({ event: 'guard-echo-investigating', sourceStartTick: sourceStart.serverTick,
-    lureTick: lure.serverTick, tick: investigating.serverTick, echo, guard,
+    lureTick: lure.serverTick, tick: investigating.serverTick, echo, guard, agreement,
     canonicalDelayTicks: investigating.serverTick - echo.sourceTick });
   // SwiftShader screenshots can take longer than the search window. Freeze
   // only presentation after readback, while real MoQ input and authority ticks
