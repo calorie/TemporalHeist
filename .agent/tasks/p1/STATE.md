@@ -2,9 +2,9 @@
 
 ## Status
 
-P1.1 is merged on `main` at `4b6f89a`. P1.2 is merged on `main` at `a0fa12e`.
-P1.3 implementation and all local container verification are complete on
-`p1/playability-presentation`; PR publication and CI are next.
+P1.1 is merged at `4b6f89a`, P1.2 at `a0fa12e`, and P1.3 at `57a44e8`.
+P1.4 release-candidate implementation and local container verification are
+complete on `p1/release-candidate`; publication and CI are next.
 
 ## Completed
 
@@ -36,6 +36,11 @@ P1.3 implementation and all local container verification are complete on
 - Extended the two-client E2E to assert the human-facing UI and labeled evidence.
 - Split visual clients into separate Chromium services, profile volumes, and
   ephemeral CDP endpoints after independent review found shared profile state.
+- Added a production two-worktree isolation harness with machine-readable
+  resource, acceptance, teardown, and survivor-health evidence.
+- Hardened E2E movement targets against delayed observation at extraction and
+  surveillance boundaries. Isolation runs initialize all four Chromium clients
+  together and temporarily idle stack B's rendering before its full scenario.
 
 ## Verification
 
@@ -104,15 +109,58 @@ Passed in containers on 2026-09-22:
   WebGPU/WGSL validation all passed. The probe used Mesa llvmpipe Vulkan with a
   SwiftShader WebGPU adapter, `rgba8unorm`, and zero shader/validation errors.
 
+Passed in containers on 2026-09-23:
+
+- PR #7 CI passed: `validate` 1m15s, `component-verification` 3m16s, and
+  `acceptance` 10m09s. Post-merge `main` CI for `57a44e8` also passed.
+- `sh containers/verify-two-stack-isolation.sh /Users/a/TemporalHeist/.worktrees/p14-a
+  p14-iso-a /Users/a/TemporalHeist/.worktrees/p14-b p14-iso-b
+  /tmp/temporal-heist-p14-isolation` passed both complete production acceptance
+  scenarios. Both browser services were live simultaneously and each contained
+  independent Chromium A/B profiles.
+- Isolation resource evidence: container IDs A
+  `55042c841453,92b62f7d7c51,b6dc0b1fb4c8,c4c217f7e5c5`; B
+  `11d33673af82,1cdd718293ac,70e83de1908e,bbb60e92b51c`; network IDs A
+  `94c171c67639`, B `1c45cca9f9eb`. Each stack had seven uniquely prefixed
+  writable volumes and no published host ports.
+- Removing `th-p14-iso-a` with volumes removed only A. Every B container,
+  network, and volume ID remained unchanged, and an in-network B web health
+  request passed. Machine evidence and separate acceptance logs are in
+  `/tmp/temporal-heist-p14-isolation/`.
+- Final `sh container p14-final-0923 verify` passed codegen, cross-language
+  protocol, rustfmt, clippy, 25 Rust tests, TypeScript, Biome, seven browser/
+  contract suites, Vite production build, and Chromium WebGPU/WGSL validation.
+  The probe reported Chromium 153, Mesa llvmpipe Vulkan 1.4.318, SwiftShader,
+  `rgba8unorm`, zero shader errors, and zero validation errors.
+- `sh container p14-final-0923 visual` passed with separate Chromium A/B
+  profiles and CDP ports `64942`/`64941`. Both 1280x720 labeled screenshots and
+  metadata reported raw WebGPU/SwiftShader and empty page/renderer errors.
+  Container-driven visible Ready actions confirmed ACTIVE HUD, player labels,
+  the five-minute timer, onboarding, and Echo countdown on both clients.
+
 ## Current work
 
-1. Commit, push, open the P1.3 PR, and monitor container-only CI.
-2. After merge, begin P1.4 release-candidate verification.
+1. Commit the final P1.4 state, run an independent diff review, and publish the
+   release-candidate PR.
+2. Monitor its container-only CI and leave the verified visual stack available
+   until evidence review is complete.
 
 ## Blockers
 
 None.
 
+## Known constraints and unverified items
+
+- Desktop Chromium is the supported target. Safari, Firefox, mobile, production
+  authentication, persistence, matchmaking, WAN deployment, and relay clustering
+  remain outside P1.
+- Automated GPU evidence uses SwiftShader on Mesa llvmpipe/Vulkan. Hardware GPU
+  passthrough and performance have not been measured.
+- Audio tests verify Web Audio transitions and mute behavior; automated runners
+  do not assess perceived loudness or sound quality.
+- Visual evidence lives in run-private Docker artifact volumes. CDP permits human
+  inspection of containerized Chromium but no VNC/noVNC desktop is provided.
+
 ## Next action
 
-Publish the P1.3 PR and monitor its container-only CI.
+Publish the P1.4 release-candidate PR and monitor its container-only CI.

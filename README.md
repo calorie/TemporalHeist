@@ -22,9 +22,9 @@ Repository-wide durable facts are in `.agentic/PROJECT.md`.
 
 The active implementation task is:
 
-- `.agent/tasks/vertical-slice/SPEC.md` — objective, scope, acceptance criteria, and verification requirements.
-- `.agent/tasks/vertical-slice/DECISIONS.md` — product and architecture decisions that must not be silently changed.
-- `.agent/tasks/vertical-slice/STATE.md` — current implementation state and next action.
+- `.agent/tasks/p1/SPEC.md` — playable-prototype milestones and acceptance criteria.
+- `.agent/tasks/p1/DECISIONS.md` — durable P1 design and verification decisions.
+- `.agent/tasks/p1/STATE.md` — current implementation state and next action.
 
 Supporting design documents:
 
@@ -45,7 +45,7 @@ codex plugin add agentic-engineering@agentic-engineering
 
 Then start Codex in this repository and give it this objective:
 
-> Continue the active `vertical-slice` task. Read `.agentic/PROJECT.md`, `.agent/tasks/vertical-slice/{SPEC,STATE,DECISIONS}.md`, and the design docs. Implement the task end-to-end, maintaining durable task state and verification evidence. Resolve reversible engineering choices autonomously. Do not change product semantics or architecture invariants without recording the reason and requesting input only when the decision is genuinely product-level or irreversible.
+> Continue the active `p1` task. Read `.agentic/PROJECT.md`, `.agent/tasks/p1/{SPEC,STATE,DECISIONS}.md`, the vertical-slice task, and the design docs. Implement the task end-to-end, maintaining durable task state and verification evidence. Resolve reversible engineering choices autonomously. Do not change product semantics or architecture invariants without recording the reason and requesting input only when the decision is genuinely product-level or irreversible.
 
 Codex should choose its own effort, subagent use, worktrees, verification strategy, and PR topology according to `AGENTS.md`; the user should not need to orchestrate agents.
 
@@ -67,8 +67,8 @@ That scene, running through the real relay/authority/browser path and rendered w
 
 ## Status
 
-The P0 vertical slice is implemented. Bootstrap and run every project command through
-the container wrapper:
+P0 and P1.1–P1.3 are merged; P1.4 release verification is implemented. Bootstrap
+and run every project command through the container wrapper:
 
 ~~~sh
 sh container local bootstrap
@@ -83,10 +83,11 @@ Chromium clients. It records JSON evidence and both client screenshots in that r
 private `artifacts` volume. Use a different lowercase run ID for each checkout or
 concurrent stack.
 
-`visual` starts a container-owned Chromium with the game already loaded and prints
-its ephemeral loopback Chrome DevTools Protocol (CDP) endpoint. Open
-`chrome://inspect`, add the printed `127.0.0.1:<port>` target, and select **inspect**.
-The inspected Chromium, profile, services, and port belong only to that run ID.
+`visual` starts separate container-owned Chromium A/B services with independent
+profiles and prints two ephemeral loopback Chrome DevTools Protocol (CDP)
+endpoints. Open `chrome://inspect`, add either printed `127.0.0.1:<port>` target,
+and select **inspect**. Both Chromium services, profiles, and ports belong only to
+that run ID.
 
 To prove release isolation with two distinct checkouts, run the production acceptance
 flow concurrently through the host-side Docker orchestrator:
