@@ -205,7 +205,9 @@ mod tests {
                 player_id: 1,
                 session_id: "s".into(),
                 connected: true,
+                ready: false,
             }],
+            room: None,
         }
     }
 
