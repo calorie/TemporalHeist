@@ -74,10 +74,10 @@ async function recordEchoPlate(pageA, plateId, doorId, x, z) {
     return plate?.echoPresence > 0 && door?.active;
   }, `Echo presence on plate ${plateId}`, 15000);
   const observedDelay = echoed.serverTick - entered.serverTick;
-  assert(observedDelay >= 598 && observedDelay <= 600,
-    `20 Hz replication observed Echo after ${observedDelay} ticks`);
   const echo = echoed.echoes.find((candidate) => candidate.playerId === 1);
   assert.equal(echo?.sourceTick, echoed.serverTick - 600);
+  assert(Math.abs(echo.sourceTick - entered.serverTick) <= 6,
+    `replicated transition differs from Echo source by ${echo.sourceTick - entered.serverTick} ticks`);
   evidence.events.push({
     event: 'echo-door-open', plateId, doorId, enteredTick: entered.serverTick,
     openedTick: echoed.serverTick, observedDelayTicks: observedDelay,

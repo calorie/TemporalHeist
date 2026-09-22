@@ -8,6 +8,7 @@ pub const SNAPSHOT_INTERVAL_TICKS: u64 = 3;
 pub const NETWORK_HISTORY_TICKS: u64 = 660;
 pub const GROUP_INTERVAL_TICKS: u64 = TICK_RATE;
 pub const TRACK_RETENTION: Duration = Duration::from_secs(30);
+pub const MAX_PENDING_INPUTS: usize = 1024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TrackNames {
@@ -67,6 +68,9 @@ impl Authority {
     }
 
     pub fn accept_frame(&mut self, bytes: &[u8]) -> anyhow::Result<()> {
+        if self.pending.len() >= MAX_PENDING_INPUTS {
+            anyhow::bail!("pending input limit of {MAX_PENDING_INPUTS} reached");
+        }
         self.pending.push(decode_input(bytes)?);
         Ok(())
     }
@@ -131,14 +135,14 @@ pub async fn run_authority(
     loop {
         tokio::select! {
             biased;
+            _ = ticker.tick() => if let Some(published) = authority.tick()
+                && output.send(published).await.is_err() { return Ok(()); },
             frame = input.recv() => match frame {
                 Some(frame) => if let Err(error) = authority.accept_frame(&frame) {
                     tracing::warn!(error = %error, bytes = frame.len(), "rejected input frame");
                 },
                 None => return Ok(()),
             },
-            _ = ticker.tick() => if let Some(published) = authority.tick()
-                && output.send(published).await.is_err() { return Ok(()); }
         }
     }
 }
@@ -235,6 +239,27 @@ mod tests {
         .encode_to_vec();
         assert!(decode_input_for_player(&forged, 1).is_err());
         assert_eq!(decode_input_for_player(&forged, 2).unwrap().player_id, 2);
+    }
+
+    #[test]
+    fn pending_input_queue_is_bounded_between_ticks() {
+        let mut authority = Authority::new("epoch-test".into());
+        let frame = Input {
+            protocol_major: PROTOCOL_MAJOR,
+            room_epoch: "epoch-test".into(),
+            player_id: 1,
+            session_id: "s".into(),
+            sequence: 1,
+            move_x: 0,
+            move_z: 0,
+            kind: InputKind::Join as i32,
+            target_id: 0,
+        }
+        .encode_to_vec();
+        for _ in 0..MAX_PENDING_INPUTS {
+            authority.accept_frame(&frame).unwrap();
+        }
+        assert!(authority.accept_frame(&frame).is_err());
     }
 
     #[test]

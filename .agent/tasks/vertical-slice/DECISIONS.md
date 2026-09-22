@@ -166,6 +166,10 @@ they reach simulation. Session IDs remain replicated correlation values so a cli
 can distinguish its accepted Join; they are not authentication credentials. Relay
 authorization and hostile-client authentication remain outside P0.
 
+The authority loop gives a ready simulation tick priority over input receipt and caps
+pending decoded frames at 1024 between ticks. Excess frames are rejected and logged;
+canonical room time cannot be starved by a continuously ready publisher.
+
 Codex may choose and later revise without asking the user:
 
 - exact workspace/package-manager layout;
