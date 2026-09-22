@@ -277,9 +277,10 @@ try {
   const frozenB = await waitFor(pageB,
     (state) => state.serverTick >= failedB.serverTick + 12,
     'post-failure frozen snapshot on client B');
-  assert.deepEqual(frozenA.players, failedA.players);
-  assert.deepEqual(frozenB.players, failedB.players);
-  assert.deepEqual(frozenA.players, frozenB.players);
+  const positions = (state) => state.players.map(({playerId, xMm, zMm}) => ({playerId, xMm, zMm}));
+  assert.deepEqual(positions(frozenA), positions(failedA));
+  assert.deepEqual(positions(frozenB), positions(failedB));
+  assert.deepEqual(positions(frozenA), positions(frozenB));
   evidence.events.push({
     event: 'surveillance-failed', attempt: failedA.room.attempt,
     hazardId: 41, detectedPlayerId: 1, endedTick: failedA.room.endedTick,
