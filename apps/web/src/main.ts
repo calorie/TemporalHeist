@@ -23,6 +23,8 @@ let joinSequence = 0;
 let motionSequence = 0;
 let actionSequence = 0;
 let reconnecting = false;
+let transportGeneration = 0;
+let reconnectTimer: number | undefined;
 function element<T extends Element>(selector: string): T {
   const found = document.querySelector<T>(selector);
   if (!found) throw new Error(`Missing ${selector}`);
@@ -81,39 +83,62 @@ function recordError(error: unknown) {
   errors.push(message);
   setState(`error: ${message}`);
 }
-function handlers() {
+function scheduleReconnect(delay = 750) {
+  if (reconnectTimer !== undefined) return;
+  reconnectTimer = window.setTimeout(() => {
+    reconnectTimer = undefined;
+    if (reconnecting) {
+      scheduleReconnect(250);
+      return;
+    }
+    void reconnect();
+  }, delay);
+}
+function handlers(generation: number) {
   return {
-    snapshot: onSnapshot,
-    history: (chunk: { roomEpoch: string; samples: Snapshot[] }) => {
-      if (chunk.roomEpoch === timeline.epoch || !timeline.epoch) timeline.addMany(chunk.samples);
+    snapshot: (snapshot: Snapshot) => {
+      if (generation === transportGeneration) onSnapshot(snapshot);
     },
-    state: setState,
+    history: (chunk: { roomEpoch: string; samples: Snapshot[] }) => {
+      if (
+        generation === transportGeneration &&
+        (chunk.roomEpoch === timeline.epoch || !timeline.epoch)
+      )
+        timeline.addMany(chunk.samples);
+    },
+    state: (next: string) => {
+      if (generation === transportGeneration) setState(next);
+    },
     error: (error: unknown) => {
+      if (generation !== transportGeneration) return;
       recordError(error);
-      if (!reconnecting) window.setTimeout(() => void reconnect(), 750);
+      scheduleReconnect();
     },
   };
 }
 async function reconnect() {
   if (reconnecting) return;
+  if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
+  reconnectTimer = undefined;
   reconnecting = true;
+  const generation = ++transportGeneration;
   joined = false;
   joiningEpoch = '';
   joinAttemptTick = -60;
   transport?.close();
   setState('reconnecting');
+  const next = new MoqTransport(handlers(generation));
+  transport = next;
   try {
-    transport = new MoqTransport(handlers());
-    await transport.connect(relay, room, playerId);
+    await next.connect(relay, room, playerId);
   } catch (error) {
-    recordError(error);
-    window.setTimeout(() => {
-      reconnecting = false;
-      void reconnect();
-    }, 1000);
-    return;
+    if (generation === transportGeneration) {
+      recordError(error);
+      scheduleReconnect(1000);
+    }
+  } finally {
+    if (generation === transportGeneration) reconnecting = false;
   }
-  reconnecting = false;
 }
 function move(x: number, z: number) {
   const length = Math.hypot(x, z);
