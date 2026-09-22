@@ -1,4 +1,8 @@
-use std::{collections::VecDeque, time::Duration};
+use std::{
+    collections::VecDeque,
+    sync::atomic::{AtomicU64, Ordering},
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use prost::Message;
 use th_protocol::{Input, MAX_INPUT_BYTES, PROTOCOL_MAJOR, Snapshot, TICK_RATE, TimelineChunk};
@@ -9,6 +13,17 @@ pub const NETWORK_HISTORY_TICKS: u64 = 660;
 pub const GROUP_INTERVAL_TICKS: u64 = TICK_RATE;
 pub const TRACK_RETENTION: Duration = Duration::from_secs(30);
 pub const MAX_PENDING_INPUTS: usize = 1024;
+
+static EPOCH_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+pub fn fresh_room_epoch(room_id: &str) -> String {
+    let started = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let counter = EPOCH_COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("{room_id}-{started:x}-{:x}-{counter:x}", std::process::id())
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TrackNames {
@@ -165,6 +180,16 @@ pub async fn run_authority(
 mod tests {
     use super::*;
     use th_protocol::{InputKind, Session};
+
+    #[test]
+    fn generated_room_epochs_change_across_authority_restarts() {
+        let first = fresh_room_epoch("room-a");
+        let second = fresh_room_epoch("room-a");
+
+        assert!(first.starts_with("room-a-"));
+        assert!(second.starts_with("room-a-"));
+        assert_ne!(first, second);
+    }
 
     fn snapshot(tick: u64) -> Snapshot {
         Snapshot {

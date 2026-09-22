@@ -33,6 +33,7 @@ services:
     <<: *dev
     command: ["cargo", "run", "--locked", "-p", "th-authority"]
     depends_on: [relay]
+    restart: on-failure
   web:
     <<: *dev
     command: ["npx", "vite", "apps/web", "--host", "0.0.0.0"]
