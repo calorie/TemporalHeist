@@ -2,9 +2,8 @@
 
 ## Status
 
-P1.1 in progress. The shared game-loop contract is the current synchronization
-boundary. Independent component work starts after its containerized codegen and
-compatibility checks pass.
+P1.1 implementation and integrated verification pass. Independent review is in
+progress before the branch is published. P1.2 stealth pressure is next.
 
 ## Completed
 
@@ -15,16 +14,35 @@ compatibility checks pass.
 - Added repository guidance to continue through reversible ambiguity and routine
   failed checks without requesting user decisions.
 - Defined the P1 milestone sequence and P1.1 authoritative game-loop semantics.
+- Froze the additive protocol and extraction-map contract at `62975fd`.
+- Implemented the deterministic Rust lifecycle, visible browser controls/HUD,
+  and two-client E2E in three isolated worktrees.
+- Integrated lobby, ready, active, won, failed, restart, attempt timing, Echo
+  proof, extraction, and inactive-phase gameplay freezing.
 
 ## Verification
 
-No P1 verification has been claimed yet.
+Passed in containers on 2026-09-22:
+
+- `sh container p1-contract run --rm dev sh spikes/protocol/check.sh`: TypeScript
+  Ready input decoded by Rust; Rust P1 room state decoded and asserted by
+  TypeScript.
+- `sh container p1-integrated-0922 verify`: codegen consistency, protocol spike,
+  Rust fmt/clippy/tests (19 tests), TypeScript typecheck, Biome, browser unit and
+  contract tests, Vite build, and containerized Chromium WebGPU probe all passed.
+- `sh container p1-integrated-0922 run --rm dev ... th-sim ...`: after phase
+  freezing, fmt/clippy and 12 simulation tests passed.
+- Fresh `sh container p1-integrated-0922 acceptance`: two containerized Chromium
+  clients passed ready → active, reconnect, all three exact-600-tick Echo doors,
+  both-player extraction, won, restart/reset, and second active attempt.
+- Acceptance WebGPU adapters: both clients reported Google/SwiftShader fallback,
+  `rgba8unorm`, with no captured browser or renderer errors.
 
 ## Current work
 
-1. Freeze the additive protobuf and map contract for ready/phase/result/extraction.
-2. Generate Rust/TypeScript consumers and verify compatibility in a container.
-3. Implement simulation, browser UI, and container E2E in isolated worktrees.
+1. Complete independent review and address material findings.
+2. Publish the merge-ready P1.1 branch and PR.
+3. Begin P1.2 authority-owned surveillance failure as the next isolated slice.
 
 ## Blockers
 
@@ -32,5 +50,4 @@ None.
 
 ## Next action
 
-Commit the verified shared contract, sync dependent worktrees, and start parallel
-P1.1 implementation.
+Finish review, publish P1.1, then freeze the minimal P1.2 hazard contract.

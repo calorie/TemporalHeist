@@ -195,11 +195,13 @@ impl World {
         }
         self.expire();
         self.start_if_ready();
-        self.move_players();
-        self.commit_history();
-        self.replay_actions();
-        self.presence();
-        self.update_room_result();
+        if self.room_phase == RoomPhase::Active {
+            self.move_players();
+            self.commit_history();
+            self.replay_actions();
+            self.presence();
+            self.update_room_result();
+        }
         self.trim_actions();
         self.snapshot()
     }
@@ -292,7 +294,7 @@ impl World {
                 }
                 InputKind::Action => {
                     p.last_input = self.tick;
-                    action = true;
+                    action = self.room_phase == RoomPhase::Active;
                 }
                 InputKind::Leave => {
                     p.last_input = self.tick;
@@ -665,6 +667,9 @@ mod tests {
     }
     fn join(w: &mut World) {
         w.step(&[input(InputKind::Join, 1)]);
+        w.room_phase = RoomPhase::Active;
+        w.started_tick = w.tick;
+        w.deadline_tick = w.tick + ATTEMPT_TICKS;
     }
     fn until(w: &mut World, t: u64) -> Snapshot {
         while w.tick < t {
@@ -913,6 +918,28 @@ mod tests {
         assert_eq!(room.ready_players, 2);
         assert_eq!(room.started_tick, active.server_tick);
         assert_eq!(room.deadline_tick, active.server_tick + ATTEMPT_TICKS);
+    }
+
+    #[test]
+    fn lobby_and_terminal_phases_freeze_gameplay() {
+        let mut w = World::new("e".into());
+        join_both(&mut w);
+        let spawn = w.players.get(&1).map(|p| (p.x, p.z)).unwrap();
+        let mut motion = player_input(1, "a", InputKind::Motion, 1);
+        motion.move_x = 1000;
+        let lobby = w.step(&[motion.clone()]);
+        assert_eq!((pose(&lobby).x_mm, pose(&lobby).z_mm), spawn);
+        assert!(w.players.get(&1).unwrap().history.is_empty());
+
+        w.step(&[
+            player_input(1, "a", InputKind::Ready, 1),
+            player_input(2, "b", InputKind::Ready, 1),
+        ]);
+        let active = w.step(&[motion]);
+        assert!(pose(&active).x_mm > spawn.0);
+        w.room_phase = RoomPhase::Won;
+        let won_x = pose(&w.snapshot()).x_mm;
+        assert_eq!(pose(&w.step(&[])).x_mm, won_x);
     }
 
     #[test]
