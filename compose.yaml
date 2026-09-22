@@ -13,6 +13,7 @@ services:
       TH_ROOM_ID: ${TH_AGENT_ID}
       TH_E2E_MOVE_TIMEOUT_MS: ${TH_E2E_MOVE_TIMEOUT_MS:-45000}
       TH_E2E_RECORD_TICKS: ${TH_E2E_RECORD_TICKS:-1200}
+      TH_E2E_START_DELAY_MS: ${TH_E2E_START_DELAY_MS:-0}
     volumes:
       - .:/workspace
       - cargo-registry:/usr/local/cargo/registry

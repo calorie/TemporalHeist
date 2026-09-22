@@ -35,12 +35,14 @@ project_b=th-$run_b
 mkdir -p "$evidence_dir"
 log_a=$evidence_dir/acceptance-a.log
 log_b=$evidence_dir/acceptance-b.log
-TH_E2E_MOVE_TIMEOUT_MS=${TH_E2E_MOVE_TIMEOUT_MS:-120000}
-TH_E2E_RECORD_TICKS=${TH_E2E_RECORD_TICKS:-3000}
-export TH_E2E_MOVE_TIMEOUT_MS TH_E2E_RECORD_TICKS
+TH_ISOLATION_B_START_DELAY_MS=${TH_ISOLATION_B_START_DELAY_MS:-240000}
+export TH_ISOLATION_B_START_DELAY_MS
 
 compose_a() { (cd "$worktree_a" && sh container "$run_a" "$@"); }
-compose_b() { (cd "$worktree_b" && sh container "$run_b" "$@"); }
+compose_b() {
+  (cd "$worktree_b" && TH_E2E_START_DELAY_MS="$TH_ISOLATION_B_START_DELAY_MS" \
+    sh container "$run_b" "$@")
+}
 pid_a=
 pid_b=
 cleanup() {

@@ -8,8 +8,10 @@ const viewport = { width: 1280, height: 720 };
 const stateTimeout = 30_000;
 const moveTimeout = Number(process.env.TH_E2E_MOVE_TIMEOUT_MS ?? 45_000);
 const recordingTicks = Number(process.env.TH_E2E_RECORD_TICKS ?? 1_200);
+const startDelay = Number(process.env.TH_E2E_START_DELAY_MS ?? 0);
 assert(Number.isSafeInteger(moveTimeout) && moveTimeout >= 45_000);
 assert(Number.isSafeInteger(recordingTicks) && recordingTicks >= 1_200);
+assert(Number.isSafeInteger(startDelay) && startDelay >= 0);
 const flags = [
   '--no-sandbox',
   '--enable-unsafe-webgpu',
@@ -234,6 +236,8 @@ try {
     await page.waitForFunction(() => window.th?.joined(), undefined, { timeout: 45_000 });
   }
   const [pageA, pageB] = contexts.map((context) => context.pages().at(-1));
+
+  if (startDelay > 0) await new Promise((resolve) => setTimeout(resolve, startDelay));
 
   const lobby = await waitFor(pageA, (state) =>
     state.room?.phase === RoomPhase.LOBBY &&
