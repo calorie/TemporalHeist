@@ -170,6 +170,11 @@ The authority loop gives a ready simulation tick priority over input receipt and
 pending decoded frames at 1024 between ticks. Excess frames are rejected and logged;
 canonical room time cannot be starved by a continuously ready publisher.
 
+Replication handoff is nonblocking. When its bounded channel is full, the authority
+drops and logs that replication frame instead of delaying simulation; later full
+snapshots and authority-origin history restore client state. A closed consumer ends
+the room process normally.
+
 Codex may choose and later revise without asking the user:
 
 - exact workspace/package-manager layout;

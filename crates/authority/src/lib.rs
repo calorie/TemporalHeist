@@ -124,6 +124,20 @@ pub fn encode_history(history: &TimelineChunk) -> Vec<u8> {
     history.encode_to_vec()
 }
 
+fn try_publish(output: &mpsc::Sender<PublishedTick>, published: PublishedTick) -> bool {
+    match output.try_send(published) {
+        Ok(()) => true,
+        Err(mpsc::error::TrySendError::Full(dropped)) => {
+            tracing::warn!(
+                server_tick = dropped.snapshot.server_tick,
+                "dropping replication frame under network backpressure"
+            );
+            true
+        }
+        Err(mpsc::error::TrySendError::Closed(_)) => false,
+    }
+}
+
 pub async fn run_authority(
     epoch: String,
     mut input: mpsc::Receiver<Vec<u8>>,
@@ -136,7 +150,7 @@ pub async fn run_authority(
         tokio::select! {
             biased;
             _ = ticker.tick() => if let Some(published) = authority.tick()
-                && output.send(published).await.is_err() { return Ok(()); },
+                && !try_publish(&output, published) { return Ok(()); },
             frame = input.recv() => match frame {
                 Some(frame) => if let Err(error) = authority.accept_frame(&frame) {
                     tracing::warn!(error = %error, bytes = frame.len(), "rejected input frame");
@@ -260,6 +274,34 @@ mod tests {
             authority.accept_frame(&frame).unwrap();
         }
         assert!(authority.accept_frame(&frame).is_err());
+    }
+
+    #[tokio::test]
+    async fn replication_backpressure_drops_instead_of_waiting() {
+        let (tx, mut rx) = mpsc::channel(1);
+        assert!(try_publish(
+            &tx,
+            PublishedTick {
+                snapshot: snapshot(3),
+                history: None
+            }
+        ));
+        assert!(try_publish(
+            &tx,
+            PublishedTick {
+                snapshot: snapshot(6),
+                history: None
+            }
+        ));
+        assert_eq!(rx.recv().await.unwrap().snapshot.server_tick, 3);
+        drop(rx);
+        assert!(!try_publish(
+            &tx,
+            PublishedTick {
+                snapshot: snapshot(9),
+                history: None
+            }
+        ));
     }
 
     #[test]
