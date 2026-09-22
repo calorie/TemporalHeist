@@ -61,6 +61,8 @@ export class MoqTransport {
     this.#closed = true;
     this.#connection?.close();
     this.#connection = undefined;
+    this.#motion = undefined;
+    this.#actions = undefined;
   }
   async #receive(name: string, track: ConsumerTrack, decode: (bytes: Uint8Array) => void) {
     try {
