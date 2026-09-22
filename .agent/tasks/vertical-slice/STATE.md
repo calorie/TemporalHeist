@@ -2,8 +2,9 @@
 
 ## Status
 
-Implementation and local container verification completed on 2026-09-22 on branch
-`vertical-slice`. No default-branch merge has been performed.
+P0 was merged to `main` in PR #2 on 2026-09-22. Post-merge hardening is active on
+branch `postp0/integration`: MoQ reconnect recovery, CI-owned WebGPU pixel evidence,
+and a container-owned manual Chromium inspection path are implemented and verified.
 
 ## Implemented
 
@@ -28,6 +29,7 @@ Implementation and local container verification completed on 2026-09-22 on branc
 sh container <run-id> bootstrap
 sh container <run-id> verify
 sh container <run-id> acceptance
+sh container <run-id> visual
 sh container <run-id> up -d relay authority web
 sh container <run-id> --profile test run --rm browser
 sh container <run-id> down --volumes --remove-orphans
@@ -35,6 +37,21 @@ sh container <run-id> down --volumes --remove-orphans
 
 ## Passed verification evidence
 
+- `sh container postp0-root verify` passed after integration with 15 Rust tests,
+  protocol/codegen checks, TypeScript/Biome/timeline/manual-browser checks, production
+  build, and container Chromium WebGPU pixel readback. Chromium 153 reported a
+  SwiftShader adapter; center/corner pixels and zero WGSL/validation errors passed.
+- Hardened two-browser acceptance passed after an explicit same-session Player A MoQ
+  reconnect. Player B observed A's subsequent canonical movement without an authority
+  restart; all three Echo Presence rooms then opened at an exact canonical 600-tick
+  delay and both WebGPU clients agreed on the result.
+- Authority reconnect preserves the running room epoch across relay transport loss,
+  resubscribes replacement input publishers, and assigns a fresh epoch on process
+  restart. Relay stop/start preserved the authority container identity and restored
+  input delivery.
+- `sh container visualqa-0922 visual` exposed a container-owned Chromium target via a
+  loopback-only ephemeral CDP port. Its private browser profile was removed with the
+  rest of the run namespace.
 - `sh container ci-fix verify` passed after changing generated-code drift detection
   to compare against a temporary codegen output. The CI path no longer requires Git
   metadata inside the verification container.
@@ -88,14 +105,11 @@ Earlier spike isolation details remain reproducible in `spikes/isolation/`.
   the accepted scope.
 - Automated GPU evidence uses SwiftShader software WebGPU. Hardware passthrough has
   not been measured.
-- The dev authority is room-lifetime scoped and exits after every announced input
-  publisher has terminated. Compose restarts it with a fresh epoch; P0 does not keep
-  a room after all clients leave.
-- Automated screenshots are in each run-private Docker artifact volume. A VNC/noVNC
-  interactive display is not included.
+- Automated screenshots are in each run-private Docker artifact volume. Manual visual
+  inspection uses the `visual` command's CDP endpoint; a VNC/noVNC desktop is not
+  included.
 
 ## Recommended next action
 
-Review pull request #2. After P0, the highest value follow-up is authority
-reconnect/restart hardening plus a container-owned remote debugging or noVNC surface
-for interactive visual QA.
+Review the post-merge hardening pull request. Further product work should be selected
+from the explicit P0 non-goals under a newly scoped task.
