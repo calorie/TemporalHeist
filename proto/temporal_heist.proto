@@ -13,7 +13,15 @@ message Input {
   InputKind kind = 8;
   uint32 target_id = 9;
 }
-enum InputKind { UNSPECIFIED = 0; JOIN = 1; MOTION = 2; ACTION = 3; LEAVE = 4; }
+enum InputKind {
+  UNSPECIFIED = 0;
+  JOIN = 1;
+  MOTION = 2;
+  ACTION = 3;
+  LEAVE = 4;
+  READY = 5;
+  RESTART = 6;
+}
 message Pose {
   uint32 player_id = 1;
   sint32 x_mm = 2;
@@ -46,8 +54,31 @@ message Snapshot {
   repeated Mechanism doors = 7;
   repeated AppliedAction actions = 8;
   repeated Session sessions = 9;
+  RoomState room = 10;
 }
-message Session { uint32 player_id = 1; string session_id = 2; bool connected = 3; }
+message Session {
+  uint32 player_id = 1;
+  string session_id = 2;
+  bool connected = 3;
+  bool ready = 4;
+}
+enum RoomPhase {
+  ROOM_PHASE_UNSPECIFIED = 0;
+  LOBBY = 1;
+  ACTIVE = 2;
+  WON = 3;
+  FAILED = 4;
+}
+message RoomState {
+  RoomPhase phase = 1;
+  uint32 attempt = 2;
+  uint64 started_tick = 3;
+  uint64 ended_tick = 4;
+  uint64 deadline_tick = 5;
+  uint32 ready_players = 6;
+  uint32 extraction_players = 7;
+  bool echo_opened_final_door = 8;
+}
 message TimelineChunk {
   uint32 protocol_major = 1;
   string room_epoch = 2;

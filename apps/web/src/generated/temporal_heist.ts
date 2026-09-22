@@ -15,6 +15,8 @@ export enum InputKind {
   MOTION = 2,
   ACTION = 3,
   LEAVE = 4,
+  READY = 5,
+  RESTART = 6,
   UNRECOGNIZED = -1,
 }
 
@@ -35,6 +37,12 @@ export function inputKindFromJSON(object: any): InputKind {
     case 4:
     case "LEAVE":
       return InputKind.LEAVE;
+    case 5:
+    case "READY":
+      return InputKind.READY;
+    case 6:
+    case "RESTART":
+      return InputKind.RESTART;
     case -1:
     case "UNRECOGNIZED":
     default:
@@ -54,7 +62,62 @@ export function inputKindToJSON(object: InputKind): string {
       return "ACTION";
     case InputKind.LEAVE:
       return "LEAVE";
+    case InputKind.READY:
+      return "READY";
+    case InputKind.RESTART:
+      return "RESTART";
     case InputKind.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
+export enum RoomPhase {
+  ROOM_PHASE_UNSPECIFIED = 0,
+  LOBBY = 1,
+  ACTIVE = 2,
+  WON = 3,
+  FAILED = 4,
+  UNRECOGNIZED = -1,
+}
+
+export function roomPhaseFromJSON(object: any): RoomPhase {
+  switch (object) {
+    case 0:
+    case "ROOM_PHASE_UNSPECIFIED":
+      return RoomPhase.ROOM_PHASE_UNSPECIFIED;
+    case 1:
+    case "LOBBY":
+      return RoomPhase.LOBBY;
+    case 2:
+    case "ACTIVE":
+      return RoomPhase.ACTIVE;
+    case 3:
+    case "WON":
+      return RoomPhase.WON;
+    case 4:
+    case "FAILED":
+      return RoomPhase.FAILED;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return RoomPhase.UNRECOGNIZED;
+  }
+}
+
+export function roomPhaseToJSON(object: RoomPhase): string {
+  switch (object) {
+    case RoomPhase.ROOM_PHASE_UNSPECIFIED:
+      return "ROOM_PHASE_UNSPECIFIED";
+    case RoomPhase.LOBBY:
+      return "LOBBY";
+    case RoomPhase.ACTIVE:
+      return "ACTIVE";
+    case RoomPhase.WON:
+      return "WON";
+    case RoomPhase.FAILED:
+      return "FAILED";
+    case RoomPhase.UNRECOGNIZED:
     default:
       return "UNRECOGNIZED";
   }
@@ -108,12 +171,25 @@ export interface Snapshot {
   doors: Mechanism[];
   actions: AppliedAction[];
   sessions: Session[];
+  room: RoomState | undefined;
 }
 
 export interface Session {
   playerId: number;
   sessionId: string;
   connected: boolean;
+  ready: boolean;
+}
+
+export interface RoomState {
+  phase: RoomPhase;
+  attempt: number;
+  startedTick: number;
+  endedTick: number;
+  deadlineTick: number;
+  readyPlayers: number;
+  extractionPlayers: number;
+  echoOpenedFinalDoor: boolean;
 }
 
 export interface TimelineChunk {
@@ -803,6 +879,7 @@ function createBaseSnapshot(): Snapshot {
     doors: [],
     actions: [],
     sessions: [],
+    room: undefined,
   };
 }
 
@@ -834,6 +911,9 @@ export const Snapshot: MessageFns<Snapshot> = {
     }
     for (const v of message.sessions) {
       Session.encode(v!, writer.uint32(74).fork()).join();
+    }
+    if (message.room !== undefined) {
+      RoomState.encode(message.room, writer.uint32(82).fork()).join();
     }
     return writer;
   },
@@ -923,6 +1003,14 @@ export const Snapshot: MessageFns<Snapshot> = {
             message.sessions.push(Session.decode(reader, reader.uint32()));
             continue;
           }
+          case 10: {
+            if (tag !== 82) {
+              break;
+            }
+
+            message.room = RoomState.decode(reader, reader.uint32());
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -960,6 +1048,7 @@ export const Snapshot: MessageFns<Snapshot> = {
         ? object.actions.map((e: any) => AppliedAction.fromJSON(e))
         : [],
       sessions: globalThis.Array.isArray(object?.sessions) ? object.sessions.map((e: any) => Session.fromJSON(e)) : [],
+      room: isSet(object.room) ? RoomState.fromJSON(object.room) : undefined,
     };
   },
 
@@ -992,6 +1081,9 @@ export const Snapshot: MessageFns<Snapshot> = {
     if (message.sessions?.length) {
       obj.sessions = message.sessions.map((e) => Session.toJSON(e));
     }
+    if (message.room !== undefined) {
+      obj.room = RoomState.toJSON(message.room);
+    }
     return obj;
   },
 
@@ -1009,12 +1101,13 @@ export const Snapshot: MessageFns<Snapshot> = {
     message.doors = object.doors?.map((e) => Mechanism.fromPartial(e)) || [];
     message.actions = object.actions?.map((e) => AppliedAction.fromPartial(e)) || [];
     message.sessions = object.sessions?.map((e) => Session.fromPartial(e)) || [];
+    message.room = (object.room !== undefined && object.room !== null) ? RoomState.fromPartial(object.room) : undefined;
     return message;
   },
 };
 
 function createBaseSession(): Session {
-  return { playerId: 0, sessionId: "", connected: false };
+  return { playerId: 0, sessionId: "", connected: false, ready: false };
 }
 
 export const Session: MessageFns<Session> = {
@@ -1027,6 +1120,9 @@ export const Session: MessageFns<Session> = {
     }
     if (message.connected !== false) {
       writer.uint32(24).bool(message.connected);
+    }
+    if (message.ready !== false) {
+      writer.uint32(32).bool(message.ready);
     }
     return writer;
   },
@@ -1068,6 +1164,14 @@ export const Session: MessageFns<Session> = {
             message.connected = reader.bool();
             continue;
           }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.ready = reader.bool();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -1093,6 +1197,7 @@ export const Session: MessageFns<Session> = {
         ? globalThis.String(object.session_id)
         : "",
       connected: isSet(object.connected) ? globalThis.Boolean(object.connected) : false,
+      ready: isSet(object.ready) ? globalThis.Boolean(object.ready) : false,
     };
   },
 
@@ -1107,6 +1212,9 @@ export const Session: MessageFns<Session> = {
     if (message.connected !== false) {
       obj.connected = message.connected;
     }
+    if (message.ready !== false) {
+      obj.ready = message.ready;
+    }
     return obj;
   },
 
@@ -1118,6 +1226,221 @@ export const Session: MessageFns<Session> = {
     message.playerId = object.playerId ?? 0;
     message.sessionId = object.sessionId ?? "";
     message.connected = object.connected ?? false;
+    message.ready = object.ready ?? false;
+    return message;
+  },
+};
+
+function createBaseRoomState(): RoomState {
+  return {
+    phase: 0,
+    attempt: 0,
+    startedTick: 0,
+    endedTick: 0,
+    deadlineTick: 0,
+    readyPlayers: 0,
+    extractionPlayers: 0,
+    echoOpenedFinalDoor: false,
+  };
+}
+
+export const RoomState: MessageFns<RoomState> = {
+  encode(message: RoomState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.phase !== 0) {
+      writer.uint32(8).int32(message.phase);
+    }
+    if (message.attempt !== 0) {
+      writer.uint32(16).uint32(message.attempt);
+    }
+    if (message.startedTick !== 0) {
+      writer.uint32(24).uint64(message.startedTick);
+    }
+    if (message.endedTick !== 0) {
+      writer.uint32(32).uint64(message.endedTick);
+    }
+    if (message.deadlineTick !== 0) {
+      writer.uint32(40).uint64(message.deadlineTick);
+    }
+    if (message.readyPlayers !== 0) {
+      writer.uint32(48).uint32(message.readyPlayers);
+    }
+    if (message.extractionPlayers !== 0) {
+      writer.uint32(56).uint32(message.extractionPlayers);
+    }
+    if (message.echoOpenedFinalDoor !== false) {
+      writer.uint32(64).bool(message.echoOpenedFinalDoor);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): RoomState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseRoomState();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.phase = reader.int32() as any;
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.attempt = reader.uint32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.startedTick = longToNumber(reader.uint64());
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.endedTick = longToNumber(reader.uint64());
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.deadlineTick = longToNumber(reader.uint64());
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.readyPlayers = reader.uint32();
+            continue;
+          }
+          case 7: {
+            if (tag !== 56) {
+              break;
+            }
+
+            message.extractionPlayers = reader.uint32();
+            continue;
+          }
+          case 8: {
+            if (tag !== 64) {
+              break;
+            }
+
+            message.echoOpenedFinalDoor = reader.bool();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): RoomState {
+    return {
+      phase: isSet(object.phase) ? roomPhaseFromJSON(object.phase) : 0,
+      attempt: isSet(object.attempt) ? globalThis.Number(object.attempt) : 0,
+      startedTick: isSet(object.startedTick)
+        ? globalThis.Number(object.startedTick)
+        : isSet(object.started_tick)
+        ? globalThis.Number(object.started_tick)
+        : 0,
+      endedTick: isSet(object.endedTick)
+        ? globalThis.Number(object.endedTick)
+        : isSet(object.ended_tick)
+        ? globalThis.Number(object.ended_tick)
+        : 0,
+      deadlineTick: isSet(object.deadlineTick)
+        ? globalThis.Number(object.deadlineTick)
+        : isSet(object.deadline_tick)
+        ? globalThis.Number(object.deadline_tick)
+        : 0,
+      readyPlayers: isSet(object.readyPlayers)
+        ? globalThis.Number(object.readyPlayers)
+        : isSet(object.ready_players)
+        ? globalThis.Number(object.ready_players)
+        : 0,
+      extractionPlayers: isSet(object.extractionPlayers)
+        ? globalThis.Number(object.extractionPlayers)
+        : isSet(object.extraction_players)
+        ? globalThis.Number(object.extraction_players)
+        : 0,
+      echoOpenedFinalDoor: isSet(object.echoOpenedFinalDoor)
+        ? globalThis.Boolean(object.echoOpenedFinalDoor)
+        : isSet(object.echo_opened_final_door)
+        ? globalThis.Boolean(object.echo_opened_final_door)
+        : false,
+    };
+  },
+
+  toJSON(message: RoomState): unknown {
+    const obj: any = {};
+    if (message.phase !== 0) {
+      obj.phase = roomPhaseToJSON(message.phase);
+    }
+    if (message.attempt !== 0) {
+      obj.attempt = Math.round(message.attempt);
+    }
+    if (message.startedTick !== 0) {
+      obj.startedTick = Math.round(message.startedTick);
+    }
+    if (message.endedTick !== 0) {
+      obj.endedTick = Math.round(message.endedTick);
+    }
+    if (message.deadlineTick !== 0) {
+      obj.deadlineTick = Math.round(message.deadlineTick);
+    }
+    if (message.readyPlayers !== 0) {
+      obj.readyPlayers = Math.round(message.readyPlayers);
+    }
+    if (message.extractionPlayers !== 0) {
+      obj.extractionPlayers = Math.round(message.extractionPlayers);
+    }
+    if (message.echoOpenedFinalDoor !== false) {
+      obj.echoOpenedFinalDoor = message.echoOpenedFinalDoor;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<RoomState>, I>>(base?: I): RoomState {
+    return RoomState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<RoomState>, I>>(object: I): RoomState {
+    const message = createBaseRoomState();
+    message.phase = object.phase ?? 0;
+    message.attempt = object.attempt ?? 0;
+    message.startedTick = object.startedTick ?? 0;
+    message.endedTick = object.endedTick ?? 0;
+    message.deadlineTick = object.deadlineTick ?? 0;
+    message.readyPlayers = object.readyPlayers ?? 0;
+    message.extractionPlayers = object.extractionPlayers ?? 0;
+    message.echoOpenedFinalDoor = object.echoOpenedFinalDoor ?? false;
     return message;
   },
 };
