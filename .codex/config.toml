@@ -1,6 +1,26 @@
 # Project-level configuration loaded by Codex for trusted projects.
-# Keep reasoning at the runtime/model default for ordinary work.
-# Multi-agent capability remains available for tasks where delegation improves throughput.
+# Routine repository development should proceed autonomously. Human approval is
+# reserved for explicit merge/integration boundaries and important design choices.
+
+default_permissions = "agentic-development"
+
+[approval_policy.granular]
+sandbox_approval = false
+rules = true
+mcp_elicitations = false
+request_permissions = false
+skill_approval = false
+
+[permissions.agentic-development]
+description = "Autonomous repository development with writable Git metadata"
+extends = ":workspace"
+
+[permissions.agentic-development.filesystem.":workspace_roots"]
+"." = "write"
+".git" = "write"
+
+[permissions.agentic-development.network]
+enabled = true
 
 [agents]
 enabled = true

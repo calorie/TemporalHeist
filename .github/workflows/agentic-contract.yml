@@ -49,12 +49,27 @@ jobs:
               claude = json.load(f)
           assert "ultracode" not in claude
           assert claude["enabledPlugins"]["agentic-engineering@agentic-engineering"] is True
+          claude_ask = set(claude["permissions"]["ask"])
+          assert "Bash(gh pr merge *)" in claude_ask
+          assert "Bash(git merge *)" in claude_ask
+          assert "Bash(git push origin main *)" in claude_ask
+          assert "Bash(git push origin master *)" in claude_ask
+          assert "Bash(git push origin trunk *)" in claude_ask
 
           with open(".codex/config.toml", "rb") as f:
               codex = tomllib.load(f)
           assert "model_reasoning_effort" not in codex
           assert codex["agents"]["enabled"] is True
           assert codex["plugins"]["agentic-engineering@agentic-engineering"]["enabled"] is True
+          assert codex["default_permissions"] == "agentic-development"
+          granular = codex["approval_policy"]["granular"]
+          assert granular["sandbox_approval"] is False
+          assert granular["rules"] is True
+          assert granular["request_permissions"] is False
+          profile = codex["permissions"]["agentic-development"]
+          assert profile["extends"] == ":workspace"
+          assert profile["filesystem"][":workspace_roots"][".git"] == "write"
+          assert profile["network"]["enabled"] is True
           PY
       - name: Enforce English agent infrastructure
         run: |
@@ -69,6 +84,7 @@ jobs:
               Path("AGENTS.md"),
               Path(".agentic/PROJECT.md"),
               Path(".codex/config.toml"),
+              Path(".codex/rules/approval-boundaries.rules"),
               Path(".github/pull_request_template.md"),
           ]
 
@@ -83,6 +99,10 @@ jobs:
           if failures:
               raise SystemExit("Non-English text detected: " + ", ".join(failures))
           PY
+      - name: Validate approval boundary rules
+        run: |
+          grep -F 'pattern = ["gh", "pr", "merge"]' .codex/rules/approval-boundaries.rules
+          grep -F 'decision = "prompt"' .codex/rules/approval-boundaries.rules
       - name: Check minimal layout
         run: |
           test -f CLAUDE.md
@@ -90,6 +110,7 @@ jobs:
           test -f .agentic/PROJECT.md
           test -f .claude/settings.json
           test -f .codex/config.toml
+          test -f .codex/rules/approval-boundaries.rules
           test -d .agent/tasks
           test ! -e .agentic/agentic.json
           test ! -d scripts

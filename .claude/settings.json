@@ -10,5 +10,14 @@
   },
   "enabledPlugins": {
     "agentic-engineering@agentic-engineering": true
+  },
+  "permissions": {
+    "ask": [
+      "Bash(gh pr merge *)",
+      "Bash(git merge *)",
+      "Bash(git push origin main *)",
+      "Bash(git push origin master *)",
+      "Bash(git push origin trunk *)"
+    ]
   }
 }

@@ -1,0 +1,14 @@
+# Explicit integration approval boundaries.
+# Project-local rules load only for trusted projects.
+
+prefix_rule(
+    pattern = ["gh", "pr", "merge"],
+    decision = "prompt",
+    justification = "Merging a pull request into the default branch requires explicit user approval immediately before merge.",
+)
+
+prefix_rule(
+    pattern = ["git", "push", "origin", ["main", "master", "trunk"]],
+    decision = "prompt",
+    justification = "Direct pushes to a conventional default branch require explicit user approval.",
+)

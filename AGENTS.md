@@ -92,6 +92,31 @@ Update durable state at meaningful milestones. Do not ask the user to initialize
 
 Do not persist native agent graphs, workflow queues, compaction state, or full transcripts.
 
+## Autonomy and approval boundaries
+
+Proceed without user approval for routine, reversible work that is within the objective and repository constraints.
+
+Do not request approval for normal implementation work such as:
+
+- reading or editing repository files;
+- formatting, linting, tests, builds, and code generation;
+- dependency installation/update that follows the existing stack and dependency policy;
+- branch/worktree creation;
+- `git add`, commits, rebases, and ordinary feature-branch maintenance;
+- pushing non-default branches;
+- creating or updating pull requests;
+- review and verification.
+
+Ask the user before an important design decision only when it materially changes long-lived system direction and cannot be inferred safely. Examples include major architecture boundaries, broad public API/data-contract changes, irreversible migration strategy, security/trust-boundary changes, or adoption of a foundational technology that materially changes the architecture.
+
+Do not ask about reversible implementation details.
+
+The default branch is a hard integration boundary:
+
+- never merge a pull request without explicit user approval immediately before merge;
+- never locally merge into or directly push to the repository default branch without explicit user approval immediately before the action;
+- preparing a PR, updating it, pushing its feature branch, and making it merge-ready do not require approval.
+
 ## Verification
 
 Automatically identify and run the narrowest useful checks, then expand according to blast radius and risk.
