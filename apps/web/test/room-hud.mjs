@@ -60,8 +60,16 @@ const won = roomHud(snapshot(RoomPhase.WON, { readyPlayers: 2 }), 1);
 assert.match(won.result, /SUCCESS/);
 assert.equal(won.canRestart, true);
 
-const failed = roomHud(snapshot(RoomPhase.FAILED), 1);
+const failed = roomHud(snapshot(RoomPhase.FAILED, { failureReason: 1 }), 1);
 assert.match(failed.result, /TIME EXPIRED/);
 assert.equal(failed.canRestart, true);
+
+const surveillance = roomHud(
+  snapshot(RoomPhase.FAILED, { failureReason: 2, failureHazardId: 41 }),
+  1,
+);
+assert.match(surveillance.result, /SURVEILLANCE/);
+assert.match(surveillance.result, /CAMERA 41/);
+assert.doesNotMatch(surveillance.result, /TIME EXPIRED/);
 
 console.log('room HUD tests passed');

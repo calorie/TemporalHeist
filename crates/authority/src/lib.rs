@@ -208,6 +208,7 @@ mod tests {
                 ready: false,
             }],
             room: None,
+            hazards: vec![],
         }
     }
 

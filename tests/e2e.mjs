@@ -18,6 +18,18 @@ const flags = [
 const contexts = [];
 const evidence = { agent: process.env.TH_AGENT_ID, events: [] };
 const RoomPhase = Object.freeze({ LOBBY: 1, ACTIVE: 2, WON: 3, FAILED: 4 });
+const FailureReason = Object.freeze({ UNSPECIFIED: 0, TIMEOUT: 1, SURVEILLANCE: 2 });
+const camera41 = Object.freeze({ x: 4500, z: 7500, directionX: 0, directionZ: -1000,
+  range: 2200, halfWidth: 1200 });
+
+function cameraContains(camera, pose) {
+  const dx = pose.xMm - camera.x;
+  const dz = pose.zMm - camera.z;
+  const forward = dx * camera.directionX + dz * camera.directionZ;
+  if (forward < 0 || forward > camera.range * 1000) return false;
+  const lateral = Math.abs(dx * camera.directionZ - dz * camera.directionX);
+  return lateral * camera.range <= camera.halfWidth * forward;
+}
 
 async function snapshot(page) {
   return page.evaluate(() => window.th.snapshot());
@@ -25,8 +37,10 @@ async function snapshot(page) {
 
 async function moveTo(page, playerId, x, z, timeout = 30000) {
   const deadline = Date.now() + timeout;
+  let lastState;
   while (Date.now() < deadline) {
     const state = await snapshot(page);
+    lastState = state;
     const pose = state?.players.find((candidate) => candidate.playerId === playerId);
     if (pose && Math.abs(pose.xMm - x) <= 180 && Math.abs(pose.zMm - z) <= 180) {
       await page.evaluate(() => window.th.move(0, 0));
@@ -41,17 +55,32 @@ async function moveTo(page, playerId, x, z, timeout = 30000) {
     await page.evaluate(([mx, mz]) => window.th.move(mx, mz), [dx, dz]);
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  throw new Error(`player ${playerId} did not reach (${x}, ${z})`);
+  const pose = lastState?.players.find((candidate) => candidate.playerId === playerId);
+  throw new Error(`player ${playerId} did not reach (${x}, ${z}); ${JSON.stringify({
+    pose,
+    tick: lastState?.serverTick,
+    phase: lastState?.room?.phase,
+    failureReason: lastState?.room?.failureReason,
+    failureHazardId: lastState?.room?.failureHazardId,
+  })}`);
 }
 
 async function waitFor(page, predicate, description, timeout = 20000) {
   const deadline = Date.now() + timeout;
+  let lastState;
   while (Date.now() < deadline) {
     const state = await snapshot(page);
+    lastState = state;
     if (state && predicate(state)) return state;
     await new Promise((resolve) => setTimeout(resolve, 40));
   }
-  throw new Error(`timed out waiting for ${description}`);
+  throw new Error(`timed out waiting for ${description}; ${JSON.stringify({
+    tick: lastState?.serverTick,
+    players: lastState?.players,
+    doors: lastState?.doors,
+    plates: lastState?.plates,
+    room: lastState?.room,
+  })}`);
 }
 
 async function waitForPhase(page, phase, description, timeout = 20000) {
@@ -84,8 +113,13 @@ async function recordEchoPlate(pageA, plateId, doorId, x, z) {
   const observedDelay = echoed.serverTick - entered.serverTick;
   const echo = echoed.echoes.find((candidate) => candidate.playerId === 1);
   assert.equal(echo?.sourceTick, echoed.serverTick - 600);
-  assert(echo.sourceTick >= entered.serverTick,
-    `Echo source ${echo.sourceTick} predates observed live occupancy ${entered.serverTick}`);
+  // `entered` is when this browser observed the authoritative activation. MoQ
+  // replication and browser polling can skip the first occupied snapshot, so
+  // this observation can arrive after the actual source tick.
+  // The exact authority delay above and the observed release bound below are
+  // stable across both local and CI scheduling.
+  assert(echo.sourceTick >= outside.serverTick,
+    `Echo source ${echo.sourceTick} predates this recording ${outside.serverTick}`);
   assert(echo.sourceTick <= left.serverTick,
     `Echo source ${echo.sourceTick} follows observed live occupancy ${left.serverTick}`);
   evidence.events.push({
@@ -231,9 +265,93 @@ try {
     startedTick: secondActiveA.room.startedTick,
   });
 
-  evidence.finalTick = secondActiveA.serverTick;
+  // Echoes are present during an active attempt without activating surveillance.
+  // Hazard detection is evaluated from live authoritative players only.
+  const secondEcho = await waitFor(pageA,
+    (state) => state.room?.phase === RoomPhase.ACTIVE && state.echoes.length > 0,
+    'second-attempt Echo without surveillance detection', 15000);
+  const quietCamera = secondEcho.hazards.find((hazard) => hazard.id === 41);
+  assert(quietCamera, 'camera 41 missing from authoritative snapshot');
+  assert.equal(quietCamera.active, false);
+  assert.equal(quietCamera.detectedPlayerId, 0);
+  const idleConePixel = await pageA.evaluate(() => window.th.rendererPixel(246, 605));
+  assert(idleConePixel[1] > idleConePixel[0], `idle cone is not teal: ${idleConePixel}`);
+  evidence.events.push({
+    event: 'echo-present-camera-inactive', hazardId: 41,
+    tick: secondEcho.serverTick, echoCount: secondEcho.echoes.length,
+  });
+
+  // Approach the camera from immediately outside its south-facing cone, then
+  // let the authority detect player 1 while moving toward (4500, 6000).
+  await moveTo(pageA, 1, 4500, 5000);
+  await pageA.evaluate(() => window.th.move(0, 1));
+  const failedA = await waitForPhase(pageA, RoomPhase.FAILED,
+    'surveillance failure on client A');
+  const failedB = await waitForPhase(pageB, RoomPhase.FAILED,
+    'surveillance failure on client B');
+  for (const failed of [failedA, failedB]) {
+    assert.equal(failed.room.attempt, 2);
+    assert.equal(failed.room.failureReason, FailureReason.SURVEILLANCE);
+    assert.equal(failed.room.failureHazardId, 41);
+    const camera = failed.hazards.find((hazard) => hazard.id === 41);
+    assert.equal(camera?.active, true);
+    assert.equal(camera?.detectedPlayerId, 1);
+  }
+  assert.equal(failedA.room.endedTick, failedB.room.endedTick);
+  const detectedConePixel = await pageA.evaluate(() => window.th.rendererPixel(246, 605));
+  assert(
+    detectedConePixel[0] > detectedConePixel[1],
+    `detected cone is not red: ${detectedConePixel}`,
+  );
+  const detectedPose = failedA.players.find((player) => player.playerId === 1);
+  assert(detectedPose, 'detected player missing from failed snapshot');
+  assert(cameraContains(camera41, detectedPose),
+    `surveillance detected player outside camera cone: ${JSON.stringify(detectedPose)}`);
+
+  // Terminal attempts keep publishing canonical ticks, but authoritative poses
+  // remain frozen on both clients.
+  const frozenA = await waitFor(pageA,
+    (state) => state.serverTick >= failedA.serverTick + 12,
+    'post-failure frozen snapshot on client A');
+  const frozenB = await waitFor(pageB,
+    (state) => state.serverTick >= failedB.serverTick + 12,
+    'post-failure frozen snapshot on client B');
+  const positions = (state) => state.players.map(({playerId, xMm, zMm}) => ({playerId, xMm, zMm}));
+  assert.deepEqual(positions(frozenA), positions(failedA));
+  assert.deepEqual(positions(frozenB), positions(failedB));
+  assert.deepEqual(positions(frozenA), positions(frozenB));
+  evidence.events.push({
+    event: 'surveillance-failed', attempt: failedA.room.attempt,
+    hazardId: 41, detectedPlayerId: 1, endedTick: failedA.room.endedTick,
+    detectedPose,
+  });
+
+  await Promise.all([pageA, pageB].map((page, index) =>
+    page.screenshot({ path: `${artifacts}/client-${index + 1}-surveillance-failed.png` })));
+
+  await pageB.evaluate(() => window.th.restart());
+  const cleanLobbyA = await waitForPhase(pageA, RoomPhase.LOBBY,
+    'clean lobby after surveillance failure on client A');
+  const cleanLobbyB = await waitForPhase(pageB, RoomPhase.LOBBY,
+    'clean lobby after surveillance failure on client B');
+  for (const clean of [cleanLobbyA, cleanLobbyB]) {
+    assert.equal(clean.room.attempt, 3);
+    assert.equal(clean.room.readyPlayers, 0);
+    assert.equal(clean.room.failureReason, FailureReason.UNSPECIFIED);
+    assert.equal(clean.room.failureHazardId, 0);
+    assert(clean.sessions.every((session) => !session.ready));
+    assert.equal(clean.echoes.length, 0);
+    assert(clean.hazards.every((hazard) => !hazard.active));
+    assert(clean.hazards.every((hazard) => hazard.detectedPlayerId === 0));
+  }
+  evidence.events.push({
+    event: 'surveillance-reset', requestedBy: 2, tick: cleanLobbyA.serverTick,
+  });
+
+  evidence.finalTick = cleanLobbyA.serverTick;
   evidence.wonSnapshot = wonA;
-  evidence.finalSnapshot = secondActiveA;
+  evidence.failedSnapshot = failedA;
+  evidence.finalSnapshot = cleanLobbyA;
   evidence.renderers = await Promise.all([pageA, pageB].map((page) => page.evaluate(() => window.th.rendererInfo())));
   evidence.errors = await Promise.all([pageA, pageB].map((page) => page.evaluate(() => window.th.errors())));
   assert(evidence.renderers.every((renderer) => renderer?.backend === 'webgpu'));

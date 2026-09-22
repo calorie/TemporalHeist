@@ -38,3 +38,32 @@ stable while players read it. Starting an attempt clears prior motion history;
 it also zeroes any motion intent sent while waiting so held lobby input cannot
 move a player on the start tick. Reset respawns both connected players and clears
 transient gameplay state.
+
+## 2026-09-22 — P1.2 surveillance semantics
+
+Use one static authority-owned camera with an integer triangular view cone. This
+is the smallest deterministic stealth pressure that is visible, avoidable, and
+testable without introducing guard pathfinding or a second timing system.
+
+Only current live humans trigger detection. Echoes remain historical projections
+and do not fail stealth. Detection is immediate on the authority tick, records the
+camera and player IDs, and enters the existing FAILED/restart flow. The camera is
+placed in an optional side lane in zone 1 so the established Echo solution remains
+valid along the central route.
+
+## 2026-09-22 — P1.2 WebGPU telegraph verification
+
+Map world height into WebGPU clip depth with `z = 0.8 - y / 2500`, which keeps
+the facility, actors, and the raised surveillance wedge inside WebGPU's `0..w`
+depth range. The E2E harness verifies the rendered warning through a one-pixel
+surface readback at a stable point inside the cone: green dominates while idle
+and red dominates after authoritative detection. This supplements screenshots
+with a deterministic assertion against the actual containerized GPU output.
+
+## 2026-09-22 — Parallel CI verification
+
+Run component verification and full-stack acceptance as independent GitHub jobs
+with unique Compose namespaces. Both still invoke the repository `container`
+entry point and clean their own networks and volumes. Parallel jobs reduce wall
+time from the sum of two cold container builds to the slower job, and workflow
+concurrency cancels obsolete runs for superseded commits.

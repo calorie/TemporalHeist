@@ -1,4 +1,9 @@
 import type { Facility } from '../map.ts';
+import {
+  surveillanceVisuals,
+  WORLD_DEPTH_OFFSET,
+  WORLD_DEPTH_SCALE,
+} from '../surveillance-view.ts';
 import type { Presentation } from '../timeline.ts';
 import shader from './shader.wgsl?raw';
 
@@ -10,12 +15,24 @@ type Instance = {
   sy: number;
   sz: number;
   color: [number, number, number, number];
+  matrix?: number[];
+};
+type PixelProbe = {
+  x: number;
+  y: number;
+  resolve: (rgba: number[]) => void;
+  reject: (error: unknown) => void;
 };
 const cube = new Float32Array([
   -1, -1, -1, 1, -1, -1, 1, 1, -1, -1, -1, -1, 1, 1, -1, -1, 1, -1, -1, -1, 1, 1, -1, 1, 1, 1, 1,
   -1, -1, 1, 1, 1, 1, -1, 1, 1, -1, -1, -1, -1, -1, 1, -1, 1, 1, -1, -1, -1, -1, 1, -1, -1, 1, 1, 1,
   -1, 1, -1, -1, -1, 1, 1, -1, 1, 1, 1, 1, -1, -1, 1, 1, 1, 1, 1, -1, 1, -1, -1, -1, -1, -1, 1, -1,
   -1, 1, 1, -1, -1, -1, -1, 1, 1, -1, 1, -1, 1, -1, 1, -1, 1, 1, 1, 1, -1, 1, -1, 1,
+]);
+const wedge = new Float32Array([
+  0, 0, 0, -1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, -1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1,
+  1, 0, 1, 0, 0, 0, 0, 0, 1, 0, -1, 1, 1, 0, 0, 0, -1, 1, 1, -1, 0, 1, -1, 0, 1, -1, 1, 1, 1, 1, 1,
+  -1, 0, 1, 1, 1, 1, 1, 0, 1,
 ]);
 export class WebGpuRenderer {
   #device: GPUDevice;
@@ -24,9 +41,12 @@ export class WebGpuRenderer {
   #pipeline: GPURenderPipeline;
   #uniform: GPUBuffer;
   #instances: GPUBuffer;
+  #cubeVertices: GPUBuffer;
+  #wedgeVertices: GPUBuffer;
   #depth?: GPUTexture;
   #size = '';
   #errors: string[] = [];
+  #pixelProbe?: PixelProbe;
   readonly adapterInfo: GPUAdapterInfo;
   static async create(canvas: HTMLCanvasElement) {
     if (!navigator.gpu)
@@ -46,7 +66,12 @@ export class WebGpuRenderer {
     device.addEventListener('uncapturederror', (event) => this.#errors.push(event.error.message));
     this.#context = canvas.getContext('webgpu') as GPUCanvasContext;
     this.#format = navigator.gpu.getPreferredCanvasFormat();
-    this.#context.configure({ device, format: this.#format, alphaMode: 'opaque' });
+    this.#context.configure({
+      device,
+      format: this.#format,
+      alphaMode: 'opaque',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+    });
     const module = device.createShaderModule({ code: shader });
     this.#pipeline = device.createRenderPipeline({
       layout: 'auto',
@@ -81,7 +106,7 @@ export class WebGpuRenderer {
           },
         ],
       },
-      primitive: { topology: 'triangle-list', cullMode: 'back' },
+      primitive: { topology: 'triangle-list', cullMode: 'none' },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
     });
     this.#uniform = device.createBuffer({
@@ -92,6 +117,16 @@ export class WebGpuRenderer {
       size: 80 * 256,
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
+    this.#cubeVertices = device.createBuffer({
+      size: cube.byteLength,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    this.#wedgeVertices = device.createBuffer({
+      size: wedge.byteLength,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(this.#cubeVertices, 0, cube);
+    device.queue.writeBuffer(this.#wedgeVertices, 0, wedge);
   }
   render(map: Facility, p: Presentation) {
     this.#resize();
@@ -127,6 +162,45 @@ export class WebGpuRenderer {
         sz: 180,
         color: [0.8, 0.55, 0.15, 1],
       });
+    const cones: Instance[] = [];
+    for (const camera of surveillanceVisuals(map, p.snapshot)) {
+      cones.push({
+        x: camera.x,
+        y: camera.coneY,
+        z: camera.z,
+        sx: camera.halfWidth,
+        sy: camera.coneHalfHeight,
+        sz: camera.range,
+        color: camera.coneColor,
+        matrix: [
+          camera.lateral[0] * camera.halfWidth,
+          0,
+          camera.lateral[1] * camera.halfWidth,
+          0,
+          0,
+          camera.coneHalfHeight,
+          0,
+          0,
+          camera.forward[0] * camera.range,
+          0,
+          camera.forward[1] * camera.range,
+          0,
+          camera.x,
+          camera.coneY,
+          camera.z,
+          1,
+        ],
+      });
+      objects.push({
+        x: camera.x,
+        y: 380,
+        z: camera.z,
+        sx: 220,
+        sy: 380,
+        sz: 220,
+        color: camera.bodyColor,
+      });
+    }
     for (const pose of p.live)
       objects.push({
         x: pose.xMm,
@@ -147,7 +221,7 @@ export class WebGpuRenderer {
         sz: 250,
         color: pose.playerId === 1 ? [0.25, 0.85, 1, 0.35] : [1, 0.55, 0.8, 0.35],
       });
-    this.#draw(objects);
+    this.#draw(cones, objects);
   }
   info() {
     return {
@@ -164,6 +238,13 @@ export class WebGpuRenderer {
   }
   errors() {
     return [...this.#errors];
+  }
+  samplePixel(x: number, y: number): Promise<number[]> {
+    if (this.#pixelProbe)
+      return Promise.reject(new Error('A renderer pixel probe is already pending'));
+    return new Promise((resolve, reject) => {
+      this.#pixelProbe = { x, y, resolve, reject };
+    });
   }
   #box(
     b: { minX: number; maxX: number; minZ: number; maxZ: number },
@@ -199,14 +280,17 @@ export class WebGpuRenderer {
       this.#size = key;
     }
   }
-  #draw(objects: Instance[]) {
-    const depth = this.#depth;
-    if (!depth) return;
+  #instanceData(objects: Instance[]) {
     const data = new Float32Array(objects.length * 20);
     objects.forEach((o, i) => {
-      data.set([o.sx, 0, 0, 0, 0, o.sy, 0, 0, 0, 0, o.sz, 0, o.x, o.y, o.z, 1, ...o.color], i * 20);
+      const matrix = o.matrix ?? [o.sx, 0, 0, 0, 0, o.sy, 0, 0, 0, 0, o.sz, 0, o.x, o.y, o.z, 1];
+      data.set([...matrix, ...o.color], i * 20);
     });
-    this.#device.queue.writeBuffer(this.#instances, 0, data);
+    return data;
+  }
+  #draw(cones: Instance[], objects: Instance[]) {
+    const depth = this.#depth;
+    if (!depth) return;
     const aspect = this.canvas.width / this.canvas.height;
     const sx = 1 / 13000,
       sz = 1 / 5200;
@@ -217,7 +301,7 @@ export class WebGpuRenderer {
       0,
       0,
       0,
-      1 / 2500,
+      WORLD_DEPTH_SCALE,
       0,
       0,
       -sz * aspect,
@@ -225,24 +309,24 @@ export class WebGpuRenderer {
       0,
       -12000 * sx,
       4000 * sz * aspect,
-      -0.2,
+      WORLD_DEPTH_OFFSET,
       1,
     ]);
     this.#device.queue.writeBuffer(this.#uniform, 0, view);
-    const vertices = this.#device.createBuffer({
-      size: cube.byteLength,
-      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-    });
-    this.#device.queue.writeBuffer(vertices, 0, cube);
+    const coneBytes = cones.length * 80;
+    if (cones.length > 0)
+      this.#device.queue.writeBuffer(this.#instances, 0, this.#instanceData(cones));
+    this.#device.queue.writeBuffer(this.#instances, coneBytes, this.#instanceData(objects));
     const bind = this.#device.createBindGroup({
       layout: this.#pipeline.getBindGroupLayout(0),
       entries: [{ binding: 0, resource: { buffer: this.#uniform } }],
     });
     const encoder = this.#device.createCommandEncoder();
+    const surface = this.#context.getCurrentTexture();
     const pass = encoder.beginRenderPass({
       colorAttachments: [
         {
-          view: this.#context.getCurrentTexture().createView(),
+          view: surface.createView(),
           clearValue: { r: 0.015, g: 0.035, b: 0.055, a: 1 },
           loadOp: 'clear',
           storeOp: 'store',
@@ -257,11 +341,45 @@ export class WebGpuRenderer {
     });
     pass.setPipeline(this.#pipeline);
     pass.setBindGroup(0, bind);
-    pass.setVertexBuffer(0, vertices);
-    pass.setVertexBuffer(1, this.#instances);
+    if (cones.length > 0) {
+      pass.setVertexBuffer(0, this.#wedgeVertices);
+      pass.setVertexBuffer(1, this.#instances);
+      pass.draw(wedge.length / 3, cones.length);
+    }
+    pass.setVertexBuffer(0, this.#cubeVertices);
+    pass.setVertexBuffer(1, this.#instances, coneBytes);
     pass.draw(cube.length / 3, objects.length);
     pass.end();
+    const probe = this.#pixelProbe;
+    let readback: GPUBuffer | undefined;
+    if (probe) {
+      this.#pixelProbe = undefined;
+      readback = this.#device.createBuffer({
+        size: 256,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+      encoder.copyTextureToBuffer(
+        {
+          texture: surface,
+          origin: {
+            x: Math.max(0, Math.min(this.canvas.width - 1, Math.round(probe.x))),
+            y: Math.max(0, Math.min(this.canvas.height - 1, Math.round(probe.y))),
+          },
+        },
+        { buffer: readback, bytesPerRow: 256 },
+        [1, 1],
+      );
+    }
     this.#device.queue.submit([encoder.finish()]);
-    vertices.destroy();
+    if (probe && readback) {
+      void readback
+        .mapAsync(GPUMapMode.READ)
+        .then(() => probe.resolve(Array.from(new Uint8Array(readback.getMappedRange(), 0, 4))))
+        .catch(probe.reject)
+        .finally(() => {
+          readback.unmap();
+          readback.destroy();
+        });
+    }
   }
 }

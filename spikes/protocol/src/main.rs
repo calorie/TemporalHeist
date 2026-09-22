@@ -28,7 +28,14 @@ fn main() {
             ready_players: 2,
             extraction_players: 1,
             echo_opened_final_door: true,
+            failure_reason: FailureReason::Surveillance as i32,
+            failure_hazard_id: 41,
         }),
+        hazards: vec![Hazard {
+            id: 41,
+            active: true,
+            detected_player_id: 2,
+        }],
         ..Default::default()
     };
     std::fs::write("/artifacts/rust-snapshot.bin", snapshot.encode_to_vec()).unwrap();

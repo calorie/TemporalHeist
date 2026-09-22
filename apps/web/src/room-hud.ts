@@ -4,6 +4,8 @@ const LOBBY = 1;
 const ACTIVE = 2;
 const WON = 3;
 const FAILED = 4;
+const FAILURE_TIMEOUT = 1;
+const FAILURE_SURVEILLANCE = 2;
 
 function phaseName(phase: number) {
   switch (phase) {
@@ -60,6 +62,12 @@ export function roomHud(snapshot: Snapshot | undefined, playerId: number): RoomH
   if (room.phase === WON) objective = 'Heist complete';
   if (room.phase === FAILED) objective = 'Attempt failed';
 
+  let failure = 'ATTEMPT FAILED — press R or Restart to retry';
+  if (room.failureReason === FAILURE_TIMEOUT)
+    failure = 'TIME EXPIRED — press R or Restart to retry';
+  if (room.failureReason === FAILURE_SURVEILLANCE)
+    failure = `SURVEILLANCE DETECTED — CAMERA ${room.failureHazardId} — press R or Restart to retry`;
+
   return {
     phase: `${phase} · ATTEMPT ${room.attempt}`,
     objective,
@@ -69,7 +77,7 @@ export function roomHud(snapshot: Snapshot | undefined, playerId: number): RoomH
       room.phase === WON
         ? 'SUCCESS — press R or Restart to play again'
         : room.phase === FAILED
-          ? 'TIME EXPIRED — press R or Restart to retry'
+          ? failure
           : '',
     canReady: room.phase === LOBBY && Boolean(ownSession?.connected && !ownSession.ready),
     canRestart: terminal,

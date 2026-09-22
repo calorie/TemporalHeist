@@ -45,7 +45,7 @@ IDs, action terminals, player spawn positions, and the P1 extraction rectangle.
 Three zones run along X.
 
 P1 extends protocol major 1 additively with READY and RESTART input kinds,
-`Session.ready`, and `Snapshot.room`. Room state carries LOBBY, ACTIVE, WON, or
+`Session.ready`, `Snapshot.room`, and `Snapshot.hazards`. Room state carries LOBBY, ACTIVE, WON, or
 FAILED plus attempt identity, authority-tick timing, readiness, extraction
 occupancy, and whether Echo Presence opened the final door in the current attempt.
 Older decoders may ignore these additions.
@@ -57,6 +57,14 @@ requires both live players inside extraction after Echo Presence has opened door
 in a terminal phase returns the room to lobby, respawns connected players, clears
 readiness, history, scheduled actions, and mechanism state, and increments the
 attempt number.
+
+P1.2 adds static surveillance cameras to the map source. Each camera has a stable
+ID, origin, normalized integer direction (length 1000), range, and half-width at
+maximum range. The authority evaluates a triangular cone using integer math every
+ACTIVE tick. A live player's center inside the cone immediately fails the attempt
+with `SURVEILLANCE`, the camera ID, and detected player ID. Echoes never trigger
+surveillance. Camera state is reset with the attempt; TIMEOUT remains a distinct
+failure reason.
 
 Pure simulation API: `World::new(epoch: String)`, `World::step(inputs: &[Input])
 -> Snapshot`, `World::snapshot() -> Snapshot`. `World` stores its history privately.

@@ -216,6 +216,7 @@ export interface TemporalHeistTestApi {
   restart(): void;
   timeline(): ReturnType<Timeline['inspect']>;
   rendererInfo(): ReturnType<WebGpuRenderer['info']> | undefined;
+  rendererPixel(x: number, y: number): Promise<number[]>;
   errors(): string[];
   reconnect(): Promise<void>;
 }
@@ -234,6 +235,8 @@ window.th = {
   restart,
   timeline: () => timeline.inspect(),
   rendererInfo: () => renderer?.info(),
+  rendererPixel: (x, y) =>
+    renderer ? renderer.samplePixel(x, y) : Promise.reject(new Error('Renderer unavailable')),
   errors: () => [...errors, ...(renderer?.errors() ?? [])],
   reconnect,
 };

@@ -4,6 +4,9 @@
   "speedPerTick": 60,
   "spawns": [{"playerId": 1, "x": 1500, "z": 2500}, {"playerId": 2, "x": 1500, "z": 4000}],
   "extraction": {"minX": 22800, "maxX": 23750, "minZ": 3000, "maxZ": 5000},
+  "cameras": [
+    {"id": 41, "x": 4500, "z": 7500, "directionX": 0, "directionZ": -1000, "range": 2200, "halfWidth": 1200}
+  ],
   "zones": [{"name": "Live presence", "x": 0}, {"name": "Echo presence", "x": 8000}, {"name": "Co-op proof", "x": 16000}],
   "walls": [
     {"id": 101, "minX": 7000, "maxX": 7400, "minZ": 0, "maxZ": 3000},
