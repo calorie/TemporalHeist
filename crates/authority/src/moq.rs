@@ -125,7 +125,22 @@ async fn read_track(
                 track = track_name,
                 "subscribed to input"
             );
-            while let Some(mut group) = subscription.recv_group().await? {
+            loop {
+                let mut group = tokio::select! {
+                    cause = broadcast.closed() => {
+                        tracing::info!(
+                            error = %cause,
+                            broadcast = broadcast_path,
+                            track = track_name,
+                            "input publisher ended; waiting for replacement"
+                        );
+                        break;
+                    }
+                    group = subscription.recv_group() => {
+                        let Some(group) = group? else { break };
+                        group
+                    }
+                };
                 while let Some(frame) = group.read_frame().await? {
                     if let Err(error) = decode_input_for_player(&frame.payload, expected_player_id)
                     {
