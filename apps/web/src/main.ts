@@ -262,7 +262,9 @@ window.th = {
     renderer ? renderer.samplePixel(x, y) : Promise.reject(new Error('Renderer unavailable')),
   errors: () => [...errors, ...(renderer?.errors() ?? [])],
   reconnect,
-  setPresentationPaused: (paused) => { presentationPaused = paused; },
+  setPresentationPaused: (paused) => {
+    presentationPaused = paused;
+  },
 };
 
 async function start() {
