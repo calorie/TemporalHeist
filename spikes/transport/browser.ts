@@ -1,17 +1,23 @@
 import * as Moq from '@moq/net';
 
 async function run() {
+  const id = new URLSearchParams(location.search).get('player') || '1';
   const connection = await Moq.Connection.connect(new URL('http://relay:4443/anon'), {websocket: {enabled: false}});
   const broadcast = new Moq.Broadcast.Producer();
   const track = broadcast.createTrack('input', {latencyMax: 30_000});
-  connection.publish(Moq.Path.from('spike/browser'), broadcast);
-  const remote = connection.consume(Moq.Path.from('spike/authority')).track('reply');
+  connection.publish(Moq.Path.from(`spike/browser/${id}`), broadcast);
+  const announced = connection.announced();
+  for (;;) { const event = await announced.next(); if (event?.path === 'spike/authority' && event.active) break; }
+  announced.close();
+  const remote = connection.consume(Moq.Path.from('spike/authority')).track(`reply/${id}`);
   const subscription = remote.subscribe({ordered: true, latencyMax: 30_000});
   const timer = setInterval(() => track.writeFrame({payload: new TextEncoder().encode('browser-to-rust'), timestamp: Moq.Time.Timestamp.now()}), 250);
   const group = await subscription.recvGroup();
   const frame = await group?.readFrame();
   clearInterval(timer);
-  const result = {transport: connection.transport, version: connection.version, payload: new TextDecoder().decode(frame?.payload)};
+  const fetched = await remote.fetchGroup(group!.sequence);
+  const fetchedFrame = await fetched.readFrame();
+  const result = {id, transport: connection.transport, version: connection.version, payload: new TextDecoder().decode(frame?.payload), fetched: new TextDecoder().decode(fetchedFrame?.payload)};
   document.querySelector('#status')!.textContent = JSON.stringify(result);
   (window as any).spikeResult = result;
 }
