@@ -194,12 +194,10 @@ P0 presentation may use:
 
 Do not make presentation state authoritative.
 
-## Post-P0 candidates
+## Post-P2 candidates
 
 After the core slice works, candidates include:
 
-- static surveillance cameras and detection cones;
-- guards reacting to humans and/or Echo Sensors;
 - multiple Echo delays/generations;
 - gadgets whose delayed effects compose with Echoes;
 - richer Action targets;
@@ -253,3 +251,27 @@ the scene for authoritative success and failure; these colors never feed back
 into gameplay. Short synthesized Web Audio cues announce Echo, door, success,
 and failure transitions after user interaction unlocks audio. The mute control
 is local presentation state and has no gameplay effect.
+
+## P2 guard and Echo stealth
+
+The facility has one authored guard, ID 51, patrolling between waypoints 511 at
+`(17200, 4000)` and 512 at `(20500, 4000)` in millimetres. Its view covers a
+2600 mm forward range with a 1400 mm half-width at that range. The guarded
+passage occupies X `18500..19500`, Z `3000..5000`. Its route and passage are
+checked-in map data, with straight-line movement rather than pathfinding.
+
+During an active attempt, a connected live human in the guard's view immediately
+fails the attempt. The result identifies guard 51. If a human and Echo are visible
+on the same tick, the human failure wins. An Echo never causes a failure or changes
+its historical route. Instead, the guard investigates the last observed Echo
+position, searches there for 180 authority ticks, and returns to its patrol. A
+continuous 30-tick Echo observation window can update the last-seen position but
+cannot extend the search timer indefinitely.
+
+Player A can record a route through the guard's view and move clear. Exactly 600
+authority ticks later, A's first-generation Echo follows that route and draws the
+guard away. Player B crosses while the guard investigates. The players still need
+Echo Presence on door 13 and both live players in extraction to win. Terminal and
+lobby phases freeze guard movement and timers; restart restores its initial patrol
+state. The HUD, guard body, route, view cone, and target marker explain the window
+to cross, while the Rust authority alone decides detection and results.

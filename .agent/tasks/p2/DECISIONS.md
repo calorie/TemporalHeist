@@ -56,3 +56,22 @@ The task brief mentioned detected-player diagnostics, but the frozen protobuf
 offers only `failure_reason` and `failure_guard_id` for guard failures. The
 approved design requires those fields, so simulation preserves the contract and
 does not invent a new serialized field.
+
+## 2026-09-23 — Release evidence and scope
+
+Treat `b35349d` as the integrated P2 code revision for release verification and
+two-stack isolation. Preserve the exact JSON/PNG artifacts outside Git in the
+release checkout before deleting Compose volumes. The tracked `STATE.md` records
+the reproducible commands and decisive values so later review does not depend
+on transient containers or screenshots being committed.
+
+Keep the visual and E2E checks on the release/runtime images. The combined dev
+image remains the cross-language verification environment. Both paths use
+container Chromium with SwiftShader WebGPU, while Mesa llvmpipe Vulkan provides
+the compositor in this software environment. Do not turn the software adapter
+into a gameplay or rendering authority assumption.
+
+Carry forward the target/Echo tolerance and single screenshot sample as review
+minors rather than silently treating passing runs as a proof of stronger
+properties. The final release images receive separate human inspection for
+filled floor, walls, guard body, and visible state cues.

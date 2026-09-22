@@ -2,7 +2,10 @@
 
 This document defines application-level semantics independent of the exact current `moq-dev/moq` API.
 
-MoQ transport framing is an adapter concern. Protocol Buffers are the default payload schema.
+MoQ transport framing is an adapter concern. Protocol Buffers are the payload
+schema. `proto/temporal_heist.proto` is the source of truth; Rust bindings
+generate during Cargo build and TypeScript bindings through
+`containers/codegen.sh`.
 
 ## Versioning
 
@@ -29,11 +32,11 @@ RoomTime {
 
 `server_tick` increments exactly once per logical authority simulation step.
 
-P0 constants:
+Current constants:
 
 - tick rate: 60 Hz;
 - Echo delay: 600 ticks;
-- authority retained history: at least 3600 ticks (60 seconds).
+- authority retained history: at least 3601 ticks (60 seconds plus one sample).
 
 ## Numeric representation
 
@@ -60,7 +63,9 @@ Echo identity is derived from source player + generation and does not require a 
 
 ## Input messages
 
-Exact protobuf field numbers are left to implementation bootstrap.
+`Input` carries protocol major, room epoch, player/session identity, monotonic
+sequence, movement axes, kind, and action target in one message. The authority
+validates these fields and deduplicates by sequence.
 
 ### MotionIntent
 
@@ -154,6 +159,21 @@ P0 world data needed by browsers includes:
 - optional interactable/debug state needed to understand the slice.
 
 Start with independently decodable snapshots if deltas would complicate recovery. Optimize later.
+
+P2 adds `Snapshot.guards` as repeated field 12. Each `Guard` contains stable ID,
+integer X/Z position and facing, `GuardState`, next waypoint ID, optional
+`GuardTarget`, state-entry tick, and search-expiry tick. `GuardState` values are
+Unspecified 0, Patrol 1, Investigate 2, and Return 3. The optional target remains
+present at coordinate zero and is absent outside investigation. The guard pose
+and timers come from the authority; client interpolation affects display only.
+
+`RoomState.failure_guard_id` is field 11. `FailureReason.GUARD` is value 3, next
+to TIMEOUT 1 and SURVEILLANCE 2. A guard failure publishes reason and guard ID;
+the frozen P2 wire contract does not include a detected-player ID for guards.
+Older snapshots without field 12 decode to an empty guard list. Unknown guard
+states use a safe browser presentation fallback. These fields are additive under
+protocol major 1; cross-language tests cover Rust-to-TypeScript guard states,
+optional target presence, guard failure, and the absent-field case.
 
 ## System/lifecycle messages
 
@@ -288,7 +308,8 @@ Keep generated outputs reproducible and document the generation/check command in
 
 ## Compatibility evolution
 
-P0 may use a single major version.
+The implementation remains on major version 1, including P2's additive guard
+fields.
 
 Future-compatible rules:
 

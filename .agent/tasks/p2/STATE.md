@@ -4,8 +4,10 @@
 
 The P2 protocol and authored map contract are frozen and container-verified.
 Guard simulation, canonical client presentation, raw WebGPU geometry, HUD, and
-audio are integrated. Two-client gameplay acceptance passes. Release verification
-still needs the cube-mesh visual follow-up and two-stack isolation.
+audio are integrated. The final branch passes component verification, clean
+two-client acceptance, two-client visual inspection, and two-stack release
+isolation from the integrated code commit `b35349d`. P2 implementation and
+release verification are complete; independent review and PR integration remain.
 
 ## Completed
 
@@ -127,21 +129,31 @@ guard snapshots are retained at tick 10242 in the investigation event's
 `agreement` field; both clients won at tick 12395 with empty browser/renderer
 error arrays. The guard-agreement regression is registered in standard verify.
 
-## Blockers
+## Review observations
 
-Visual inspection now exposes a pre-existing cube-mesh defect: floor/wall/body
-boxes appear as diagonal half-rectangles. The primary agent confirmed the finding
-and assigned a dedicated renderer follow-up. The protocol, map, and renderer
-geometry were not changed by Task 5.
+The prior cube-mesh defect is fixed by `c928f92` and its strengthened regression
+by `b35349d`. The integrated visual images show filled rectangular floor, wall,
+and guard bodies. Triangular view cones are intentional. Both the acceptance and
+visual screenshots contain opaque, nonblack scene pixels after removing
+`--disable-vulkan-surface` from the browser launches.
 
 The frozen `RoomState` publishes the guard failure reason and guard ID but has no
 guard-detected-player field. The approved design requires reason and guard ID;
 the task brief's detected-player phrase is a non-blocking plan overreach.
 
+Two deferred reviewer minors remain explicit. The E2E lure check accepts a
+180 mm target/Echo offset but also requires exact X equality; this passed in the
+final run (both X values were 21397 mm) yet is stricter than the stated tolerance.
+The generic screenshot check samples one floor pixel `(640, 650)`; all 14 final
+acceptance captures passed with `[9,23,31,255]`, and manual inspection of both
+players' lobby and investigation images separately verified the wall, floor,
+guard body, cones, and HUD. The single sample alone does not prove the whole
+frame is correct.
+
 ## Next action
 
-Run final integrated acceptance/visual verification and release two-stack
-isolation before requesting integration approval.
+Hand off the verified branch for independent review and PR preparation. The
+default branch remains the explicit approval boundary for integration.
 
 ## Cube mesh repair verification (`p2-cube` namespace)
 
@@ -161,5 +173,50 @@ isolation before requesting integration approval.
 
 The cube-only branch still used the older `--disable-vulkan-surface` flag and
 therefore produced black canvas screenshots. Task 5 independently removed that
-flag and proved opaque, visible WebGPU scenes; the final integrated visual run
-must verify both fixes together.
+flag and proved opaque, visible WebGPU scenes. The final integrated acceptance
+and visual images verified both fixes together.
+
+## Final integrated release verification (`b35349d`)
+
+- `sh container p2-final verify` — passed: generated TypeScript matches the
+  protobuf source, Rust↔TypeScript guard protocol/legacy compatibility, rustfmt,
+  Clippy with warnings denied, 8 authority and 29 simulation tests, TypeScript,
+  Biome, client and container contracts including cube coverage and complete
+  guard agreement, Vite production build, and Chromium WebGPU/WGSL with zero
+  shader and validation errors. Chromium 153.0.8010.12 used the SwiftShader
+  WebGPU fallback adapter (`vendor: google`, `architecture: swiftshader`); the
+  compositor reported ANGLE/Mesa llvmpipe Vulkan 1.4.318, Mesa 25.2.8.
+- `sh container p2-final acceptance` — passed from a clean release runtime
+  stack. Guard 51 failed a live human at tick 4300 with reason 3 and guard ID 51,
+  then restart restored its initial Patrol snapshot. A's Echo at authority tick
+  10125 sampled source tick 9525, exactly 600 ticks behind. Its target was
+  `(21397,3223)` mm. Both clients' complete guard snapshots matched at shared
+  epoch/tick 10125. B occupied the guarded passage at `(18947,4696)` mm and
+  exited at tick 10191 while guard 51 remained in Investigate and the room
+  remained active. Both players won attempt 2 at tick 12290. Patrol and
+  investigation cone readbacks were `[15,80,80,255]` and `[164,17,14,255]`.
+  Fourteen PNG screenshots passed opaque/nonblack scene checks; both browser
+  and renderer error arrays were empty. Both clients reported WebGPU SwiftShader.
+- Acceptance evidence and 14 PNGs were copied from the private `artifacts`
+  volume before `sh container p2-final down --volumes --remove-orphans` passed.
+  The ignored handoff directory is `.superpowers/sdd/p2/artifacts/p2-final/`.
+- `sh container p2-visual visual` — passed with separate persistent Chromium
+  profiles and ephemeral CDP ports 52254 (A) and 52253 (B). Both metadata files
+  recorded the same initial guard 51 snapshot, WebGPU SwiftShader backend,
+  1280×720 viewports, and empty error arrays. Both PNGs visibly contain filled
+  rectangular world and guard geometry and a teal guard cone. The images and
+  metadata were copied to ignored `.superpowers/sdd/p2/artifacts/p2-visual/`
+  before `sh container p2-visual down --volumes --remove-orphans` passed.
+- `sh containers/verify-two-stack-isolation.sh
+  /Users/a/TemporalHeist/.worktrees/p2-isolation-a p2-isolation-a
+  /Users/a/TemporalHeist/.worktrees/p2-isolation-b p2-isolation-b
+  /tmp/temporal-heist-p2-isolation` — passed from two clean detached worktrees
+  at exact integrated code revision `b35349d0c143ee10dba623e0fdbe26cdaa5e358b`.
+  Both acceptance exits were zero, with 14 screenshots each. Both browser
+  services were live together; the four observed container IDs per project,
+  network IDs, and artifact volumes were disjoint, and no host ports were
+  published. Removing A with volumes preserved every recorded B container,
+  network, and volume ID, and B's in-network web health check passed. The
+  harness cleaned both stacks; both disposable worktrees were removed.
+  JSON and acceptance logs remain at `/tmp/temporal-heist-p2-isolation/`.
+- `git diff --check` — passed after the documentation edits.

@@ -62,6 +62,7 @@ The exact workspace boundaries may change if simpler verified boundaries emerge.
 - resolve current human collision;
 - commit player histories;
 - evaluate Echo poses/effects;
+- move guards, evaluate their integer view cones, and decide guard failure;
 - own doors, plates, and interactable state;
 - publish canonical state/timelines;
 - retain enough in-memory history for P0;
@@ -103,6 +104,13 @@ derive doors/plates and tick result
 ~~~
 
 Ordering must be explicit and tested. If implementation uses a different order, document it and ensure the resulting semantics match the acceptance tests.
+
+For P2, each active step moves humans and commits their canonical history,
+replays due Echo actions and Presence, evaluates surveillance, then advances the
+guard. The guard checks connected live humans before first-generation Echoes, so
+human detection wins on the same tick. Its Patrol, Investigate, and Return state,
+last-seen target, timers, and deduplication key live in the pure Rust simulation.
+Lobby and terminal phases freeze that state. Reset reconstructs the initial guard.
 
 ## History model
 
@@ -199,6 +207,7 @@ Use schema/version compatibility checks and golden/round-trip tests across langu
 - owns WebGPU adapter/device/context;
 - creates primitive world/actor geometry;
 - draws world, live actors, and Echoes;
+- draws the canonical guard, route, view cone, state, and investigation marker;
 - may upload timeline samples to storage buffers;
 - may use compute to derive Echo transforms/trails;
 - never emits authority state.
@@ -351,6 +360,15 @@ If a human needs to inspect the running game, keep Chromium in the container and
 ### CI parity
 
 CI must call the same containerized entry points used by local agents. CI should not duplicate the project toolchain as a separate host-native workflow.
+
+The stable entry points are `sh container <run-id> verify`, `acceptance`, and
+`visual`. Acceptance and visual build a release Rust authority, static nginx web
+server, and container Chromium browser runner. The browser uses SwiftShader
+WebGPU with the Mesa llvmpipe Vulkan compositor in software validation. The
+`verify` command uses the combined development image for cross-language checks.
+`containers/verify-two-stack-isolation.sh` runs full acceptance from two clean
+worktrees at the same commit and proves their Compose resources and services stay
+independent when one stack is removed.
 
 ## Observability
 
