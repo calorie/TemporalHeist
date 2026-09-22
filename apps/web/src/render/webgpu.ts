@@ -13,6 +13,7 @@ import {
   WORLD_DEPTH_SCALE,
 } from '../surveillance-view.ts';
 import type { Presentation } from '../timeline.ts';
+import { guardPrimitives } from './guard-geometry.ts';
 import shader from './shader.wgsl?raw';
 
 type Instance = {
@@ -210,6 +211,9 @@ export class WebGpuRenderer {
         color: camera.bodyColor,
       });
     }
+    const guards = guardPrimitives(map, p);
+    cones.push(...guards.cones);
+    objects.push(...guards.objects);
     for (const pose of p.live)
       objects.push({
         x: pose.xMm,
@@ -298,6 +302,8 @@ export class WebGpuRenderer {
     return data;
   }
   #draw(cones: Instance[], objects: Instance[], clearColor: [number, number, number, number]) {
+    if (cones.length + objects.length > 256)
+      throw new Error('Scene exceeds the persistent WebGPU instance buffer');
     const depth = this.#depth;
     if (!depth) return;
     const aspect = this.canvas.width / this.canvas.height;

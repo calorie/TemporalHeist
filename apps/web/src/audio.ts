@@ -4,7 +4,7 @@ const ACTIVE = 2;
 const WON = 3;
 const FAILED = 4;
 
-export type AudioCue = 'echo' | 'door' | 'success' | 'failure';
+export type AudioCue = 'echo' | 'door' | 'guard' | 'success' | 'failure';
 
 export interface AudioFrame {
   epoch: string;
@@ -13,6 +13,7 @@ export interface AudioFrame {
   tick: number;
   echoTick: number;
   doorOpen: boolean;
+  guards: { id: number; state: number }[];
 }
 
 export function audioFrame(snapshot: Snapshot | undefined): AudioFrame | undefined {
@@ -24,6 +25,7 @@ export function audioFrame(snapshot: Snapshot | undefined): AudioFrame | undefin
     tick: snapshot.serverTick,
     echoTick: snapshot.room.startedTick + 600,
     doorOpen: snapshot.room.echoOpenedFinalDoor,
+    guards: (snapshot.guards ?? []).map(({ id, state }) => ({ id, state })),
   };
 }
 
@@ -43,6 +45,18 @@ export function audioTransitions(
   )
     cues.push('echo');
   if (next.phase === ACTIVE && !previous.doorOpen && next.doorOpen) cues.push('door');
+  if (
+    previous.phase === ACTIVE &&
+    next.phase === ACTIVE &&
+    next.guards.some(
+      (guard) =>
+        guard.state === 2 &&
+        previous.guards.some(
+          (prior) => prior.id === guard.id && (prior.state === 1 || prior.state === 3),
+        ),
+    )
+  )
+    cues.push('guard');
   if (previous.phase !== WON && next.phase === WON) cues.push('success');
   if (previous.phase !== FAILED && next.phase === FAILED) cues.push('failure');
   return cues;
@@ -56,6 +70,10 @@ const notes: Record<AudioCue, readonly [number, number][]> = {
   door: [
     [330, 0.08],
     [660, 0.18],
+  ],
+  guard: [
+    [660, 0.08],
+    [440, 0.14],
   ],
   success: [
     [523, 0.1],

@@ -81,6 +81,13 @@ p {
   color: #ffda7b;
   font-weight: 700;
 }
+#guard-status {
+  color: #7bdbff;
+  font-weight: 700;
+}
+#guard-status:empty {
+  display: none;
+}
 #result {
   min-height: 20px;
   color: #7bffbd;

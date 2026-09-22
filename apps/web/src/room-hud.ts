@@ -6,6 +6,7 @@ const WON = 3;
 const FAILED = 4;
 const FAILURE_TIMEOUT = 1;
 const FAILURE_SURVEILLANCE = 2;
+const FAILURE_GUARD = 3;
 
 function phaseName(phase: number) {
   switch (phase) {
@@ -28,6 +29,7 @@ export interface RoomHud {
   objective: string;
   timer: string;
   echoStatus: string;
+  guardStatus: string;
   readiness: string;
   result: string;
   resultState: 'none' | 'success' | 'failure';
@@ -49,6 +51,7 @@ export function roomHud(snapshot: Snapshot | undefined, playerId: number): RoomH
       objective: 'Waiting for authority',
       timer: '--:--',
       echoStatus: 'ECHO · WAITING FOR ATTEMPT',
+      guardStatus: '',
       readiness: 'Players ready: 0/2',
       result: '',
       resultState: 'none',
@@ -62,8 +65,11 @@ export function roomHud(snapshot: Snapshot | undefined, playerId: number): RoomH
   const active = room.phase === ACTIVE;
   const terminal = room.phase === WON || room.phase === FAILED;
   const echoTicks = room.startedTick + 600 - snapshot.serverTick;
+  const guard = snapshot.guards?.find((item) => item.state >= 1 && item.state <= 3);
   let objective = 'Ready up with your partner';
   if (active && !room.echoOpenedFinalDoor) objective = 'Open the final door with Echo Presence';
+  if (active && guard && !room.echoOpenedFinalDoor)
+    objective = `Use your Echo to distract Guard ${guard.id}`;
   if (active && room.echoOpenedFinalDoor)
     objective = `Reach extraction together (${room.extractionPlayers}/2)`;
   if (room.phase === WON) objective = 'Heist complete';
@@ -74,6 +80,8 @@ export function roomHud(snapshot: Snapshot | undefined, playerId: number): RoomH
     failure = 'TIME EXPIRED — press R or Restart to retry';
   if (room.failureReason === FAILURE_SURVEILLANCE)
     failure = `SURVEILLANCE DETECTED — CAMERA ${room.failureHazardId} — press R or Restart to retry`;
+  if (room.failureReason === FAILURE_GUARD)
+    failure = `GUARD ${room.failureGuardId} DETECTED YOU — press R or Restart to retry`;
 
   return {
     phase: `${phase} · ATTEMPT ${room.attempt}`,
@@ -85,6 +93,14 @@ export function roomHud(snapshot: Snapshot | undefined, playerId: number): RoomH
         ? `ECHO IN ${clock(echoTicks)}`
         : 'ECHO REPLAYING · 10 SECONDS BEHIND'
       : 'ECHO · STARTS 10 SECONDS AFTER LAUNCH',
+    guardStatus:
+      active && guard
+        ? guard.state === 1
+          ? `GUARD ${guard.id} PATROLLING · HUMANS ARE CAUGHT, ECHOES DISTRACT`
+          : guard.state === 2
+            ? `GUARD ${guard.id} INVESTIGATING — CROSS NOW`
+            : `GUARD ${guard.id} RETURNING`
+        : '',
     readiness: `Players ready: ${room.readyPlayers}/2${ownSession?.ready ? ' · YOU ARE READY' : ''}`,
     result:
       room.phase === WON
