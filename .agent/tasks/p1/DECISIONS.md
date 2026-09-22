@@ -38,3 +38,15 @@ stable while players read it. Starting an attempt clears prior motion history;
 it also zeroes any motion intent sent while waiting so held lobby input cannot
 move a player on the start tick. Reset respawns both connected players and clears
 transient gameplay state.
+
+## 2026-09-22 — P1.2 surveillance semantics
+
+Use one static authority-owned camera with an integer triangular view cone. This
+is the smallest deterministic stealth pressure that is visible, avoidable, and
+testable without introducing guard pathfinding or a second timing system.
+
+Only current live humans trigger detection. Echoes remain historical projections
+and do not fail stealth. Detection is immediate on the authority tick, records the
+camera and player IDs, and enters the existing FAILED/restart flow. The camera is
+placed in an optional side lane in zone 1 so the established Echo solution remains
+valid along the central route.

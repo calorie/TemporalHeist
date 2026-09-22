@@ -123,6 +123,45 @@ export function roomPhaseToJSON(object: RoomPhase): string {
   }
 }
 
+export enum FailureReason {
+  FAILURE_REASON_UNSPECIFIED = 0,
+  TIMEOUT = 1,
+  SURVEILLANCE = 2,
+  UNRECOGNIZED = -1,
+}
+
+export function failureReasonFromJSON(object: any): FailureReason {
+  switch (object) {
+    case 0:
+    case "FAILURE_REASON_UNSPECIFIED":
+      return FailureReason.FAILURE_REASON_UNSPECIFIED;
+    case 1:
+    case "TIMEOUT":
+      return FailureReason.TIMEOUT;
+    case 2:
+    case "SURVEILLANCE":
+      return FailureReason.SURVEILLANCE;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return FailureReason.UNRECOGNIZED;
+  }
+}
+
+export function failureReasonToJSON(object: FailureReason): string {
+  switch (object) {
+    case FailureReason.FAILURE_REASON_UNSPECIFIED:
+      return "FAILURE_REASON_UNSPECIFIED";
+    case FailureReason.TIMEOUT:
+      return "TIMEOUT";
+    case FailureReason.SURVEILLANCE:
+      return "SURVEILLANCE";
+    case FailureReason.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 /** All coordinates are millimetres; time is authority ticks at 60 Hz. */
 export interface Input {
   protocolMajor: number;
@@ -172,6 +211,7 @@ export interface Snapshot {
   actions: AppliedAction[];
   sessions: Session[];
   room: RoomState | undefined;
+  hazards: Hazard[];
 }
 
 export interface Session {
@@ -190,6 +230,14 @@ export interface RoomState {
   readyPlayers: number;
   extractionPlayers: number;
   echoOpenedFinalDoor: boolean;
+  failureReason: FailureReason;
+  failureHazardId: number;
+}
+
+export interface Hazard {
+  id: number;
+  active: boolean;
+  detectedPlayerId: number;
 }
 
 export interface TimelineChunk {
@@ -880,6 +928,7 @@ function createBaseSnapshot(): Snapshot {
     actions: [],
     sessions: [],
     room: undefined,
+    hazards: [],
   };
 }
 
@@ -914,6 +963,9 @@ export const Snapshot: MessageFns<Snapshot> = {
     }
     if (message.room !== undefined) {
       RoomState.encode(message.room, writer.uint32(82).fork()).join();
+    }
+    for (const v of message.hazards) {
+      Hazard.encode(v!, writer.uint32(90).fork()).join();
     }
     return writer;
   },
@@ -1011,6 +1063,14 @@ export const Snapshot: MessageFns<Snapshot> = {
             message.room = RoomState.decode(reader, reader.uint32());
             continue;
           }
+          case 11: {
+            if (tag !== 90) {
+              break;
+            }
+
+            message.hazards.push(Hazard.decode(reader, reader.uint32()));
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -1049,6 +1109,7 @@ export const Snapshot: MessageFns<Snapshot> = {
         : [],
       sessions: globalThis.Array.isArray(object?.sessions) ? object.sessions.map((e: any) => Session.fromJSON(e)) : [],
       room: isSet(object.room) ? RoomState.fromJSON(object.room) : undefined,
+      hazards: globalThis.Array.isArray(object?.hazards) ? object.hazards.map((e: any) => Hazard.fromJSON(e)) : [],
     };
   },
 
@@ -1084,6 +1145,9 @@ export const Snapshot: MessageFns<Snapshot> = {
     if (message.room !== undefined) {
       obj.room = RoomState.toJSON(message.room);
     }
+    if (message.hazards?.length) {
+      obj.hazards = message.hazards.map((e) => Hazard.toJSON(e));
+    }
     return obj;
   },
 
@@ -1102,6 +1166,7 @@ export const Snapshot: MessageFns<Snapshot> = {
     message.actions = object.actions?.map((e) => AppliedAction.fromPartial(e)) || [];
     message.sessions = object.sessions?.map((e) => Session.fromPartial(e)) || [];
     message.room = (object.room !== undefined && object.room !== null) ? RoomState.fromPartial(object.room) : undefined;
+    message.hazards = object.hazards?.map((e) => Hazard.fromPartial(e)) || [];
     return message;
   },
 };
@@ -1241,6 +1306,8 @@ function createBaseRoomState(): RoomState {
     readyPlayers: 0,
     extractionPlayers: 0,
     echoOpenedFinalDoor: false,
+    failureReason: 0,
+    failureHazardId: 0,
   };
 }
 
@@ -1269,6 +1336,12 @@ export const RoomState: MessageFns<RoomState> = {
     }
     if (message.echoOpenedFinalDoor !== false) {
       writer.uint32(64).bool(message.echoOpenedFinalDoor);
+    }
+    if (message.failureReason !== 0) {
+      writer.uint32(72).int32(message.failureReason);
+    }
+    if (message.failureHazardId !== 0) {
+      writer.uint32(80).uint32(message.failureHazardId);
     }
     return writer;
   },
@@ -1350,6 +1423,22 @@ export const RoomState: MessageFns<RoomState> = {
             message.echoOpenedFinalDoor = reader.bool();
             continue;
           }
+          case 9: {
+            if (tag !== 72) {
+              break;
+            }
+
+            message.failureReason = reader.int32() as any;
+            continue;
+          }
+          case 10: {
+            if (tag !== 80) {
+              break;
+            }
+
+            message.failureHazardId = reader.uint32();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -1396,6 +1485,16 @@ export const RoomState: MessageFns<RoomState> = {
         : isSet(object.echo_opened_final_door)
         ? globalThis.Boolean(object.echo_opened_final_door)
         : false,
+      failureReason: isSet(object.failureReason)
+        ? failureReasonFromJSON(object.failureReason)
+        : isSet(object.failure_reason)
+        ? failureReasonFromJSON(object.failure_reason)
+        : 0,
+      failureHazardId: isSet(object.failureHazardId)
+        ? globalThis.Number(object.failureHazardId)
+        : isSet(object.failure_hazard_id)
+        ? globalThis.Number(object.failure_hazard_id)
+        : 0,
     };
   },
 
@@ -1425,6 +1524,12 @@ export const RoomState: MessageFns<RoomState> = {
     if (message.echoOpenedFinalDoor !== false) {
       obj.echoOpenedFinalDoor = message.echoOpenedFinalDoor;
     }
+    if (message.failureReason !== 0) {
+      obj.failureReason = failureReasonToJSON(message.failureReason);
+    }
+    if (message.failureHazardId !== 0) {
+      obj.failureHazardId = Math.round(message.failureHazardId);
+    }
     return obj;
   },
 
@@ -1441,6 +1546,113 @@ export const RoomState: MessageFns<RoomState> = {
     message.readyPlayers = object.readyPlayers ?? 0;
     message.extractionPlayers = object.extractionPlayers ?? 0;
     message.echoOpenedFinalDoor = object.echoOpenedFinalDoor ?? false;
+    message.failureReason = object.failureReason ?? 0;
+    message.failureHazardId = object.failureHazardId ?? 0;
+    return message;
+  },
+};
+
+function createBaseHazard(): Hazard {
+  return { id: 0, active: false, detectedPlayerId: 0 };
+}
+
+export const Hazard: MessageFns<Hazard> = {
+  encode(message: Hazard, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== 0) {
+      writer.uint32(8).uint32(message.id);
+    }
+    if (message.active !== false) {
+      writer.uint32(16).bool(message.active);
+    }
+    if (message.detectedPlayerId !== 0) {
+      writer.uint32(24).uint32(message.detectedPlayerId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): Hazard {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseHazard();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.id = reader.uint32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.active = reader.bool();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.detectedPlayerId = reader.uint32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): Hazard {
+    return {
+      id: isSet(object.id) ? globalThis.Number(object.id) : 0,
+      active: isSet(object.active) ? globalThis.Boolean(object.active) : false,
+      detectedPlayerId: isSet(object.detectedPlayerId)
+        ? globalThis.Number(object.detectedPlayerId)
+        : isSet(object.detected_player_id)
+        ? globalThis.Number(object.detected_player_id)
+        : 0,
+    };
+  },
+
+  toJSON(message: Hazard): unknown {
+    const obj: any = {};
+    if (message.id !== 0) {
+      obj.id = Math.round(message.id);
+    }
+    if (message.active !== false) {
+      obj.active = message.active;
+    }
+    if (message.detectedPlayerId !== 0) {
+      obj.detectedPlayerId = Math.round(message.detectedPlayerId);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<Hazard>, I>>(base?: I): Hazard {
+    return Hazard.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<Hazard>, I>>(object: I): Hazard {
+    const message = createBaseHazard();
+    message.id = object.id ?? 0;
+    message.active = object.active ?? false;
+    message.detectedPlayerId = object.detectedPlayerId ?? 0;
     return message;
   },
 };

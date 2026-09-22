@@ -2,8 +2,8 @@
 
 ## Status
 
-P1.1 is implemented, independently reviewed, and published as PR #5. Local and
-GitHub container verification pass. P1.2 stealth pressure is next.
+P1.1 is merged on `main` at `4b6f89a`. P1.2 surveillance implementation is in
+progress; its protocol/map contract is the current synchronization boundary.
 
 ## Completed
 
@@ -22,6 +22,9 @@ GitHub container verification pass. P1.2 stealth pressure is next.
 - Independent review found a lobby pre-positioning bypass. ACTIVE-only gameplay
   advancement and clearing held lobby motion fixed it with regression coverage.
 - Published `p1/game-loop-foundation` as PR #5.
+- PR #5 merged as `4b6f89a`.
+- Defined the P1.2 static camera, integer view cone, failure diagnostics, and
+  Echo immunity semantics.
 
 ## Verification
 
@@ -45,8 +48,9 @@ Passed in containers on 2026-09-22:
 
 ## Current work
 
-1. Merge PR #5 after explicit user approval.
-2. Begin P1.2 authority-owned surveillance failure as the next isolated slice.
+1. Verify and commit the additive P1.2 protocol/map contract.
+2. Implement simulation, raw WebGPU telegraphy/UI, and two-client E2E in isolated
+   worktrees.
 
 ## Blockers
 
@@ -54,4 +58,5 @@ None.
 
 ## Next action
 
-Freeze the minimal P1.2 hazard contract after P1.1 integration.
+Run P1.2 code generation and cross-language compatibility in a container, commit
+the synchronization boundary, then start parallel implementation.

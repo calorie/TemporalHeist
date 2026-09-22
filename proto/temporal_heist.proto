@@ -55,6 +55,7 @@ message Snapshot {
   repeated AppliedAction actions = 8;
   repeated Session sessions = 9;
   RoomState room = 10;
+  repeated Hazard hazards = 11;
 }
 message Session {
   uint32 player_id = 1;
@@ -69,6 +70,11 @@ enum RoomPhase {
   WON = 3;
   FAILED = 4;
 }
+enum FailureReason {
+  FAILURE_REASON_UNSPECIFIED = 0;
+  TIMEOUT = 1;
+  SURVEILLANCE = 2;
+}
 message RoomState {
   RoomPhase phase = 1;
   uint32 attempt = 2;
@@ -78,6 +84,13 @@ message RoomState {
   uint32 ready_players = 6;
   uint32 extraction_players = 7;
   bool echo_opened_final_door = 8;
+  FailureReason failure_reason = 9;
+  uint32 failure_hazard_id = 10;
+}
+message Hazard {
+  uint32 id = 1;
+  bool active = 2;
+  uint32 detected_player_id = 3;
 }
 message TimelineChunk {
   uint32 protocol_major = 1;

@@ -13,5 +13,8 @@ if (process.argv[2] === 'encode') {
   assert.equal(snapshot.room?.attempt, 2);
   assert.equal(snapshot.room?.deadlineTick, 18123);
   assert.equal(snapshot.room?.echoOpenedFinalDoor, true);
+  assert.equal(snapshot.room?.failureReason, 2);
+  assert.equal(snapshot.room?.failureHazardId, 41);
+  assert.deepEqual(snapshot.hazards, [{id: 41, active: true, detectedPlayerId: 2}]);
   console.log('TypeScript decoded Rust P1 room state; signed axes and safe integer boundary passed');
 }
