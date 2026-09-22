@@ -1,5 +1,5 @@
 services:
-  dev:
+  dev: &dev
     build:
       context: .
       dockerfile: containers/Dockerfile
@@ -10,6 +10,7 @@ services:
       CARGO_TARGET_DIR: /build/target
       CARGO_BUILD_JOBS: "2"
       npm_config_cache: /cache/npm
+      TH_ROOM_ID: ${TH_AGENT_ID}
     volumes:
       - .:/workspace
       - cargo-registry:/usr/local/cargo/registry
@@ -20,6 +21,25 @@ services:
       - artifacts:/artifacts
       - certificates:/certificates
     shm_size: 1gb
+  relay:
+    build:
+      context: .
+      dockerfile: containers/Relay.Dockerfile
+    command: ["/config/relay.toml"]
+    volumes:
+      - ./spikes/transport/relay.toml:/config/relay.toml:ro
+    init: true
+  authority:
+    <<: *dev
+    command: ["cargo", "run", "--locked", "-p", "th-authority"]
+    depends_on: [relay]
+  web:
+    <<: *dev
+    command: ["npx", "vite", "apps/web", "--host", "0.0.0.0"]
+  browser:
+    <<: *dev
+    profiles: ["test"]
+    command: ["node", "tests/e2e.mjs"]
 volumes:
   cargo-registry:
   cargo-git:

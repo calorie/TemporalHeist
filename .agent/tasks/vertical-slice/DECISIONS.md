@@ -122,6 +122,31 @@ Automated tests must not require fixed host ports or hard-coded container names.
 
 ## Reversible choices delegated to Codex
 
+### A15 — Verified transport and browser baseline
+
+Selected `@moq/net` 0.3.5, `moq-net` 0.2.22, `moq-native` 0.19.19 and
+`moq-relay` 0.14.18. The container spike verified WebTransport with `moq-lite-05`,
+two concurrent browser publishers, Rust replies, and real group fetch. Explicit
+30-second track/subscriber latency is required instead of the five-second default.
+Use bounded authority-origin history bootstrap for gameplay late join so correctness
+does not rely on relay retention. Keep protocol types outside transport adapters.
+
+### A16 — Software WebGPU validation
+
+Full containerized Chromium 153.0.8010.12 from Playwright 1.63.0 initializes a
+Google SwiftShader fallback WebGPU adapter. Explicit ANGLE/Vulkan/SwiftShader
+flags are recorded in `spikes/gpu/test.mjs`; WGSL compilation, GPU pixel readback
+and validation checks pass. The compositor separately reports Mesa llvmpipe.
+No host browser or GPU-derived authority is used.
+
+### A17 — Generated protocol bindings
+
+Use prost/prost-build 0.14.4 for Rust and ts-proto 2.12.4 for TypeScript, generated
+from one protobuf schema. Container compatibility test includes negative axes and
+JavaScript's maximum safe integer. P0 rejects values outside safe wire limits.
+Protocol major, epoch, session and per-kind input sequences define compatibility
+and idempotency; no zero/unknown input kind is interpreted as join.
+
 Codex may choose and later revise without asking the user:
 
 - exact workspace/package-manager layout;

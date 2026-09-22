@@ -1,4 +1,10 @@
-# Draft contract v1 (not frozen until spikes pass)
+# Frozen contract v1
+
+Frozen after containerized protocol, WebGPU, bidirectional MoQ, retained-group,
+two-client, and two-independent-stack spikes passed on 2026-09-22. Component
+work may rely on this contract. A change to this file, the protobuf schema, map
+source, or container command contract is serialized and requires compatibility
+verification before dependent work resumes.
 
 Protocol source: `proto/temporal_heist.proto`. Protocol major 1; tick rate 60;
 Echo delay 600; authority history capacity 3601 samples per player. Integer
@@ -11,7 +17,13 @@ the claim. Snapshots acknowledge ownership through `sessions`. Wrong versions,
 epochs, invalid IDs, unspecified/unknown kinds, malformed axes and oversized
 payloads are rejected. Motion times out to zero after 30 ticks without refresh;
 session expires after 300 ticks without accepted input. Reconnect can reuse a
-session with preserved sequence counters; a new epoch clears client state.
+session with preserved sequence counters; a new epoch clears client state. A
+disconnect removes the live actor and its Echo immediately while retaining its
+history internally. A new session does not inherit that Echo. Already accepted
+Echo-capable actions remain scheduled and fire once even if the source disconnects.
+Rejected Action sequences consume their watermark so retrying one later cannot
+turn it into a newly accepted action. A same-session JOIN refresh does not reset
+history or sequence counters.
 
 Snapshots contain current players, authoritative echoes, doors/plates, session
 acknowledgements and a bounded accepted-action log (at least 3600 ticks), including

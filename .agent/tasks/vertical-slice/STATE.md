@@ -6,6 +6,31 @@ Resumed by the user's explicit implementation request on 2026-09-22.
 
 ## Active continuation (2026-09-22)
 
+### Verified spike milestone
+
+- Commits: `e001dda` (transport/protobuf/WebGPU spikes and draft contract),
+  `95320f6` (two simultaneous browser publishers and actual MoQ group fetch).
+- PASSED container `sh spikes/protocol/check.sh`: generated TS → Rust → generated
+  TS, negative movement and maximum JS safe integer sequence. `cargo check -p
+  th-protocol`, workspace rustfmt check, generated TS typecheck also passed.
+- PASSED `node spikes/gpu/test.mjs` in both independent `gpu-0922b` and
+  `spike-main-0922` stacks: Chromium153.0.8010.12, WebGPU Google SwiftShader fallback,
+  actual green center/black corner pixel readback, zero shader/validation errors.
+  Compositor reports ANGLE Mesa llvmpipe Vulkan1.4.318 (distinct from WebGPU adapter).
+- PASSED `node spikes/transport/test.mjs` with relay/native authority/web services:
+  two browser clients simultaneously publish, Rust asserts incoming payload,
+  both receive reply over WebTransport / moq-lite-05 and fetch retained groups.
+  Additional 11-second delayed fetch also PASSED for both clients.
+- Container-only infrastructure check passed. CI agentic-contract workflow now
+  invokes the same container entry point; full game CI remains to be implemented.
+- Initial full-stack isolation is in progress in `/private/tmp/th-isolation-0922`
+  (project `th-isolation-0922`). Its private dependencies/native build passed.
+  Immutable relay image build from `containers/Relay.Dockerfile` is in progress.
+- Component worktrees prepared: `/private/tmp/th-sim-0922`, `/private/tmp/th-web-0922`.
+  They are in read-only preparation until isolation proof and contract freeze.
+- Broad implementation and game acceptance remain NOT completed. The status below
+  is historical unless superseded by this milestone.
+
 - Read all required documents and the orchestrate skill; preserved existing bootstrap.
 - Docker Engine 29.8.0 and Compose 5.5.1 are reachable. Container-only execution continues.
 - Bootstrap committed as `4b8b551`. Existing SSH signing points at a missing public key;

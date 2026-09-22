@@ -15,6 +15,7 @@ async function run() {
   const group = await subscription.recvGroup();
   const frame = await group?.readFrame();
   clearInterval(timer);
+  await new Promise(resolve => setTimeout(resolve, 11_000));
   const fetched = await remote.fetchGroup(group!.sequence);
   const fetchedFrame = await fetched.readFrame();
   const result = {id, transport: connection.transport, version: connection.version, payload: new TextDecoder().decode(frame?.payload), fetched: new TextDecoder().decode(fetchedFrame?.payload)};
