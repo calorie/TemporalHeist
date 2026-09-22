@@ -25,6 +25,7 @@ let desired = { x: 0, z: 0 };
 let joinSequence = 0;
 let motionSequence = 0;
 let presentationPaused = false;
+let presentationFrame: number | undefined;
 let actionSequence = 0;
 let reconnecting = false;
 let transportGeneration = 0;
@@ -264,7 +265,43 @@ window.th = {
   reconnect,
   setPresentationPaused: (paused) => {
     presentationPaused = paused;
+    if (paused && presentationFrame !== undefined) {
+      cancelAnimationFrame(presentationFrame);
+      presentationFrame = undefined;
+    } else if (!paused && renderer && presentationFrame === undefined) {
+      presentationFrame = requestAnimationFrame(frame);
+    }
   },
+};
+
+const scheduleFrame = () => {
+  if (!presentationPaused && presentationFrame === undefined) {
+    presentationFrame = requestAnimationFrame(frame);
+  }
+};
+
+const frame = () => {
+  presentationFrame = undefined;
+  if (presentationPaused) return;
+  const presentation = timeline.presentation();
+  renderer?.render(map, presentation);
+  const snap = presentation.snapshot;
+  const hud = roomHud(snap, playerId);
+  audio.update(snap);
+  hudElement.dataset.phase = hud.phaseState;
+  phase.textContent = hud.phase;
+  objective.textContent = hud.objective;
+  timer.textContent = hud.timer;
+  echoStatus.textContent = hud.echoStatus;
+  readiness.textContent = hud.readiness;
+  result.textContent = hud.result;
+  result.dataset.state = hud.resultState;
+  readyButton.hidden = !hud.canReady;
+  restartButton.hidden = !hud.canRestart;
+  details.textContent = snap
+    ? `tick ${snap.serverTick} · epoch ${snap.roomEpoch.slice(0, 8)} · ${timeline.length} samples · ${presentation.echoes.length} echoes`
+    : `room ${room} · waiting for authority`;
+  scheduleFrame();
 };
 
 async function start() {
@@ -278,32 +315,7 @@ async function start() {
     return;
   }
   setInterval(sendMotion, 33);
-  const frame = () => {
-    if (presentationPaused) {
-      requestAnimationFrame(frame);
-      return;
-    }
-    const presentation = timeline.presentation();
-    renderer?.render(map, presentation);
-    const snap = presentation.snapshot;
-    const hud = roomHud(snap, playerId);
-    audio.update(snap);
-    hudElement.dataset.phase = hud.phaseState;
-    phase.textContent = hud.phase;
-    objective.textContent = hud.objective;
-    timer.textContent = hud.timer;
-    echoStatus.textContent = hud.echoStatus;
-    readiness.textContent = hud.readiness;
-    result.textContent = hud.result;
-    result.dataset.state = hud.resultState;
-    readyButton.hidden = !hud.canReady;
-    restartButton.hidden = !hud.canRestart;
-    details.textContent = snap
-      ? `tick ${snap.serverTick} · epoch ${snap.roomEpoch.slice(0, 8)} · ${timeline.length} samples · ${presentation.echoes.length} echoes`
-      : `room ${room} · waiting for authority`;
-    requestAnimationFrame(frame);
-  };
-  requestAnimationFrame(frame);
+  scheduleFrame();
   await reconnect();
 }
 void start();

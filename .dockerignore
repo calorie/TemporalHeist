@@ -1,6 +1,7 @@
 .git
 .agent
 .agents
+.worktrees
 .codex
 node_modules
 target

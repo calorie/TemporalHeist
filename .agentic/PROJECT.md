@@ -23,6 +23,13 @@ evidence. The `visual` command starts player A and B as separate Chromium servic
 with separate persistent profiles and ephemeral CDP ports. Host commands may
 orchestrate Docker and Git only.
 
+`acceptance` and `visual` build dedicated release/runtime targets: a release Rust
+authority, static nginx web server, and browser runner. They do not use the combined
+development image or its writable language caches. The relay is the digest-pinned
+official `moqdev/moq-relay:0.14.18` image. `verify` alone uses the combined dev image
+because its cross-language checks need both toolchains. Always remove a visual stack
+after inspection with `sh container <run-id> down --volumes --remove-orphans`.
+
 `verify-two-stack-isolation.sh` is the release-level two-worktree check. It runs the
 existing containerized acceptance entry point twice in parallel, observes both
 browser services, verifies disjoint Compose resources and no host ports, tears one
