@@ -153,6 +153,11 @@ isolation before requesting integration approval.
 - Canvas readbacks found guard-body color at all four rectangle corners plus wall
   and floor colors, proving the repaired mesh fills its rectangles.
 - `sh container p2-cube down --volumes --remove-orphans` — passed.
+- Review follow-up: degenerate-triangle and edge-sharing face mutations each
+  passed the old invariant, then failed as expected before their new assertions.
+  The strengthened `sh container p2-cube run --rm dev node apps/web/test/cube-mesh.mjs`
+  passed, and a fresh `sh container p2-cube verify` passed.
+  `sh container p2-cube down --volumes --remove-orphans` passed afterward.
 
 The cube-only branch still used the older `--disable-vulkan-surface` flag and
 therefore produced black canvas screenshots. Task 5 independently removed that
