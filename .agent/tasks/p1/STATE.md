@@ -113,25 +113,32 @@ Passed in containers on 2026-09-23:
 
 - PR #7 CI passed: `validate` 1m15s, `component-verification` 3m16s, and
   `acceptance` 10m09s. Post-merge `main` CI for `57a44e8` also passed.
-- `sh containers/verify-two-stack-isolation.sh /Users/a/TemporalHeist/.worktrees/p14-a
-  p14-iso-a /Users/a/TemporalHeist/.worktrees/p14-b p14-iso-b
-  /tmp/temporal-heist-p14-isolation` passed both complete production acceptance
-  scenarios. Both browser services were live simultaneously and each contained
-  independent Chromium A/B profiles.
-- Isolation resource evidence: container IDs A
-  `55042c841453,92b62f7d7c51,b6dc0b1fb4c8,c4c217f7e5c5`; B
-  `11d33673af82,1cdd718293ac,70e83de1908e,bbb60e92b51c`; network IDs A
-  `94c171c67639`, B `1c45cca9f9eb`. Each stack had seven uniquely prefixed
-  writable volumes and no published host ports.
-- Removing `th-p14-iso-a` with volumes removed only A. Every B container,
+- `sh containers/verify-two-stack-isolation.sh /Users/a/TemporalHeist/.worktrees/p14-final-a
+  p14-rc-a6 /Users/a/TemporalHeist/.worktrees/p14-final-b p14-rc-b6
+  /tmp/temporal-heist-p14-final-isolation-6` passed both complete production
+  acceptance scenarios at clean, identical executable revision `80f43c0`.
+  Both browser services were live simultaneously and each contained independent
+  Chromium A/B profiles.
+- Final isolation resource evidence: container IDs A
+  `046a704d063f,0fa62f94f654,eb6fb0967a77,fa5ab099b620`; B
+  `518543fea118,6eeea8ad2c9f,c89e431813e3,f713a05b7d27`; network IDs A
+  `ef0bee76b14c`, B `426df657f150`. Each stack had seven uniquely prefixed
+  writable volumes and no published host ports. Both acceptance runs exited 0.
+- Removing `th-p14-rc-a6` with volumes removed only A. Every B container,
   network, and volume ID remained unchanged, and an in-network B web health
   request passed. Machine evidence and separate acceptance logs are in
-  `/tmp/temporal-heist-p14-isolation/`.
+  `/tmp/temporal-heist-p14-final-isolation-6/`.
+- A warm-cache single-stack `sh container p14-smoke acceptance` also passed at
+  `80f43c0`. Its E2E automation uses quarter-speed authoritative feedback under
+  software-GPU load; this preserved all gameplay assertions while preventing
+  observation latency from skipping plates or narrow door openings.
 - Final `sh container p14-final-0923 verify` passed codegen, cross-language
   protocol, rustfmt, clippy, 25 Rust tests, TypeScript, Biome, seven browser/
   contract suites, Vite production build, and Chromium WebGPU/WGSL validation.
   The probe reported Chromium 153, Mesa llvmpipe Vulkan 1.4.318, SwiftShader,
-  `rgba8unorm`, zero shader errors, and zero validation errors.
+  `rgba8unorm`, zero shader errors, and zero validation errors. The same command
+  passed again after the final E2E automation changes at executable revision
+  `80f43c0`.
 - `sh container p14-final-0923 visual` passed with separate Chromium A/B
   profiles and CDP ports `64942`/`64941`. Both 1280x720 labeled screenshots and
   metadata reported raw WebGPU/SwiftShader and empty page/renderer errors.
@@ -140,10 +147,9 @@ Passed in containers on 2026-09-23:
 
 ## Current work
 
-1. Commit the final P1.4 state, run an independent diff review, and publish the
-   release-candidate PR.
-2. Monitor its container-only CI and leave the verified visual stack available
-   until evidence review is complete.
+1. Run the final container verification at the release executable revision,
+   commit this evidence-only state update, and publish the release-candidate PR.
+2. Monitor its container-only CI.
 
 ## Blockers
 

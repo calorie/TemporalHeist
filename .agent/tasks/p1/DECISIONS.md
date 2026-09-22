@@ -109,3 +109,9 @@ render loops compete strongly enough to starve reliable input observation.
 The harness fails unless both acceptance runs pass, resources are disjoint, no
 host ports are published, and deleting stack A with all volumes leaves stack B's
 resource IDs and in-network health unchanged.
+
+The E2E driver uses quarter-speed motion and authoritative feedback for plate
+occupancy, forward-only door crossings, extraction, and surveillance entry.
+This keeps browser observation delay below the facility's narrow trigger and
+door widths on contended software-GPU hosts. Gameplay clients retain full-speed
+input; only deterministic automation uses the reduced axis value.
