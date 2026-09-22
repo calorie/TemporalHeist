@@ -95,3 +95,23 @@ them. It reserves the final gate for the required proof: player B crosses while
 player A's exact 600-tick Echo supplies Presence. Camera detection approaches
 the cone laterally from an outside waypoint so delayed movement messages cannot
 trigger the terminal state before the assertion begins.
+
+## 2026-09-23 — P1.4 release isolation
+
+Release isolation uses two distinct Git worktrees and production `acceptance`
+stacks. Both stacks and all four Chromium clients are brought up together. On
+software-GPU hosts, stack B pauses only its presentation loop for four minutes
+after WebGPU initialization and room connection while stack A runs; B then resumes
+and runs the same complete scenario. This retains simultaneous process, profile,
+network, volume, certificate, and connection coverage without making two llvmpipe
+render loops compete strongly enough to starve reliable input observation.
+
+The harness fails unless both acceptance runs pass, resources are disjoint, no
+host ports are published, and deleting stack A with all volumes leaves stack B's
+resource IDs and in-network health unchanged.
+
+The E2E driver uses quarter-speed motion and authoritative feedback for plate
+occupancy, forward-only door crossings, extraction, and surveillance entry.
+This keeps browser observation delay below the facility's narrow trigger and
+door widths on contended software-GPU hosts. Gameplay clients retain full-speed
+input; only deterministic automation uses the reduced axis value.

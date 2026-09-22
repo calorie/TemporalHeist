@@ -24,6 +24,7 @@ let joinAttemptTick = -60;
 let desired = { x: 0, z: 0 };
 let joinSequence = 0;
 let motionSequence = 0;
+let presentationPaused = false;
 let actionSequence = 0;
 let reconnecting = false;
 let transportGeneration = 0;
@@ -240,6 +241,7 @@ export interface TemporalHeistTestApi {
   rendererPixel(x: number, y: number): Promise<number[]>;
   errors(): string[];
   reconnect(): Promise<void>;
+  setPresentationPaused(paused: boolean): void;
 }
 declare global {
   interface Window {
@@ -260,6 +262,9 @@ window.th = {
     renderer ? renderer.samplePixel(x, y) : Promise.reject(new Error('Renderer unavailable')),
   errors: () => [...errors, ...(renderer?.errors() ?? [])],
   reconnect,
+  setPresentationPaused: (paused) => {
+    presentationPaused = paused;
+  },
 };
 
 async function start() {
@@ -274,6 +279,10 @@ async function start() {
   }
   setInterval(sendMotion, 33);
   const frame = () => {
+    if (presentationPaused) {
+      requestAnimationFrame(frame);
+      return;
+    }
     const presentation = timeline.presentation();
     renderer?.render(map, presentation);
     const snap = presentation.snapshot;

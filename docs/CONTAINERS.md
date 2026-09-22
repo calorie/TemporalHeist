@@ -200,16 +200,18 @@ The finalized entry points are `sh container <run-id> bootstrap`, `verify`, and
 cleanup is `sh container <run-id> down --volumes --remove-orphans`.
 
 Manual visual inspection uses `sh container <run-id> visual`. It starts the private
-relay, authority, web service, and a container-owned Chromium, then prints a URL like
-`http://127.0.0.1:60448/json/list`. The port is allocated by the container runtime;
-it is not stable between runs. In desktop Chromium, open `chrome://inspect`, choose
-**Configure**, add the printed `127.0.0.1:<port>`, and inspect the game target.
+relay, authority, web service, and separate container-owned Chromium A/B services.
+Each browser has its own `visual-profile-a` or `visual-profile-b` volume and an
+ephemeral CDP host port. The command prints both URLs. In desktop Chromium, open
+`chrome://inspect`, choose **Configure**, add either printed `127.0.0.1:<port>`, and
+inspect that player's game target.
 
-The remote-debugging client is the only host-side UI. Game execution, Chromium,
-its persistent profile, and WebGPU remain inside the run-ID Compose project. This
-surface provides DevTools inspection rather than a shared desktop; use automated
-screenshots for unattended evidence. Remove the stack and its profile with the
-standard `down --volumes --remove-orphans` command.
+The remote-debugging client is the only host-side UI. Game execution, both Chromium
+processes, their persistent profiles, and WebGPU remain inside the run-ID Compose
+project. Labeled screenshots and renderer/error metadata are stored in the run's
+artifact volume. This surface provides DevTools inspection rather than a shared
+desktop; use automated screenshots for unattended evidence. Remove the stack and
+both profiles with the standard `down --volumes --remove-orphans` command.
 
 ## CI
 
@@ -231,3 +233,24 @@ Parallel isolation is verified when:
 6. tearing one stack down with volumes does not interrupt the other.
 
 Document the exact verification command and evidence in `.agent/tasks/vertical-slice/STATE.md`.
+
+The production isolation harness accepts two existing, distinct Git worktrees and
+two unique run IDs:
+
+~~~sh
+sh containers/verify-two-stack-isolation.sh \
+  /path/to/worktree-a isolation-a \
+  /path/to/worktree-b isolation-b \
+  /tmp/temporal-heist-isolation-evidence
+~~~
+
+It starts `acceptance` in both worktrees concurrently and observes both Compose
+`browser` services live at the same time. Before waiting for the game scene, it
+asserts that labeled containers, networks, and writable volumes are disjoint and
+that neither project publishes a host port. After both runs pass, it removes stack
+A with volumes, proves stack B retained the same container/network/volume IDs, and
+runs an HTTP health request from stack B's web container. It cleans both stacks on
+every exit while preserving `evidence.json`, `acceptance-a.log`, and
+`acceptance-b.log` in the caller-selected directory. The default browser-observation
+timeout is 20 minutes so cold image and dependency builds can overlap safely;
+`TH_ISOLATION_OBSERVE_TIMEOUT_SECONDS` may override it.

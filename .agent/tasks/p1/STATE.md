@@ -2,9 +2,9 @@
 
 ## Status
 
-P1.1 is merged on `main` at `4b6f89a`. P1.2 is merged on `main` at `a0fa12e`.
-P1.3 implementation and all local container verification are complete on
-`p1/playability-presentation`; PR publication and CI are next.
+P1.1 is merged at `4b6f89a`, P1.2 at `a0fa12e`, and P1.3 at `57a44e8`.
+P1.4 release-candidate implementation and local container verification are
+complete on `p1/release-candidate`; publication and CI are next.
 
 ## Completed
 
@@ -36,6 +36,11 @@ P1.3 implementation and all local container verification are complete on
 - Extended the two-client E2E to assert the human-facing UI and labeled evidence.
 - Split visual clients into separate Chromium services, profile volumes, and
   ephemeral CDP endpoints after independent review found shared profile state.
+- Added a production two-worktree isolation harness with machine-readable
+  resource, acceptance, teardown, and survivor-health evidence.
+- Hardened E2E movement targets against delayed observation at extraction and
+  surveillance boundaries. Isolation runs initialize all four Chromium clients
+  together and temporarily idle stack B's rendering before its full scenario.
 
 ## Verification
 
@@ -104,15 +109,64 @@ Passed in containers on 2026-09-22:
   WebGPU/WGSL validation all passed. The probe used Mesa llvmpipe Vulkan with a
   SwiftShader WebGPU adapter, `rgba8unorm`, and zero shader/validation errors.
 
+Passed in containers on 2026-09-23:
+
+- PR #7 CI passed: `validate` 1m15s, `component-verification` 3m16s, and
+  `acceptance` 10m09s. Post-merge `main` CI for `57a44e8` also passed.
+- `sh containers/verify-two-stack-isolation.sh /Users/a/TemporalHeist/.worktrees/p14-final-a
+  p14-rc-a6 /Users/a/TemporalHeist/.worktrees/p14-final-b p14-rc-b6
+  /tmp/temporal-heist-p14-final-isolation-6` passed both complete production
+  acceptance scenarios at clean, identical executable revision `80f43c0`.
+  Both browser services were live simultaneously and each contained independent
+  Chromium A/B profiles.
+- Final isolation resource evidence: container IDs A
+  `046a704d063f,0fa62f94f654,eb6fb0967a77,fa5ab099b620`; B
+  `518543fea118,6eeea8ad2c9f,c89e431813e3,f713a05b7d27`; network IDs A
+  `ef0bee76b14c`, B `426df657f150`. Each stack had seven uniquely prefixed
+  writable volumes and no published host ports. Both acceptance runs exited 0.
+- Removing `th-p14-rc-a6` with volumes removed only A. Every B container,
+  network, and volume ID remained unchanged, and an in-network B web health
+  request passed. Machine evidence and separate acceptance logs are in
+  `/tmp/temporal-heist-p14-final-isolation-6/`.
+- A warm-cache single-stack `sh container p14-smoke acceptance` also passed at
+  `80f43c0`. Its E2E automation uses quarter-speed authoritative feedback under
+  software-GPU load; this preserved all gameplay assertions while preventing
+  observation latency from skipping plates or narrow door openings.
+- Final `sh container p14-final-0923 verify` passed codegen, cross-language
+  protocol, rustfmt, clippy, 25 Rust tests, TypeScript, Biome, seven browser/
+  contract suites, Vite production build, and Chromium WebGPU/WGSL validation.
+  The probe reported Chromium 153, Mesa llvmpipe Vulkan 1.4.318, SwiftShader,
+  `rgba8unorm`, zero shader errors, and zero validation errors. The same command
+  passed again after the final E2E automation changes at executable revision
+  `80f43c0`.
+- `sh container p14-final-0923 visual` passed with separate Chromium A/B
+  profiles and CDP ports `64942`/`64941`. Both 1280x720 labeled screenshots and
+  metadata reported raw WebGPU/SwiftShader and empty page/renderer errors.
+  Container-driven visible Ready actions confirmed ACTIVE HUD, player labels,
+  the five-minute timer, onboarding, and Echo countdown on both clients.
+
 ## Current work
 
-1. Commit, push, open the P1.3 PR, and monitor container-only CI.
-2. After merge, begin P1.4 release-candidate verification.
+1. Run the final container verification at the release executable revision,
+   commit this evidence-only state update, and publish the release-candidate PR.
+2. Monitor its container-only CI.
 
 ## Blockers
 
 None.
 
+## Known constraints and unverified items
+
+- Desktop Chromium is the supported target. Safari, Firefox, mobile, production
+  authentication, persistence, matchmaking, WAN deployment, and relay clustering
+  remain outside P1.
+- Automated GPU evidence uses SwiftShader on Mesa llvmpipe/Vulkan. Hardware GPU
+  passthrough and performance have not been measured.
+- Audio tests verify Web Audio transitions and mute behavior; automated runners
+  do not assess perceived loudness or sound quality.
+- Visual evidence lives in run-private Docker artifact volumes. CDP permits human
+  inspection of containerized Chromium but no VNC/noVNC desktop is provided.
+
 ## Next action
 
-Publish the P1.3 PR and monitor its container-only CI.
+Publish the P1.4 release-candidate PR and monitor its container-only CI.

@@ -6,6 +6,11 @@ const artifacts = `/artifacts/e2e-${process.env.TH_AGENT_ID}`;
 await mkdir(artifacts, { recursive: true });
 const viewport = { width: 1280, height: 720 };
 const stateTimeout = 30_000;
+const moveTimeout = Number(process.env.TH_E2E_MOVE_TIMEOUT_MS ?? 45_000);
+const startDelay = Number(process.env.TH_E2E_START_DELAY_MS ?? 0);
+const movementAxis = 0.25;
+assert(Number.isSafeInteger(moveTimeout) && moveTimeout >= 45_000);
+assert(Number.isSafeInteger(startDelay) && startDelay >= 0);
 const flags = [
   '--no-sandbox',
   '--enable-unsafe-webgpu',
@@ -116,7 +121,7 @@ async function capture(page, player, label) {
   evidence.screenshots.push({ file, player, label, ui: await uiState(page) });
 }
 
-async function moveTo(page, playerId, x, z, timeout = 45_000) {
+async function moveTo(page, playerId, x, z, timeout = moveTimeout) {
   const deadline = Date.now() + timeout;
   let lastState;
   while (Date.now() < deadline) {
@@ -141,8 +146,8 @@ async function moveTo(page, playerId, x, z, timeout = 45_000) {
       await new Promise((resolve) => setTimeout(resolve, 50));
       continue;
     }
-    const dx = Math.abs(pose.xMm - x) <= 120 ? 0 : Math.sign(x - pose.xMm);
-    const dz = Math.abs(pose.zMm - z) <= 120 ? 0 : Math.sign(z - pose.zMm);
+    const dx = Math.abs(pose.xMm - x) <= 120 ? 0 : Math.sign(x - pose.xMm) * movementAxis;
+    const dz = Math.abs(pose.zMm - z) <= 120 ? 0 : Math.sign(z - pose.zMm) * movementAxis;
     await page.evaluate(([mx, mz]) => window.th.move(mx, mz), [dx, dz]);
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
@@ -153,6 +158,90 @@ async function moveTo(page, playerId, x, z, timeout = 45_000) {
     phase: lastState?.room?.phase,
     failureReason: lastState?.room?.failureReason,
     failureHazardId: lastState?.room?.failureHazardId,
+  })}`);
+}
+
+async function occupyPlate(page, playerId, plateId, x, z, timeout = moveTimeout) {
+  const deadline = Date.now() + timeout;
+  let consecutivePresence = 0;
+  let lastState;
+  while (Date.now() < deadline) {
+    const state = await snapshot(page);
+    lastState = state;
+    const pose = state?.players.find((candidate) => candidate.playerId === playerId);
+    const present = state?.plates.find((plate) => plate.id === plateId)?.livePresence > 0;
+    if (present) {
+      await page.evaluate(() => window.th.move(0, 0));
+      consecutivePresence += 1;
+      if (consecutivePresence >= 10) return state;
+    } else if (pose) {
+      consecutivePresence = 0;
+      const dx = Math.abs(pose.xMm - x) <= 120 ? 0 : Math.sign(x - pose.xMm) * movementAxis;
+      const dz = Math.abs(pose.zMm - z) <= 120 ? 0 : Math.sign(z - pose.zMm) * movementAxis;
+      await page.evaluate(([mx, mz]) => window.th.move(mx, mz), [dx, dz]);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`player ${playerId} did not settle on plate ${plateId}; ${JSON.stringify({
+    tick: lastState?.serverTick,
+    pose: lastState?.players.find((candidate) => candidate.playerId === playerId),
+    plate: lastState?.plates.find((candidate) => candidate.id === plateId),
+  })}`);
+}
+
+async function moveRightPast(page, playerId, x, z, timeout = moveTimeout) {
+  const deadline = Date.now() + timeout;
+  let lastState;
+  while (Date.now() < deadline) {
+    const state = await snapshot(page);
+    lastState = state;
+    const pose = state?.players.find((candidate) => candidate.playerId === playerId);
+    if (
+      state?.room?.phase === RoomPhase.WON &&
+      x >= 22_800 &&
+      pose?.xMm >= 22_800 &&
+      pose.zMm >= 3_000 &&
+      pose.zMm <= 5_000
+    ) {
+      await page.evaluate(() => window.th.move(0, 0));
+      return state;
+    }
+    if (pose?.xMm >= x && Math.abs(pose.zMm - z) <= 180) {
+      await page.evaluate(() => window.th.move(0, 0));
+      return state;
+    }
+    if (pose) {
+      const dx = pose.xMm >= x ? 0 : movementAxis;
+      const dz = Math.abs(pose.zMm - z) <= 120 ? 0 : Math.sign(z - pose.zMm) * movementAxis;
+      await page.evaluate(([mx, mz]) => window.th.move(mx, mz), [dx, dz]);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`player ${playerId} did not pass x=${x}; ${JSON.stringify({
+    tick: lastState?.serverTick,
+    pose: lastState?.players.find((candidate) => candidate.playerId === playerId),
+  })}`);
+}
+
+async function enterSurveillance(page, playerId, x, z, timeout = moveTimeout) {
+  const deadline = Date.now() + timeout;
+  let lastState;
+  while (Date.now() < deadline) {
+    const state = await snapshot(page);
+    lastState = state;
+    if (state?.room?.phase === RoomPhase.FAILED) return state;
+    const pose = state?.players.find((candidate) => candidate.playerId === playerId);
+    if (pose) {
+      const dx = Math.abs(pose.xMm - x) <= 120 ? 0 : Math.sign(x - pose.xMm) * movementAxis;
+      const dz = Math.abs(pose.zMm - z) <= 120 ? 0 : Math.sign(z - pose.zMm) * movementAxis;
+      await page.evaluate(([mx, mz]) => window.th.move(mx, mz), [dx, dz]);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`player ${playerId} did not trigger surveillance; ${JSON.stringify({
+    tick: lastState?.serverTick,
+    pose: lastState?.players.find((candidate) => candidate.playerId === playerId),
+    room: lastState?.room,
   })}`);
 }
 
@@ -179,24 +268,19 @@ async function waitForPhase(page, phase, description, timeout = stateTimeout) {
 }
 
 async function recordEchoPlate(pageA, plateId, doorId, x, z, whileLive) {
-  const outside = await moveTo(pageA, 1, x - 1000, z);
+  const outside = await moveTo(pageA, 1, x - 2000, z);
   assert.equal(outside.plates.find((plate) => plate.id === plateId)?.active, false);
-  await pageA.evaluate(() => window.th.move(1, 0));
-  const entered = await waitFor(pageA,
-    (state) => state.plates.find((plate) => plate.id === plateId)?.livePresence > 0,
-    `live presence on plate ${plateId}`);
+  const entered = await occupyPlate(pageA, 1, plateId, x, z);
   evidence.events.push({ event: 'live-plate', plateId, tick: entered.serverTick });
-  await moveTo(pageA, 1, x, z);
-  // Record twenty seconds of plate occupancy. The long replay window keeps the
-  // full-stack test valid even when a cold CI runner delays browser observation
-  // while authority ticks continue in real time.
-  await waitFor(pageA, (state) => state.serverTick >= entered.serverTick + 1200,
+  // Record twenty seconds so a cold CI runner still observes a useful replay window.
+  await waitFor(pageA, (state) => state.serverTick >= entered.serverTick + 1_200,
     `recording window on plate ${plateId}`, 25_000);
   if (whileLive) await whileLive();
-  await moveTo(pageA, 1, x - 1200, z);
+  await pageA.evaluate((axis) => window.th.move(-axis, 0), movementAxis);
   const left = await waitFor(pageA,
     (state) => state.plates.find((plate) => plate.id === plateId)?.livePresence === 0,
     `live player release of plate ${plateId}`);
+  await pageA.evaluate(() => window.th.move(0, 0));
   assert(left.serverTick > entered.serverTick);
   const echoed = await waitFor(pageA, (state) => {
     const plate = state.plates.find((candidate) => candidate.id === plateId);
@@ -231,6 +315,14 @@ try {
     await page.waitForFunction(() => window.th?.joined(), undefined, { timeout: 45_000 });
   }
   const [pageA, pageB] = contexts.map((context) => context.pages().at(-1));
+
+  if (startDelay > 0) {
+    await Promise.all([pageA, pageB].map((page) =>
+      page.evaluate(() => window.th.setPresentationPaused(true))));
+    await new Promise((resolve) => setTimeout(resolve, startDelay));
+    await Promise.all([pageA, pageB].map((page) =>
+      page.evaluate(() => window.th.setPresentationPaused(false))));
+  }
 
   const lobby = await waitFor(pageA, (state) =>
     state.room?.phase === RoomPhase.LOBBY &&
@@ -289,7 +381,7 @@ try {
   assert(beforePose, 'player 1 missing before reconnect');
   await pageA.evaluate(() => window.th.reconnect());
   await pageA.waitForFunction(() => window.th?.joined(), { timeout: 30000 });
-  await moveTo(pageA, 1, beforePose.xMm + 500, beforePose.zMm);
+  await moveRightPast(pageA, 1, beforePose.xMm + 500, beforePose.zMm);
   await waitFor(pageB,
     (state) => (state.players.find((player) => player.playerId === 1)?.xMm ?? 0) >= beforePose.xMm + 320,
     'client B observing player A after MoQ reconnect');
@@ -297,19 +389,19 @@ try {
 
   // Zone 1: A records the tutorial plate; B crosses, then A's Echo frees A.
   await recordEchoPlate(pageA, 21, 11, 4500, 2500,
-    () => moveTo(pageB, 2, 8000, 4000));
-  await moveTo(pageA, 1, 8000, 4000);
+    () => moveRightPast(pageB, 2, 8000, 4000));
+  await moveRightPast(pageA, 1, 8000, 4000);
 
   // Zone 2: repeat the delayed-presence lesson so both players reach the proof room.
   await recordEchoPlate(pageA, 22, 12, 12500, 2500,
-    () => moveTo(pageB, 2, 16000, 4000));
-  await moveTo(pageA, 1, 16000, 4000);
+    () => moveRightPast(pageB, 2, 16000, 4000));
+  await moveRightPast(pageA, 1, 16000, 4000);
 
   // Zone 3 acceptance: A leaves its plate; exactly 600 authority ticks later its
   // Echo opens the current door, and B crosses while A remains elsewhere.
   await moveTo(pageB, 2, 21500, 4000);
   const finalOpen = await recordEchoPlate(pageA, 23, 13, 19500, 2500);
-  await moveTo(pageB, 2, 23000, 4000);
+  await moveRightPast(pageB, 2, 23000, 4000);
   const finalA = await waitFor(pageA,
     (state) => state.players.find((player) => player.playerId === 2)?.xMm > 22400,
     'client A observing player B beyond the co-op door');
@@ -330,9 +422,10 @@ try {
 
   // Both live players must enter extraction after Echo Presence has opened the
   // final door. The authority, rather than either renderer, decides the result.
-  // Winning freezes authoritative movement as soon as A crosses x=22800, so
-  // target the extraction threshold instead of a point beyond the frozen pose.
-  await moveTo(pageA, 1, 22850, 4000);
+  // Aim well inside extraction so the movement tolerance cannot accept a pose
+  // before x=22800. The terminal-state branch handles authority's immediate
+  // movement freeze once both players qualify.
+  await moveRightPast(pageA, 1, 23000, 4000);
   const wonA = await waitForPhase(pageA, RoomPhase.WON, 'won result on client A');
   const wonB = await waitForPhase(pageB, RoomPhase.WON, 'won result on client B');
   assert.equal(wonA.room.attempt, 1);
@@ -403,13 +496,10 @@ try {
   });
 
   // Approach from the cone's east side. Both waypoints remain outside the
-  // triangle even when transport-delayed input overshoots, then one westward
-  // command crosses the visible edge deterministically.
-  await moveTo(pageA, 1, 6500, 2500);
-  await moveTo(pageA, 1, 6500, 6000);
-  await pageA.evaluate(() => window.th.move(-1, 0));
-  const failedA = await waitForPhase(pageA, RoomPhase.FAILED,
-    'surveillance failure on client A');
+  // triangle; authoritative feedback then steers through the visible edge.
+  await moveTo(pageA, 1, 6750, 2500);
+  await moveTo(pageA, 1, 6750, 6000);
+  const failedA = await enterSurveillance(pageA, 1, 4500, 6000);
   const failedB = await waitForPhase(pageB, RoomPhase.FAILED,
     'surveillance failure on client B');
   for (const failed of [failedA, failedB]) {
