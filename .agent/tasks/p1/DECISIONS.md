@@ -50,3 +50,12 @@ and do not fail stealth. Detection is immediate on the authority tick, records t
 camera and player IDs, and enters the existing FAILED/restart flow. The camera is
 placed in an optional side lane in zone 1 so the established Echo solution remains
 valid along the central route.
+
+## 2026-09-22 — P1.2 WebGPU telegraph verification
+
+Map world height into WebGPU clip depth with `z = 0.8 - y / 2500`, which keeps
+the facility, actors, and the raised surveillance wedge inside WebGPU's `0..w`
+depth range. The E2E harness verifies the rendered warning through a one-pixel
+surface readback at a stable point inside the cone: green dominates while idle
+and red dominates after authoritative detection. This supplements screenshots
+with a deterministic assertion against the actual containerized GPU output.

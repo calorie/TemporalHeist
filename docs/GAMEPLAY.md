@@ -225,3 +225,15 @@ attempt:
 
 The browser displays this state and sends intent, but cannot decide readiness,
 timing, completion, failure, or reset effects.
+
+## P1 surveillance
+
+A static surveillance camera covers an optional side lane in zone 1. Its visible
+triangular field of view is a warning rendered by raw WebGPU. A live human whose
+center enters the cone immediately fails the active attempt on the authority
+tick. The failure identifies the camera and detected player on both clients.
+
+Echoes do not trigger surveillance. This keeps the historical projection useful
+for temporal planning and ensures that the new stealth rule does not change Echo
+trajectory or effect semantics. Timeout and surveillance remain distinct failure
+reasons and both use the same deterministic restart flow.

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { surveillanceVisuals } from '../src/surveillance-view.ts';
+import { clipDepth, surveillanceVisuals } from '../src/surveillance-view.ts';
 
 const map = {
   cameras: [
@@ -12,6 +12,10 @@ assert.equal(idle.id, 41);
 assert.equal(idle.detected, false);
 assert.deepEqual(idle.forward, [0, -1]);
 assert.deepEqual(idle.lateral, [1, 0]);
+assert(clipDepth(idle.coneY - idle.coneHalfHeight) >= 0);
+assert(clipDepth(idle.coneY + idle.coneHalfHeight) <= 1);
+assert(clipDepth(-220) <= 1, 'floor must be inside WebGPU clip depth');
+assert(clipDepth(760) >= 0, 'tallest geometry must be inside WebGPU clip depth');
 assert.deepEqual(idle.bodyColor, [0.95, 0.72, 0.16, 1]);
 assert.deepEqual(idle.coneColor, [0.12, 0.75, 0.72, 0.22]);
 

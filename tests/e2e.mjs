@@ -26,8 +26,10 @@ async function snapshot(page) {
 
 async function moveTo(page, playerId, x, z, timeout = 30000) {
   const deadline = Date.now() + timeout;
+  let lastState;
   while (Date.now() < deadline) {
     const state = await snapshot(page);
+    lastState = state;
     const pose = state?.players.find((candidate) => candidate.playerId === playerId);
     if (pose && Math.abs(pose.xMm - x) <= 180 && Math.abs(pose.zMm - z) <= 180) {
       await page.evaluate(() => window.th.move(0, 0));
@@ -42,7 +44,14 @@ async function moveTo(page, playerId, x, z, timeout = 30000) {
     await page.evaluate(([mx, mz]) => window.th.move(mx, mz), [dx, dz]);
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  throw new Error(`player ${playerId} did not reach (${x}, ${z})`);
+  const pose = lastState?.players.find((candidate) => candidate.playerId === playerId);
+  throw new Error(`player ${playerId} did not reach (${x}, ${z}); ${JSON.stringify({
+    pose,
+    tick: lastState?.serverTick,
+    phase: lastState?.room?.phase,
+    failureReason: lastState?.room?.failureReason,
+    failureHazardId: lastState?.room?.failureHazardId,
+  })}`);
 }
 
 async function waitFor(page, predicate, description, timeout = 20000) {
@@ -241,8 +250,10 @@ try {
   assert(quietCamera, 'camera 41 missing from authoritative snapshot');
   assert.equal(quietCamera.active, false);
   assert.equal(quietCamera.detectedPlayerId, 0);
+  const idleConePixel = await pageA.evaluate(() => window.th.rendererPixel(246, 605));
+  assert(idleConePixel[1] > idleConePixel[0], `idle cone is not teal: ${idleConePixel}`);
   evidence.events.push({
-    event: 'echo-ignored-by-surveillance', hazardId: 41,
+    event: 'echo-present-camera-inactive', hazardId: 41,
     tick: secondEcho.serverTick, echoCount: secondEcho.echoes.length,
   });
 
@@ -263,6 +274,11 @@ try {
     assert.equal(camera?.detectedPlayerId, 1);
   }
   assert.equal(failedA.room.endedTick, failedB.room.endedTick);
+  const detectedConePixel = await pageA.evaluate(() => window.th.rendererPixel(246, 605));
+  assert(
+    detectedConePixel[0] > detectedConePixel[1],
+    `detected cone is not red: ${detectedConePixel}`,
+  );
   const detectedPose = failedA.players.find((player) => player.playerId === 1);
   assert(detectedPose, 'detected player missing from failed snapshot');
   assert(Math.abs(detectedPose.xMm - 4500) <= 180);
@@ -286,6 +302,9 @@ try {
     hazardId: 41, detectedPlayerId: 1, endedTick: failedA.room.endedTick,
     detectedPose,
   });
+
+  await Promise.all([pageA, pageB].map((page, index) =>
+    page.screenshot({ path: `${artifacts}/client-${index + 1}-surveillance-failed.png` })));
 
   await pageB.evaluate(() => window.th.restart());
   const cleanLobbyA = await waitForPhase(pageA, RoomPhase.LOBBY,
