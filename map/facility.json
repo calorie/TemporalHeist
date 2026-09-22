@@ -4,8 +4,26 @@
   "speedPerTick": 60,
   "spawns": [{"playerId": 1, "x": 1500, "z": 2500}, {"playerId": 2, "x": 1500, "z": 4000}],
   "extraction": {"minX": 22800, "maxX": 23750, "minZ": 3000, "maxZ": 5000},
+  "guardedPassage": {"minX": 18500, "maxX": 19500, "minZ": 3000, "maxZ": 5000},
   "cameras": [
     {"id": 41, "x": 4500, "z": 7500, "directionX": 0, "directionZ": -1000, "range": 2200, "halfWidth": 1200}
+  ],
+  "guards": [
+    {
+      "id": 51,
+      "x": 17200,
+      "z": 4000,
+      "facingX": 1000,
+      "facingZ": 0,
+      "speedPerTick": 20,
+      "range": 2600,
+      "halfWidth": 1400,
+      "searchTicks": 180,
+      "waypoints": [
+        {"id": 511, "x": 17200, "z": 4000},
+        {"id": 512, "x": 20500, "z": 4000}
+      ]
+    }
   ],
   "zones": [{"name": "Live presence", "x": 0}, {"name": "Echo presence", "x": 8000}, {"name": "Co-op proof", "x": 16000}],
   "walls": [

@@ -1,4 +1,4 @@
-import { Input, InputKind, RoomPhase, Snapshot } from './compiled/temporal_heist.js';
+import { FailureReason, GuardState, Input, InputKind, RoomPhase, Snapshot } from './compiled/temporal_heist.js';
 import { readFileSync, writeFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 const expected = {protocolMajor: 1, roomEpoch: 'spike-epoch', playerId: 1, sessionId: 'session-a', sequence: 9007199254740991, moveX: -1000, moveZ: 1000, kind: InputKind.READY, targetId: 0};
@@ -13,8 +13,19 @@ if (process.argv[2] === 'encode') {
   assert.equal(snapshot.room?.attempt, 2);
   assert.equal(snapshot.room?.deadlineTick, 18123);
   assert.equal(snapshot.room?.echoOpenedFinalDoor, true);
-  assert.equal(snapshot.room?.failureReason, 2);
-  assert.equal(snapshot.room?.failureHazardId, 41);
+  assert.equal(snapshot.room?.failureReason, FailureReason.GUARD);
+  assert.equal(snapshot.room?.failureHazardId, 0);
+  assert.equal(snapshot.room?.failureGuardId, 51);
   assert.deepEqual(snapshot.hazards, [{id: 41, active: true, detectedPlayerId: 2}]);
-  console.log('TypeScript decoded Rust P1 room state; signed axes and safe integer boundary passed');
+  assert.equal(snapshot.guards[0]?.id, 51);
+  assert.equal(snapshot.guards[0]?.state, GuardState.INVESTIGATE);
+  assert.equal(snapshot.guards[0]?.investigationTarget?.xMm, 18750);
+  assert.deepEqual(snapshot.guards.map(({state}) => state), [
+    GuardState.INVESTIGATE,
+    GuardState.PATROL,
+    GuardState.RETURN,
+  ]);
+  const legacySnapshot = Snapshot.decode(Uint8Array.from([0x08, 0x01]));
+  assert.deepEqual(legacySnapshot.guards, []);
+  console.log('TypeScript decoded Rust P2 guard state; absent guard fields remain compatible');
 }

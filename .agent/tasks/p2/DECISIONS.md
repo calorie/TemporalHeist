@@ -22,3 +22,18 @@ Use a 30-tick Echo observation window keyed by source player and
 inside that window but cannot refresh the guard's state-entry or search-expiry tick.
 Use an optional protobuf `GuardTarget` message so a valid target on coordinate zero
 is distinguishable from the absence of an investigation target.
+
+## 2026-09-23 — Frozen P2 protocol and map identifiers
+
+Keep protocol major 1 and extend it additively. `Snapshot.guards` is field 12,
+after the existing fields 1–11. `RoomState.failure_guard_id` is field 11.
+`FailureReason.GUARD` is value 3, and `GuardState` assigns Patrol, Investigate,
+and Return values 1, 2, and 3 respectively, with value 0 reserved as unspecified.
+Legacy snapshots that omit field 12 decode to an empty guard array.
+
+The authored encounter uses guard ID 51 at `(17200, 4000)`, initially facing
+positive X, moving 20 mm per tick, with range 2600 mm, half-width 1400 mm, and a
+180-tick search. Its cyclic route is explicitly ordered as waypoint 511 at
+`(17200, 4000)` followed by waypoint 512 at `(20500, 4000)`. The guarded passage
+is the rectangle X `18500..19500`, Z `3000..5000`, which intersects the patrol
+route and gives E2E a stable authored crossing target. No navigation mesh is added.

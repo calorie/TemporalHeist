@@ -127,6 +127,7 @@ export enum FailureReason {
   FAILURE_REASON_UNSPECIFIED = 0,
   TIMEOUT = 1,
   SURVEILLANCE = 2,
+  GUARD = 3,
   UNRECOGNIZED = -1,
 }
 
@@ -141,6 +142,9 @@ export function failureReasonFromJSON(object: any): FailureReason {
     case 2:
     case "SURVEILLANCE":
       return FailureReason.SURVEILLANCE;
+    case 3:
+    case "GUARD":
+      return FailureReason.GUARD;
     case -1:
     case "UNRECOGNIZED":
     default:
@@ -156,7 +160,54 @@ export function failureReasonToJSON(object: FailureReason): string {
       return "TIMEOUT";
     case FailureReason.SURVEILLANCE:
       return "SURVEILLANCE";
+    case FailureReason.GUARD:
+      return "GUARD";
     case FailureReason.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
+export enum GuardState {
+  GUARD_STATE_UNSPECIFIED = 0,
+  PATROL = 1,
+  INVESTIGATE = 2,
+  RETURN = 3,
+  UNRECOGNIZED = -1,
+}
+
+export function guardStateFromJSON(object: any): GuardState {
+  switch (object) {
+    case 0:
+    case "GUARD_STATE_UNSPECIFIED":
+      return GuardState.GUARD_STATE_UNSPECIFIED;
+    case 1:
+    case "PATROL":
+      return GuardState.PATROL;
+    case 2:
+    case "INVESTIGATE":
+      return GuardState.INVESTIGATE;
+    case 3:
+    case "RETURN":
+      return GuardState.RETURN;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return GuardState.UNRECOGNIZED;
+  }
+}
+
+export function guardStateToJSON(object: GuardState): string {
+  switch (object) {
+    case GuardState.GUARD_STATE_UNSPECIFIED:
+      return "GUARD_STATE_UNSPECIFIED";
+    case GuardState.PATROL:
+      return "PATROL";
+    case GuardState.INVESTIGATE:
+      return "INVESTIGATE";
+    case GuardState.RETURN:
+      return "RETURN";
+    case GuardState.UNRECOGNIZED:
     default:
       return "UNRECOGNIZED";
   }
@@ -212,6 +263,7 @@ export interface Snapshot {
   sessions: Session[];
   room: RoomState | undefined;
   hazards: Hazard[];
+  guards: Guard[];
 }
 
 export interface Session {
@@ -232,12 +284,31 @@ export interface RoomState {
   echoOpenedFinalDoor: boolean;
   failureReason: FailureReason;
   failureHazardId: number;
+  failureGuardId: number;
 }
 
 export interface Hazard {
   id: number;
   active: boolean;
   detectedPlayerId: number;
+}
+
+export interface Guard {
+  id: number;
+  xMm: number;
+  zMm: number;
+  facingX: number;
+  facingZ: number;
+  state: GuardState;
+  waypointId: number;
+  investigationTarget: GuardTarget | undefined;
+  stateEnteredTick: number;
+  searchExpiresTick: number;
+}
+
+export interface GuardTarget {
+  xMm: number;
+  zMm: number;
 }
 
 export interface TimelineChunk {
@@ -929,6 +1000,7 @@ function createBaseSnapshot(): Snapshot {
     sessions: [],
     room: undefined,
     hazards: [],
+    guards: [],
   };
 }
 
@@ -966,6 +1038,9 @@ export const Snapshot: MessageFns<Snapshot> = {
     }
     for (const v of message.hazards) {
       Hazard.encode(v!, writer.uint32(90).fork()).join();
+    }
+    for (const v of message.guards) {
+      Guard.encode(v!, writer.uint32(98).fork()).join();
     }
     return writer;
   },
@@ -1071,6 +1146,14 @@ export const Snapshot: MessageFns<Snapshot> = {
             message.hazards.push(Hazard.decode(reader, reader.uint32()));
             continue;
           }
+          case 12: {
+            if (tag !== 98) {
+              break;
+            }
+
+            message.guards.push(Guard.decode(reader, reader.uint32()));
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -1110,6 +1193,7 @@ export const Snapshot: MessageFns<Snapshot> = {
       sessions: globalThis.Array.isArray(object?.sessions) ? object.sessions.map((e: any) => Session.fromJSON(e)) : [],
       room: isSet(object.room) ? RoomState.fromJSON(object.room) : undefined,
       hazards: globalThis.Array.isArray(object?.hazards) ? object.hazards.map((e: any) => Hazard.fromJSON(e)) : [],
+      guards: globalThis.Array.isArray(object?.guards) ? object.guards.map((e: any) => Guard.fromJSON(e)) : [],
     };
   },
 
@@ -1148,6 +1232,9 @@ export const Snapshot: MessageFns<Snapshot> = {
     if (message.hazards?.length) {
       obj.hazards = message.hazards.map((e) => Hazard.toJSON(e));
     }
+    if (message.guards?.length) {
+      obj.guards = message.guards.map((e) => Guard.toJSON(e));
+    }
     return obj;
   },
 
@@ -1167,6 +1254,7 @@ export const Snapshot: MessageFns<Snapshot> = {
     message.sessions = object.sessions?.map((e) => Session.fromPartial(e)) || [];
     message.room = (object.room !== undefined && object.room !== null) ? RoomState.fromPartial(object.room) : undefined;
     message.hazards = object.hazards?.map((e) => Hazard.fromPartial(e)) || [];
+    message.guards = object.guards?.map((e) => Guard.fromPartial(e)) || [];
     return message;
   },
 };
@@ -1308,6 +1396,7 @@ function createBaseRoomState(): RoomState {
     echoOpenedFinalDoor: false,
     failureReason: 0,
     failureHazardId: 0,
+    failureGuardId: 0,
   };
 }
 
@@ -1342,6 +1431,9 @@ export const RoomState: MessageFns<RoomState> = {
     }
     if (message.failureHazardId !== 0) {
       writer.uint32(80).uint32(message.failureHazardId);
+    }
+    if (message.failureGuardId !== 0) {
+      writer.uint32(88).uint32(message.failureGuardId);
     }
     return writer;
   },
@@ -1439,6 +1531,14 @@ export const RoomState: MessageFns<RoomState> = {
             message.failureHazardId = reader.uint32();
             continue;
           }
+          case 11: {
+            if (tag !== 88) {
+              break;
+            }
+
+            message.failureGuardId = reader.uint32();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -1495,6 +1595,11 @@ export const RoomState: MessageFns<RoomState> = {
         : isSet(object.failure_hazard_id)
         ? globalThis.Number(object.failure_hazard_id)
         : 0,
+      failureGuardId: isSet(object.failureGuardId)
+        ? globalThis.Number(object.failureGuardId)
+        : isSet(object.failure_guard_id)
+        ? globalThis.Number(object.failure_guard_id)
+        : 0,
     };
   },
 
@@ -1530,6 +1635,9 @@ export const RoomState: MessageFns<RoomState> = {
     if (message.failureHazardId !== 0) {
       obj.failureHazardId = Math.round(message.failureHazardId);
     }
+    if (message.failureGuardId !== 0) {
+      obj.failureGuardId = Math.round(message.failureGuardId);
+    }
     return obj;
   },
 
@@ -1548,6 +1656,7 @@ export const RoomState: MessageFns<RoomState> = {
     message.echoOpenedFinalDoor = object.echoOpenedFinalDoor ?? false;
     message.failureReason = object.failureReason ?? 0;
     message.failureHazardId = object.failureHazardId ?? 0;
+    message.failureGuardId = object.failureGuardId ?? 0;
     return message;
   },
 };
@@ -1653,6 +1762,341 @@ export const Hazard: MessageFns<Hazard> = {
     message.id = object.id ?? 0;
     message.active = object.active ?? false;
     message.detectedPlayerId = object.detectedPlayerId ?? 0;
+    return message;
+  },
+};
+
+function createBaseGuard(): Guard {
+  return {
+    id: 0,
+    xMm: 0,
+    zMm: 0,
+    facingX: 0,
+    facingZ: 0,
+    state: 0,
+    waypointId: 0,
+    investigationTarget: undefined,
+    stateEnteredTick: 0,
+    searchExpiresTick: 0,
+  };
+}
+
+export const Guard: MessageFns<Guard> = {
+  encode(message: Guard, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== 0) {
+      writer.uint32(8).uint32(message.id);
+    }
+    if (message.xMm !== 0) {
+      writer.uint32(16).sint32(message.xMm);
+    }
+    if (message.zMm !== 0) {
+      writer.uint32(24).sint32(message.zMm);
+    }
+    if (message.facingX !== 0) {
+      writer.uint32(32).sint32(message.facingX);
+    }
+    if (message.facingZ !== 0) {
+      writer.uint32(40).sint32(message.facingZ);
+    }
+    if (message.state !== 0) {
+      writer.uint32(48).int32(message.state);
+    }
+    if (message.waypointId !== 0) {
+      writer.uint32(56).uint32(message.waypointId);
+    }
+    if (message.investigationTarget !== undefined) {
+      GuardTarget.encode(message.investigationTarget, writer.uint32(66).fork()).join();
+    }
+    if (message.stateEnteredTick !== 0) {
+      writer.uint32(72).uint64(message.stateEnteredTick);
+    }
+    if (message.searchExpiresTick !== 0) {
+      writer.uint32(80).uint64(message.searchExpiresTick);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): Guard {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseGuard();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.id = reader.uint32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.xMm = reader.sint32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.zMm = reader.sint32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.facingX = reader.sint32();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.facingZ = reader.sint32();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.state = reader.int32() as any;
+            continue;
+          }
+          case 7: {
+            if (tag !== 56) {
+              break;
+            }
+
+            message.waypointId = reader.uint32();
+            continue;
+          }
+          case 8: {
+            if (tag !== 66) {
+              break;
+            }
+
+            message.investigationTarget = GuardTarget.decode(reader, reader.uint32());
+            continue;
+          }
+          case 9: {
+            if (tag !== 72) {
+              break;
+            }
+
+            message.stateEnteredTick = longToNumber(reader.uint64());
+            continue;
+          }
+          case 10: {
+            if (tag !== 80) {
+              break;
+            }
+
+            message.searchExpiresTick = longToNumber(reader.uint64());
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): Guard {
+    return {
+      id: isSet(object.id) ? globalThis.Number(object.id) : 0,
+      xMm: isSet(object.xMm) ? globalThis.Number(object.xMm) : isSet(object.x_mm) ? globalThis.Number(object.x_mm) : 0,
+      zMm: isSet(object.zMm) ? globalThis.Number(object.zMm) : isSet(object.z_mm) ? globalThis.Number(object.z_mm) : 0,
+      facingX: isSet(object.facingX)
+        ? globalThis.Number(object.facingX)
+        : isSet(object.facing_x)
+        ? globalThis.Number(object.facing_x)
+        : 0,
+      facingZ: isSet(object.facingZ)
+        ? globalThis.Number(object.facingZ)
+        : isSet(object.facing_z)
+        ? globalThis.Number(object.facing_z)
+        : 0,
+      state: isSet(object.state) ? guardStateFromJSON(object.state) : 0,
+      waypointId: isSet(object.waypointId)
+        ? globalThis.Number(object.waypointId)
+        : isSet(object.waypoint_id)
+        ? globalThis.Number(object.waypoint_id)
+        : 0,
+      investigationTarget: isSet(object.investigationTarget)
+        ? GuardTarget.fromJSON(object.investigationTarget)
+        : isSet(object.investigation_target)
+        ? GuardTarget.fromJSON(object.investigation_target)
+        : undefined,
+      stateEnteredTick: isSet(object.stateEnteredTick)
+        ? globalThis.Number(object.stateEnteredTick)
+        : isSet(object.state_entered_tick)
+        ? globalThis.Number(object.state_entered_tick)
+        : 0,
+      searchExpiresTick: isSet(object.searchExpiresTick)
+        ? globalThis.Number(object.searchExpiresTick)
+        : isSet(object.search_expires_tick)
+        ? globalThis.Number(object.search_expires_tick)
+        : 0,
+    };
+  },
+
+  toJSON(message: Guard): unknown {
+    const obj: any = {};
+    if (message.id !== 0) {
+      obj.id = Math.round(message.id);
+    }
+    if (message.xMm !== 0) {
+      obj.xMm = Math.round(message.xMm);
+    }
+    if (message.zMm !== 0) {
+      obj.zMm = Math.round(message.zMm);
+    }
+    if (message.facingX !== 0) {
+      obj.facingX = Math.round(message.facingX);
+    }
+    if (message.facingZ !== 0) {
+      obj.facingZ = Math.round(message.facingZ);
+    }
+    if (message.state !== 0) {
+      obj.state = guardStateToJSON(message.state);
+    }
+    if (message.waypointId !== 0) {
+      obj.waypointId = Math.round(message.waypointId);
+    }
+    if (message.investigationTarget !== undefined) {
+      obj.investigationTarget = GuardTarget.toJSON(message.investigationTarget);
+    }
+    if (message.stateEnteredTick !== 0) {
+      obj.stateEnteredTick = Math.round(message.stateEnteredTick);
+    }
+    if (message.searchExpiresTick !== 0) {
+      obj.searchExpiresTick = Math.round(message.searchExpiresTick);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<Guard>, I>>(base?: I): Guard {
+    return Guard.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<Guard>, I>>(object: I): Guard {
+    const message = createBaseGuard();
+    message.id = object.id ?? 0;
+    message.xMm = object.xMm ?? 0;
+    message.zMm = object.zMm ?? 0;
+    message.facingX = object.facingX ?? 0;
+    message.facingZ = object.facingZ ?? 0;
+    message.state = object.state ?? 0;
+    message.waypointId = object.waypointId ?? 0;
+    message.investigationTarget = (object.investigationTarget !== undefined && object.investigationTarget !== null)
+      ? GuardTarget.fromPartial(object.investigationTarget)
+      : undefined;
+    message.stateEnteredTick = object.stateEnteredTick ?? 0;
+    message.searchExpiresTick = object.searchExpiresTick ?? 0;
+    return message;
+  },
+};
+
+function createBaseGuardTarget(): GuardTarget {
+  return { xMm: 0, zMm: 0 };
+}
+
+export const GuardTarget: MessageFns<GuardTarget> = {
+  encode(message: GuardTarget, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.xMm !== 0) {
+      writer.uint32(8).sint32(message.xMm);
+    }
+    if (message.zMm !== 0) {
+      writer.uint32(16).sint32(message.zMm);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GuardTarget {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseGuardTarget();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.xMm = reader.sint32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.zMm = reader.sint32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): GuardTarget {
+    return {
+      xMm: isSet(object.xMm) ? globalThis.Number(object.xMm) : isSet(object.x_mm) ? globalThis.Number(object.x_mm) : 0,
+      zMm: isSet(object.zMm) ? globalThis.Number(object.zMm) : isSet(object.z_mm) ? globalThis.Number(object.z_mm) : 0,
+    };
+  },
+
+  toJSON(message: GuardTarget): unknown {
+    const obj: any = {};
+    if (message.xMm !== 0) {
+      obj.xMm = Math.round(message.xMm);
+    }
+    if (message.zMm !== 0) {
+      obj.zMm = Math.round(message.zMm);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GuardTarget>, I>>(base?: I): GuardTarget {
+    return GuardTarget.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GuardTarget>, I>>(object: I): GuardTarget {
+    const message = createBaseGuardTarget();
+    message.xMm = object.xMm ?? 0;
+    message.zMm = object.zMm ?? 0;
     return message;
   },
 };

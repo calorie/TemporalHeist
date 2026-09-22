@@ -282,8 +282,10 @@ impl World {
                 echo_opened_final_door: self.echo_opened_final_door,
                 failure_reason: self.failure_reason as i32,
                 failure_hazard_id: self.failure_hazard_id,
+                failure_guard_id: 0,
             }),
             hazards: self.hazards.clone(),
+            guards: vec![],
         }
     }
     fn apply(&mut self, i: &Input) {
