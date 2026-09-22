@@ -188,6 +188,30 @@ async function occupyPlate(page, playerId, plateId, x, z, timeout = moveTimeout)
   })}`);
 }
 
+async function moveRightPast(page, playerId, x, z, timeout = moveTimeout) {
+  const deadline = Date.now() + timeout;
+  let lastState;
+  while (Date.now() < deadline) {
+    const state = await snapshot(page);
+    lastState = state;
+    const pose = state?.players.find((candidate) => candidate.playerId === playerId);
+    if (pose?.xMm >= x && Math.abs(pose.zMm - z) <= 180) {
+      await page.evaluate(() => window.th.move(0, 0));
+      return state;
+    }
+    if (pose) {
+      const dx = pose.xMm >= x ? 0 : 1;
+      const dz = Math.abs(pose.zMm - z) <= 120 ? 0 : Math.sign(z - pose.zMm);
+      await page.evaluate(([mx, mz]) => window.th.move(mx, mz), [dx, dz]);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`player ${playerId} did not pass x=${x}; ${JSON.stringify({
+    tick: lastState?.serverTick,
+    pose: lastState?.players.find((candidate) => candidate.playerId === playerId),
+  })}`);
+}
+
 async function waitFor(page, predicate, description, timeout = stateTimeout) {
   const deadline = Date.now() + timeout;
   let lastState;
@@ -331,19 +355,19 @@ try {
 
   // Zone 1: A records the tutorial plate; B crosses, then A's Echo frees A.
   await recordEchoPlate(pageA, 21, 11, 4500, 2500,
-    () => moveTo(pageB, 2, 8000, 4000));
-  await moveTo(pageA, 1, 8000, 4000);
+    () => moveRightPast(pageB, 2, 8000, 4000));
+  await moveRightPast(pageA, 1, 8000, 4000);
 
   // Zone 2: repeat the delayed-presence lesson so both players reach the proof room.
   await recordEchoPlate(pageA, 22, 12, 12500, 2500,
-    () => moveTo(pageB, 2, 16000, 4000));
-  await moveTo(pageA, 1, 16000, 4000);
+    () => moveRightPast(pageB, 2, 16000, 4000));
+  await moveRightPast(pageA, 1, 16000, 4000);
 
   // Zone 3 acceptance: A leaves its plate; exactly 600 authority ticks later its
   // Echo opens the current door, and B crosses while A remains elsewhere.
   await moveTo(pageB, 2, 21500, 4000);
   const finalOpen = await recordEchoPlate(pageA, 23, 13, 19500, 2500);
-  await moveTo(pageB, 2, 23500, 4000);
+  await moveRightPast(pageB, 2, 23000, 4000);
   const finalA = await waitFor(pageA,
     (state) => state.players.find((player) => player.playerId === 2)?.xMm > 22400,
     'client A observing player B beyond the co-op door');
