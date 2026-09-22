@@ -2,9 +2,81 @@
 
 ## Status
 
-Initial environment spike started on 2026-09-22; blocked on access to an OCI runtime.
+Resumed by the user's explicit implementation request on 2026-09-22.
 
-The repository currently contains only the agentic project template plus the design/task bootstrap. No application code or application toolchain has been created yet.
+## Active continuation (2026-09-22)
+
+- Read all required documents and the orchestrate skill; preserved existing bootstrap.
+- Docker Engine 29.8.0 and Compose 5.5.1 are reachable. Container-only execution continues.
+- Bootstrap committed as `4b8b551`. Existing SSH signing points at a missing public key;
+  local implementation commits use command-scoped `commit.gpgsign=false`, without changing Git settings.
+- Main runtime ID `spike-main-0922`; WebGPU spike worktree `/private/tmp/th-gpu-0922b`,
+  runtime ID `gpu-0922b`, owns only `spikes/gpu`. Each uses private Compose volumes/network.
+- Exact installed MoQ sources inspected: native 0.19.19 depends on net 0.2.22;
+  browser 0.3.5 and relay 0.14.18 selected for wire spike, not yet proven compatible.
+- Building relay and minimal native transport in containers. Added draft protobuf schema
+  and cross-language spike. These are NOT frozen contracts or passed verification yet.
+- WebGPU primitive verification proceeds in an independent worktree. Broad component
+  implementation waits for verified spike and shared contract baseline.
+- Next: complete transport/GPU/protobuf spikes, prove concurrent stacks, then freeze interfaces.
+
+Docker is now available and the container toolchain bootstrap succeeded.
+The original missing-runtime blocker below is historical and resolved.
+
+## Pause checkpoint (2026-09-22)
+
+- Installed `agentic-engineering@agentic-engineering` v0.5.1 at the user's
+  request. Marketplace was already registered. Read its orchestrate skill.
+- Docker Desktop 4.92.0 / Engine 29.8.0 / Compose 5.5.1 work. Docker's bin
+  directory must be in PATH for `docker-credential-desktop`; the root
+  `container` wrapper handles the macOS path. Docker socket access requires
+  sandbox escalation; the absolute Docker command prefix was approved.
+- Added draft `container`, `compose.yaml`, `containers/Dockerfile`,
+  `.dockerignore`, `package.json`, and ignore rules. Compose resources use
+  `th-<agent-run-id>` project names and private named volumes, no host ports.
+- `sh container spike-main-0922 build dev` PASSED inside Docker. Rust base
+  resolved to 1.98.1; Playwright image is v1.63.0-noble. Both base digests
+  are recorded in Dockerfile (Playwright digest pin was added after build).
+- Container `npm install` PASSED: 38 packages installed, audit reported zero
+  vulnerabilities. It created `package-lock.json` in the checkout.
+- Container registry queries/downloads confirmed @moq/net 0.3.5,
+  moq-net 0.2.22, moq-native 0.19.19, moq-relay 0.14.18, prost 0.14.4.
+  This is dependency discovery, NOT a passed wire-compatibility spike.
+- Downloaded MoQ crate sources remain in the project-private cargo-registry
+  volume. Installed npm packages remain in its node-modules volume.
+- No gameplay code, protocol schema, transport spike, or browser/WebGPU
+  spike has been implemented. No shared semantic contract is frozen.
+- Commit attempt FAILED because Git signing invokes 1Password with missing
+  `/Users/a/.ssh/id_ed25519.pub`. No successful implementation commit exists.
+  Preserve signing preferences; resolve this before the contract commit.
+- `git worktree add /private/tmp/th-webgpu-spike-0922 -b spike/webgpu-0922`
+  succeeded after that failed commit, so that worktree contains only old
+  `cd95141`, NOT the uncommitted bootstrap. No writing agent was launched.
+- Read-only MoQ research agents finished; none owns runtime resources.
+- On pause, `sh container spike-main-0922 stop` completed successfully.
+  Dependency-discovery container had already exited successfully. Images
+  and namespaced volumes are retained for resumption; nothing was deleted.
+
+### Resume from this checkpoint
+
+1. Inspect uncommitted/staged changes and signing setup. Commit the bootstrap
+   when signing is available, then synchronize the unused spike worktree.
+2. Read exact downloaded MoQ sources inside the dev container, build the
+   minimal relay/Rust/browser bidirectional spike and WebGPU primitive test.
+3. Prove two isolated stacks, protobuf vectors, then freeze shared contracts.
+4. Start independent component writers only after that verified baseline.
+
+Draft commands (only build and dependency acquisition verified so far):
+
+```sh
+sh container <unique-run-id> build dev
+sh container <unique-run-id> run --rm dev <container-command>
+sh container <unique-run-id> stop
+sh container <unique-run-id> down --volumes --remove-orphans
+```
+
+The repository contains design/task documents and an uncommitted container
+toolchain bootstrap. Application implementation remains pending.
 
 ## Completed
 

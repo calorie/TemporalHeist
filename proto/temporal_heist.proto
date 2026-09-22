@@ -1,0 +1,55 @@
+syntax = "proto3";
+package temporal_heist.v1;
+
+// All coordinates are millimetres; time is authority ticks at 60 Hz.
+message Input {
+  uint32 protocol_major = 1;
+  string room_epoch = 2;
+  uint32 player_id = 3;
+  string session_id = 4;
+  uint64 sequence = 5;
+  sint32 move_x = 6;
+  sint32 move_z = 7;
+  InputKind kind = 8;
+  uint32 target_id = 9;
+}
+enum InputKind { UNSPECIFIED = 0; JOIN = 1; MOTION = 2; ACTION = 3; LEAVE = 4; }
+message Pose {
+  uint32 player_id = 1;
+  sint32 x_mm = 2;
+  sint32 z_mm = 3;
+  uint64 source_tick = 4;
+  bool echo = 5;
+}
+message Mechanism {
+  uint32 id = 1;
+  bool active = 2;
+  uint32 live_presence = 3;
+  uint32 echo_presence = 4;
+}
+message AppliedAction {
+  uint64 id = 1;
+  uint32 player_id = 2;
+  uint32 target_id = 3;
+  uint64 acceptance_tick = 4;
+  bool echo_capable = 5;
+  bool echo_pulse = 6;
+}
+// Every Snapshot is independently decodable, including within a fetched group.
+message Snapshot {
+  uint32 protocol_major = 1;
+  string room_epoch = 2;
+  uint64 server_tick = 3;
+  repeated Pose players = 4;
+  repeated Pose echoes = 5;
+  repeated Mechanism plates = 6;
+  repeated Mechanism doors = 7;
+  repeated AppliedAction actions = 8;
+  repeated Session sessions = 9;
+}
+message Session { uint32 player_id = 1; string session_id = 2; bool connected = 3; }
+message TimelineChunk {
+  uint32 protocol_major = 1;
+  string room_epoch = 2;
+  repeated Snapshot samples = 3;
+}

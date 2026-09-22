@@ -1,0 +1,15 @@
+[workspace]
+resolver = "3"
+members = ["crates/protocol"]
+exclude = ["spikes/transport", "spikes/protocol"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+th-protocol = { path = "crates/protocol" }
+prost = "=0.14.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+

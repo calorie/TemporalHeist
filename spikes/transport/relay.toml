@@ -1,0 +1,12 @@
+[server]
+bind = "0.0.0.0:4443"
+version = ["moq-lite-05"]
+
+[server.tls]
+generate = ["relay"]
+
+[web.http]
+listen = "0.0.0.0:4443"
+
+[auth]
+public = "anon"

@@ -1,0 +1,29 @@
+{
+  "bounds": {"minX": 0, "maxX": 24000, "minZ": 0, "maxZ": 8000},
+  "radius": 250,
+  "speedPerTick": 60,
+  "spawns": [{"playerId": 1, "x": 1500, "z": 2500}, {"playerId": 2, "x": 1500, "z": 4000}],
+  "zones": [{"name": "Live presence", "x": 0}, {"name": "Echo presence", "x": 8000}, {"name": "Co-op proof", "x": 16000}],
+  "walls": [
+    {"id": 101, "minX": 7000, "maxX": 7400, "minZ": 0, "maxZ": 3000},
+    {"id": 102, "minX": 7000, "maxX": 7400, "minZ": 5000, "maxZ": 8000},
+    {"id": 103, "minX": 15000, "maxX": 15400, "minZ": 0, "maxZ": 3000},
+    {"id": 104, "minX": 15000, "maxX": 15400, "minZ": 5000, "maxZ": 8000},
+    {"id": 105, "minX": 22000, "maxX": 22400, "minZ": 0, "maxZ": 3000},
+    {"id": 106, "minX": 22000, "maxX": 22400, "minZ": 5000, "maxZ": 8000}
+  ],
+  "doors": [
+    {"id": 11, "minX": 7000, "maxX": 7400, "minZ": 3000, "maxZ": 5000},
+    {"id": 12, "minX": 15000, "maxX": 15400, "minZ": 3000, "maxZ": 5000},
+    {"id": 13, "minX": 22000, "maxX": 22400, "minZ": 3000, "maxZ": 5000}
+  ],
+  "plates": [
+    {"id": 21, "doorId": 11, "x": 4500, "z": 2500, "radius": 750, "capability": "Presence"},
+    {"id": 22, "doorId": 12, "x": 12500, "z": 2500, "radius": 750, "capability": "Presence"},
+    {"id": 23, "doorId": 13, "x": 19500, "z": 2500, "radius": 750, "capability": "Presence"}
+  ],
+  "terminals": [
+    {"id": 31, "x": 2500, "z": 6000, "capability": "Action"},
+    {"id": 32, "x": 3500, "z": 6000, "capability": "None"}
+  ]
+}
