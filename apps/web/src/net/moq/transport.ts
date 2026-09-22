@@ -17,9 +17,11 @@ export class MoqTransport {
   #motion?: ProducerTrack;
   #actions?: ProducerTrack;
   #closed = false;
+  #failed = false;
   constructor(readonly handlers: TransportHandlers) {}
   async connect(relay: URL, room: string, playerId: number) {
     this.#closed = false;
+    this.#failed = false;
     this.handlers.state('connecting');
     const connection = await Moq.Connection.connect(relay, { websocket: { enabled: false } });
     if (this.#closed) {
@@ -35,16 +37,17 @@ export class MoqTransport {
     const announced = connection.announced();
     for (;;) {
       const event = await announced.next();
-      if (event?.path === authorityPath && event.active) break;
+      if (!event) throw new Error(`authority announcement ended: ${authorityPath}`);
+      if (event.path === authorityPath && event.active) break;
       if (this.#closed) return;
     }
     announced.close();
     this.handlers.state(`connected:${connection.transport}`);
     const authority = connection.consume(Moq.Path.from(authorityPath));
-    void this.#receive(authority.track('world'), (bytes) =>
+    void this.#receive('world', authority.track('world'), (bytes) =>
       this.handlers.snapshot(Snapshot.decode(bytes)),
     );
-    void this.#receive(authority.track('history'), (bytes) =>
+    void this.#receive('history', authority.track('history'), (bytes) =>
       this.handlers.history(TimelineChunk.decode(bytes)),
     );
   }
@@ -58,8 +61,10 @@ export class MoqTransport {
     this.#closed = true;
     this.#connection?.close();
     this.#connection = undefined;
+    this.#motion = undefined;
+    this.#actions = undefined;
   }
-  async #receive(track: ConsumerTrack, decode: (bytes: Uint8Array) => void) {
+  async #receive(name: string, track: ConsumerTrack, decode: (bytes: Uint8Array) => void) {
     try {
       const subscription = track.subscribe({ ordered: true, latencyMax: 30_000 });
       while (!this.#closed) {
@@ -68,12 +73,19 @@ export class MoqTransport {
         for (;;) {
           const frame = await group.readFrame();
           if (!frame) break;
+          if (this.#closed) return;
           decode(frame.payload);
         }
       }
+      this.#fail(new Error(`authority ${name} track ended`));
     } catch (error) {
-      if (!this.#closed) this.handlers.error(error);
+      this.#fail(error);
     }
+  }
+  #fail(error: unknown) {
+    if (this.#closed || this.#failed) return;
+    this.#failed = true;
+    this.handlers.error(error);
   }
   #write(track: ProducerTrack | undefined, payload: Uint8Array) {
     track?.writeFrame({ payload, timestamp: Moq.Time.Timestamp.now() });

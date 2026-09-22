@@ -74,6 +74,7 @@ the container wrapper:
 sh container local bootstrap
 sh container local verify
 sh container local acceptance
+sh container local visual
 sh container local down --volumes --remove-orphans
 ~~~
 
@@ -81,3 +82,8 @@ sh container local down --volumes --remove-orphans
 Chromium clients. It records JSON evidence and both client screenshots in that run's
 private `artifacts` volume. Use a different lowercase run ID for each checkout or
 concurrent stack.
+
+`visual` starts a container-owned Chromium with the game already loaded and prints
+its ephemeral loopback Chrome DevTools Protocol (CDP) endpoint. Open
+`chrome://inspect`, add the printed `127.0.0.1:<port>` target, and select **inspect**.
+The inspected Chromium, profile, services, and port belong only to that run ID.

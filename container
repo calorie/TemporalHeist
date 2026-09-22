@@ -38,5 +38,18 @@ case "$command" in
     compose up -d relay authority web
     compose --profile test run --rm browser
     ;;
+  visual)
+    compose build dev relay
+    compose run --rm dev npm ci
+    compose run --rm dev cargo build --locked -p th-authority
+    compose --profile visual up -d relay authority web visual-browser
+    compose exec -T visual-browser node containers/visual-browser-check.mjs
+    published=$(compose port visual-browser 9222)
+    echo "Chromium CDP: http://$published/json/list"
+    ;;
+  down)
+    shift
+    compose --profile test --profile visual down "$@"
+    ;;
   *) exec docker compose --project-name "th-$agent_id" --file compose.yaml "$@" ;;
 esac

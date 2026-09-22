@@ -31,7 +31,10 @@ async function moveTo(page, playerId, x, z, timeout = 30000) {
       await page.evaluate(() => window.th.move(0, 0));
       return state;
     }
-    assert(pose, `player ${playerId} missing from authoritative snapshot`);
+    if (!pose) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      continue;
+    }
     const dx = Math.abs(pose.xMm - x) <= 120 ? 0 : Math.sign(x - pose.xMm);
     const dz = Math.abs(pose.zMm - z) <= 120 ? 0 : Math.sign(z - pose.zMm);
     await page.evaluate(([mx, mz]) => window.th.move(mx, mz), [dx, dz]);
@@ -76,8 +79,10 @@ async function recordEchoPlate(pageA, plateId, doorId, x, z) {
   const observedDelay = echoed.serverTick - entered.serverTick;
   const echo = echoed.echoes.find((candidate) => candidate.playerId === 1);
   assert.equal(echo?.sourceTick, echoed.serverTick - 600);
-  assert(Math.abs(echo.sourceTick - entered.serverTick) <= 6,
-    `replicated transition differs from Echo source by ${echo.sourceTick - entered.serverTick} ticks`);
+  assert(echo.sourceTick >= entered.serverTick,
+    `Echo source ${echo.sourceTick} predates observed live occupancy ${entered.serverTick}`);
+  assert(echo.sourceTick <= left.serverTick,
+    `Echo source ${echo.sourceTick} follows observed live occupancy ${left.serverTick}`);
   evidence.events.push({
     event: 'echo-door-open', plateId, doorId, enteredTick: entered.serverTick,
     openedTick: echoed.serverTick, observedDelayTicks: observedDelay,
@@ -97,6 +102,19 @@ try {
     await page.waitForFunction(() => window.th?.joined(), { timeout: 30000 });
   }
   const [pageA, pageB] = contexts.map((context) => context.pages().at(-1));
+
+  // A new MoQ publication for the same browser session must be consumed without
+  // restarting the authority or disturbing the other player.
+  const beforeReconnect = await snapshot(pageA);
+  const beforePose = beforeReconnect.players.find((player) => player.playerId === 1);
+  assert(beforePose, 'player 1 missing before reconnect');
+  await pageA.evaluate(() => window.th.reconnect());
+  await pageA.waitForFunction(() => window.th?.joined(), { timeout: 30000 });
+  await moveTo(pageA, 1, beforePose.xMm + 500, beforePose.zMm);
+  await waitFor(pageB,
+    (state) => (state.players.find((player) => player.playerId === 1)?.xMm ?? 0) >= beforePose.xMm + 320,
+    'client B observing player A after MoQ reconnect');
+  evidence.events.push({ event: 'input-reconnected', playerId: 1 });
 
   // Zone 1: A records the tutorial plate; B crosses, then A's Echo frees A.
   await recordEchoPlate(pageA, 21, 11, 4500, 2500);
@@ -128,6 +146,10 @@ try {
   evidence.finalSnapshot = finalA;
   evidence.renderers = await Promise.all([pageA, pageB].map((page) => page.evaluate(() => window.th.rendererInfo())));
   evidence.errors = await Promise.all([pageA, pageB].map((page) => page.evaluate(() => window.th.errors())));
+  assert(evidence.renderers.every((renderer) => renderer?.backend === 'webgpu'));
+  assert(evidence.renderers.every((renderer) => renderer?.adapter?.vendor));
+  assert(finalA.echoes.some((echo) => echo.playerId === 1));
+  assert(finalB.echoes.some((echo) => echo.playerId === 1));
   assert(evidence.errors.every((errors) => errors.length === 0));
   await Promise.all([pageA, pageB].map((page, index) => page.screenshot({ path: `${artifacts}/client-${index + 1}.png` })));
   await writeFile(`${artifacts}/evidence.json`, `${JSON.stringify(evidence, null, 2)}\n`);

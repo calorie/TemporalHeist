@@ -175,6 +175,22 @@ drops and logs that replication frame instead of delaying simulation; later full
 snapshots and authority-origin history restore client state. A closed consumer ends
 the room process normally.
 
+### A19 — Reconnect and manual inspection hardening
+
+Authority relay connectivity uses `moq-native`'s reconnect supervisor. The running
+simulation and epoch survive relay transport loss, while each input reader observes
+publisher closure and waits for a replacement publication at the same path. Browser
+clients discard buffered frames after closing a transport, release old publishers,
+and retry same-session JOIN once per 60 authority ticks until acknowledged. An
+authority process restart creates a fresh epoch unless `TH_ROOM_EPOCH` is explicitly
+set for a controlled test.
+
+The `visual` command starts a run-private persistent Chromium profile and publishes
+its CDP endpoint on a loopback-only ephemeral host port. Chromium, WebGPU, the game
+page, certificates, and profile remain inside the namespaced Compose stack. CI
+`verify` runs an actual WebGPU pixel readback in container Chromium in addition to
+the integrated two-client renderer assertions.
+
 Codex may choose and later revise without asking the user:
 
 - exact workspace/package-manager layout;

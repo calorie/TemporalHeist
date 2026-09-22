@@ -17,16 +17,18 @@ pub async fn run(
 ) -> anyhow::Result<()> {
     let outgoing = moq_net::Origin::random().produce();
     let incoming = moq_net::Origin::random().produce();
-    let client = moq_native::ClientConfig::default()
+    let mut config = moq_native::ClientConfig::default();
+    config.backoff.timeout = Duration::ZERO;
+    let client = config
         .init()
         .context("initialize MoQ client")?
         .with_publisher(outgoing.consume())
         .with_subscriber(incoming.clone());
-    let session = client
-        .connect(relay_url)
-        .await
-        .context("connect to MoQ relay")?;
-    tracing::info!(version = ?session.version(), "connected to MoQ relay");
+    let mut connection = client.reconnect(relay_url);
+    while !connection.connected() {
+        connection.status().await.context("connect to MoQ relay")?;
+    }
+    tracing::info!(version = ?connection.version(), "connected to MoQ relay");
 
     let mut authority = outgoing
         .create_broadcast(
@@ -43,7 +45,7 @@ pub async fn run(
         .context("create history track")?;
 
     let mut readers = tokio::task::JoinSet::new();
-    for (index, player) in names.player_inputs.into_iter().enumerate() {
+    for (index, player) in names.player_inputs.iter().cloned().enumerate() {
         for track in [player.motion, player.actions] {
             readers.spawn(read_track(
                 incoming.clone(),
@@ -62,9 +64,13 @@ pub async fn run(
         tokio::select! {
             result = readers.join_next() => match result {
                 Some(Ok(Ok(()))) => tracing::warn!("input subscription ended"),
-                Some(Ok(Err(error))) => tracing::warn!(error = %error, "input subscription failed; restart authority to retry"),
+                Some(Ok(Err(error))) => tracing::warn!(error = %error, "input subscription failed"),
                 Some(Err(error)) => tracing::warn!(error = %error, "input subscription task failed"),
                 None => anyhow::bail!("all input subscriptions ended"),
+            },
+            result = connection.closed() => {
+                result.context("MoQ relay reconnect loop stopped")?;
+                anyhow::bail!("MoQ relay reconnect loop stopped");
             },
             published = output_rx.recv() => {
                 let Some(published) = published else { return Ok(()) };
@@ -96,41 +102,76 @@ async fn read_track(
     expected_player_id: u32,
     input_tx: mpsc::Sender<Vec<u8>>,
 ) -> anyhow::Result<()> {
-    let broadcast = incoming
-        .consume()
-        .announced_broadcast(&broadcast_path)
-        .await
-        .with_context(|| format!("input broadcast ended before announcement: {broadcast_path}"))?;
-    let mut subscription = broadcast
-        .track(track_name)?
-        .subscribe(
-            Subscription::default()
-                .with_latency_max(Duration::from_secs(30))
-                .with_ordered(true),
-        )
-        .await
-        .with_context(|| format!("subscribe {broadcast_path}/{track_name}"))?;
-    tracing::info!(
-        broadcast = broadcast_path,
-        track = track_name,
-        "subscribed to input"
-    );
-    while let Some(mut group) = subscription.recv_group().await? {
-        while let Some(frame) = group.read_frame().await? {
-            if let Err(error) = decode_input_for_player(&frame.payload, expected_player_id) {
-                tracing::warn!(
-                    error = %error,
-                    broadcast = broadcast_path,
-                    track = track_name,
-                    "rejected input on mismatched player track"
-                );
-                continue;
-            }
-            input_tx
-                .send(frame.payload.to_vec())
+    loop {
+        let Some(broadcast) = incoming
+            .consume()
+            .announced_broadcast(&broadcast_path)
+            .await
+        else {
+            return Ok(());
+        };
+        let result = async {
+            let mut subscription = broadcast
+                .track(track_name)?
+                .subscribe(
+                    Subscription::default()
+                        .with_latency_max(Duration::from_secs(30))
+                        .with_ordered(true),
+                )
                 .await
-                .context("authority input queue closed")?;
+                .with_context(|| format!("subscribe {broadcast_path}/{track_name}"))?;
+            tracing::info!(
+                broadcast = broadcast_path,
+                track = track_name,
+                "subscribed to input"
+            );
+            loop {
+                let mut group = tokio::select! {
+                    cause = broadcast.closed() => {
+                        tracing::info!(
+                            error = %cause,
+                            broadcast = broadcast_path,
+                            track = track_name,
+                            "input publisher ended; waiting for replacement"
+                        );
+                        break;
+                    }
+                    group = subscription.recv_group() => {
+                        let Some(group) = group? else { break };
+                        group
+                    }
+                };
+                while let Some(frame) = group.read_frame().await? {
+                    if let Err(error) = decode_input_for_player(&frame.payload, expected_player_id)
+                    {
+                        tracing::warn!(
+                            error = %error,
+                            broadcast = broadcast_path,
+                            track = track_name,
+                            "rejected input on mismatched player track"
+                        );
+                        continue;
+                    }
+                    input_tx
+                        .send(frame.payload.to_vec())
+                        .await
+                        .context("authority input queue closed")?;
+                }
+            }
+            Ok::<_, anyhow::Error>(())
         }
+        .await;
+        if input_tx.is_closed() {
+            return Ok(());
+        }
+        if let Err(error) = result {
+            tracing::warn!(
+                error = %error,
+                broadcast = broadcast_path,
+                track = track_name,
+                "input subscription failed; waiting for publisher"
+            );
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
     }
-    Ok(())
 }
