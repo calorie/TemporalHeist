@@ -237,7 +237,13 @@ try {
   }
   const [pageA, pageB] = contexts.map((context) => context.pages().at(-1));
 
-  if (startDelay > 0) await new Promise((resolve) => setTimeout(resolve, startDelay));
+  if (startDelay > 0) {
+    await Promise.all([pageA, pageB].map((page) =>
+      page.evaluate(() => window.th.setPresentationPaused(true))));
+    await new Promise((resolve) => setTimeout(resolve, startDelay));
+    await Promise.all([pageA, pageB].map((page) =>
+      page.evaluate(() => window.th.setPresentationPaused(false))));
+  }
 
   const lobby = await waitFor(pageA, (state) =>
     state.room?.phase === RoomPhase.LOBBY &&
