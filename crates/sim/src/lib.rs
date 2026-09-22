@@ -2,13 +2,14 @@ use serde::Deserialize;
 use std::collections::{BTreeMap, VecDeque};
 use th_protocol::{
     AppliedAction, ECHO_DELAY_TICKS, HISTORY_TICKS, Input, InputKind, Mechanism, PROTOCOL_MAJOR,
-    Pose, Session, Snapshot,
+    Pose, RoomPhase, RoomState, Session, Snapshot,
 };
 
 const MOTION_TIMEOUT: u64 = 30;
 const SESSION_TIMEOUT: u64 = 300;
 const ACTION_LOG: u64 = 3_600;
 const ACTION_RANGE: i32 = 1_000;
+const ATTEMPT_TICKS: u64 = 18_000;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,6 +22,7 @@ struct Map {
     doors: Vec<Rect>,
     plates: Vec<Plate>,
     terminals: Vec<Terminal>,
+    extraction: Area,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -41,6 +43,14 @@ struct Spawn {
 #[serde(rename_all = "camelCase")]
 struct Rect {
     id: u32,
+    min_x: i32,
+    max_x: i32,
+    min_z: i32,
+    max_z: i32,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Area {
     min_x: i32,
     max_x: i32,
     min_z: i32,
@@ -76,6 +86,8 @@ struct Marks {
     motion: Option<u64>,
     action: Option<u64>,
     leave: Option<u64>,
+    ready: Option<u64>,
+    restart: Option<u64>,
 }
 impl Marks {
     fn accept(&mut self, kind: InputKind, seq: u64) -> bool {
@@ -84,6 +96,8 @@ impl Marks {
             InputKind::Motion => &mut self.motion,
             InputKind::Action => &mut self.action,
             InputKind::Leave => &mut self.leave,
+            InputKind::Ready => &mut self.ready,
+            InputKind::Restart => &mut self.restart,
             InputKind::Unspecified => return false,
         };
         if mark.is_some_and(|old| seq <= old) {
@@ -104,6 +118,7 @@ struct Player {
     last_input: u64,
     marks: Marks,
     history: VecDeque<History>,
+    ready: bool,
 }
 #[derive(Clone, Copy)]
 struct History {
@@ -127,6 +142,12 @@ pub struct World {
     next_action_id: u64,
     plates: Vec<Mechanism>,
     doors: Vec<Mechanism>,
+    room_phase: RoomPhase,
+    attempt: u32,
+    started_tick: u64,
+    ended_tick: u64,
+    deadline_tick: u64,
+    echo_opened_final_door: bool,
 }
 
 impl World {
@@ -159,6 +180,12 @@ impl World {
             next_action_id: 1,
             plates,
             doors,
+            room_phase: RoomPhase::Lobby,
+            attempt: 1,
+            started_tick: 0,
+            ended_tick: 0,
+            deadline_tick: 0,
+            echo_opened_final_door: false,
         }
     }
     pub fn step(&mut self, inputs: &[Input]) -> Snapshot {
@@ -167,10 +194,14 @@ impl World {
             self.apply(input);
         }
         self.expire();
-        self.move_players();
-        self.commit_history();
-        self.replay_actions();
-        self.presence();
+        self.start_if_ready();
+        if self.room_phase == RoomPhase::Active {
+            self.move_players();
+            self.commit_history();
+            self.replay_actions();
+            self.presence();
+            self.update_room_result();
+        }
         self.trim_actions();
         self.snapshot()
     }
@@ -194,8 +225,15 @@ impl World {
                 player_id: id,
                 session_id: p.session.clone(),
                 connected: p.connected,
+                ready: p.ready,
             })
             .collect();
+        let ready_players = self
+            .players
+            .values()
+            .filter(|p| p.connected && p.ready)
+            .count() as u32;
+        let extraction_players = self.extraction_players();
         Snapshot {
             protocol_major: PROTOCOL_MAJOR,
             room_epoch: self.epoch.clone(),
@@ -206,6 +244,16 @@ impl World {
             doors: self.doors.clone(),
             actions: self.actions.iter().cloned().collect(),
             sessions,
+            room: Some(RoomState {
+                phase: self.room_phase as i32,
+                attempt: self.attempt,
+                started_tick: self.started_tick,
+                ended_tick: self.ended_tick,
+                deadline_tick: self.deadline_tick,
+                ready_players,
+                extraction_players,
+                echo_opened_final_door: self.echo_opened_final_door,
+            }),
         }
     }
     fn apply(&mut self, i: &Input) {
@@ -226,32 +274,52 @@ impl World {
             self.join(i);
             return;
         }
-        let Some(p) = self.players.get_mut(&i.player_id) else {
-            return;
-        };
-        if !p.connected || p.session != i.session_id || !p.marks.accept(kind, i.sequence) {
-            return;
+        let mut action = false;
+        let mut restart = false;
+        {
+            let Some(p) = self.players.get_mut(&i.player_id) else {
+                return;
+            };
+            if !p.connected || p.session != i.session_id || !p.marks.accept(kind, i.sequence) {
+                return;
+            }
+            match kind {
+                InputKind::Motion
+                    if (-1000..=1000).contains(&i.move_x) && (-1000..=1000).contains(&i.move_z) =>
+                {
+                    p.mx = i.move_x;
+                    p.mz = i.move_z;
+                    p.last_motion = self.tick;
+                    p.last_input = self.tick;
+                }
+                InputKind::Action => {
+                    p.last_input = self.tick;
+                    action = self.room_phase == RoomPhase::Active;
+                }
+                InputKind::Leave => {
+                    p.last_input = self.tick;
+                    p.connected = false;
+                    p.mx = 0;
+                    p.mz = 0;
+                }
+                InputKind::Ready => {
+                    p.last_input = self.tick;
+                    if self.room_phase == RoomPhase::Lobby {
+                        p.ready = true;
+                    }
+                }
+                InputKind::Restart => {
+                    p.last_input = self.tick;
+                    restart = matches!(self.room_phase, RoomPhase::Won | RoomPhase::Failed);
+                }
+                _ => {}
+            }
         }
-        match kind {
-            InputKind::Motion
-                if (-1000..=1000).contains(&i.move_x) && (-1000..=1000).contains(&i.move_z) =>
-            {
-                p.mx = i.move_x;
-                p.mz = i.move_z;
-                p.last_motion = self.tick;
-                p.last_input = self.tick;
-            }
-            InputKind::Action => {
-                p.last_input = self.tick;
-                self.accept_action(i.player_id, i.target_id);
-            }
-            InputKind::Leave => {
-                p.last_input = self.tick;
-                p.connected = false;
-                p.mx = 0;
-                p.mz = 0;
-            }
-            _ => {}
+        if action {
+            self.accept_action(i.player_id, i.target_id);
+        }
+        if restart {
+            self.reset_attempt();
         }
     }
     fn join(&mut self, i: &Input) {
@@ -285,8 +353,94 @@ impl World {
                 last_input: self.tick,
                 marks,
                 history: VecDeque::with_capacity(HISTORY_TICKS),
+                ready: false,
             },
         );
+    }
+    fn start_if_ready(&mut self) {
+        if self.room_phase != RoomPhase::Lobby {
+            return;
+        }
+        let ready = (1..=2).all(|id| {
+            self.players
+                .get(&id)
+                .is_some_and(|p| p.connected && p.ready)
+        });
+        if ready {
+            self.room_phase = RoomPhase::Active;
+            self.started_tick = self.tick;
+            self.ended_tick = 0;
+            self.deadline_tick = self.tick + ATTEMPT_TICKS;
+            self.echo_opened_final_door = false;
+            self.scheduled.clear();
+            self.actions.clear();
+            for p in self.players.values_mut() {
+                p.history.clear();
+                p.mx = 0;
+                p.mz = 0;
+                p.last_motion = self.tick;
+            }
+        }
+    }
+    fn update_room_result(&mut self) {
+        if self.room_phase != RoomPhase::Active {
+            return;
+        }
+        if self
+            .doors
+            .iter()
+            .any(|door| door.id == 13 && door.echo_presence > 0)
+        {
+            self.echo_opened_final_door = true;
+        }
+        if self.echo_opened_final_door && self.extraction_players() == 2 {
+            self.room_phase = RoomPhase::Won;
+            self.ended_tick = self.tick;
+        } else if self.tick >= self.deadline_tick {
+            self.room_phase = RoomPhase::Failed;
+            self.ended_tick = self.tick;
+        }
+    }
+    fn extraction_players(&self) -> u32 {
+        self.players
+            .values()
+            .filter(|p| {
+                p.connected
+                    && p.x >= self.map.extraction.min_x
+                    && p.x <= self.map.extraction.max_x
+                    && p.z >= self.map.extraction.min_z
+                    && p.z <= self.map.extraction.max_z
+            })
+            .count() as u32
+    }
+    fn reset_attempt(&mut self) {
+        self.room_phase = RoomPhase::Lobby;
+        self.attempt += 1;
+        self.started_tick = 0;
+        self.ended_tick = 0;
+        self.deadline_tick = 0;
+        self.echo_opened_final_door = false;
+        self.scheduled.clear();
+        self.actions.clear();
+        self.next_action_id = 1;
+        for state in self.plates.iter_mut().chain(&mut self.doors) {
+            *state = Mechanism {
+                id: state.id,
+                ..Default::default()
+            };
+        }
+        for (&id, p) in &mut self.players {
+            if let Some(spawn) = self.map.spawns.iter().find(|s| s.player_id == id) {
+                p.x = spawn.x;
+                p.z = spawn.z;
+            }
+            p.mx = 0;
+            p.mz = 0;
+            p.last_motion = self.tick;
+            p.last_input = self.tick;
+            p.ready = false;
+            p.history.clear();
+        }
     }
     fn accept_action(&mut self, player_id: u32, target_id: u32) {
         let Some(p) = self.players.get(&player_id) else {
@@ -490,8 +644,35 @@ mod tests {
             ..Default::default()
         }
     }
+    fn player_input(player_id: u32, session_id: &str, kind: InputKind, seq: u64) -> Input {
+        Input {
+            protocol_major: PROTOCOL_MAJOR,
+            room_epoch: "e".into(),
+            player_id,
+            session_id: session_id.into(),
+            sequence: seq,
+            kind: kind as i32,
+            ..Default::default()
+        }
+    }
+    fn join_both(w: &mut World) {
+        w.step(&[
+            player_input(1, "a", InputKind::Join, 1),
+            player_input(2, "b", InputKind::Join, 1),
+        ]);
+    }
+    fn start_attempt(w: &mut World) -> Snapshot {
+        join_both(w);
+        w.step(&[
+            player_input(1, "a", InputKind::Ready, 1),
+            player_input(2, "b", InputKind::Ready, 1),
+        ])
+    }
     fn join(w: &mut World) {
         w.step(&[input(InputKind::Join, 1)]);
+        w.room_phase = RoomPhase::Active;
+        w.started_tick = w.tick;
+        w.deadline_tick = w.tick + ATTEMPT_TICKS;
     }
     fn until(w: &mut World, t: u64) -> Snapshot {
         while w.tick < t {
@@ -706,5 +887,177 @@ mod tests {
             s.doors.iter().find(|d| d.id == 13).unwrap().live_presence,
             1
         );
+    }
+
+    #[test]
+    fn room_starts_only_after_both_connected_players_are_ready() {
+        let mut w = World::new("e".into());
+        let initial = w.snapshot();
+        assert_eq!(
+            initial.room.as_ref().unwrap().phase,
+            RoomPhase::Lobby as i32
+        );
+        assert_eq!(initial.room.as_ref().unwrap().attempt, 1);
+
+        join_both(&mut w);
+        let one_ready = w.step(&[player_input(1, "a", InputKind::Ready, 1)]);
+        assert_eq!(
+            one_ready.room.as_ref().unwrap().phase,
+            RoomPhase::Lobby as i32
+        );
+        assert_eq!(one_ready.room.as_ref().unwrap().ready_players, 1);
+        assert!(
+            one_ready
+                .sessions
+                .iter()
+                .find(|s| s.player_id == 1)
+                .unwrap()
+                .ready
+        );
+
+        let active = w.step(&[player_input(2, "b", InputKind::Ready, 1)]);
+        let room = active.room.as_ref().unwrap();
+        assert_eq!(room.phase, RoomPhase::Active as i32);
+        assert_eq!(room.ready_players, 2);
+        assert_eq!(room.started_tick, active.server_tick);
+        assert_eq!(room.deadline_tick, active.server_tick + ATTEMPT_TICKS);
+    }
+
+    #[test]
+    fn lobby_and_terminal_phases_freeze_gameplay() {
+        let mut w = World::new("e".into());
+        join_both(&mut w);
+        let spawn = w.players.get(&1).map(|p| (p.x, p.z)).unwrap();
+        let mut motion = player_input(1, "a", InputKind::Motion, 1);
+        motion.move_x = 1000;
+        let lobby = w.step(&[motion.clone()]);
+        assert_eq!((pose(&lobby).x_mm, pose(&lobby).z_mm), spawn);
+        assert!(w.players.get(&1).unwrap().history.is_empty());
+
+        let started = w.step(&[
+            player_input(1, "a", InputKind::Ready, 1),
+            player_input(2, "b", InputKind::Ready, 1),
+        ]);
+        assert_eq!((pose(&started).x_mm, pose(&started).z_mm), spawn);
+        motion.sequence = 2;
+        let active = w.step(&[motion]);
+        assert!(pose(&active).x_mm > spawn.0);
+        w.room_phase = RoomPhase::Won;
+        let won_x = pose(&w.snapshot()).x_mm;
+        assert_eq!(pose(&w.step(&[])).x_mm, won_x);
+    }
+
+    #[test]
+    fn active_attempt_fails_exactly_at_the_authority_deadline() {
+        let mut w = World::new("e".into());
+        let active = start_attempt(&mut w);
+        let deadline = active.room.as_ref().unwrap().deadline_tick;
+        while w.tick + 1 < deadline {
+            let seq = w.tick + 2;
+            w.step(&[
+                player_input(1, "a", InputKind::Join, seq),
+                player_input(2, "b", InputKind::Join, seq),
+            ]);
+        }
+        assert_eq!(
+            w.snapshot().room.as_ref().unwrap().phase,
+            RoomPhase::Active as i32
+        );
+        let failed = w.step(&[]);
+        assert_eq!(failed.server_tick, deadline);
+        assert_eq!(
+            failed.room.as_ref().unwrap().phase,
+            RoomPhase::Failed as i32
+        );
+        assert_eq!(failed.room.as_ref().unwrap().ended_tick, deadline);
+    }
+
+    #[test]
+    fn win_requires_echo_opened_final_door_and_both_players_in_extraction() {
+        let mut w = World::new("e".into());
+        start_attempt(&mut w);
+        {
+            let p = w.players.get_mut(&1).unwrap();
+            p.x = 19_500;
+            p.z = 2_500;
+        }
+        let source_tick = w.step(&[]).server_tick;
+        {
+            let p = w.players.get_mut(&1).unwrap();
+            p.x = 18_000;
+            p.z = 4_000;
+        }
+        while w.tick < source_tick + ECHO_DELAY_TICKS {
+            let seq = w.tick + 2;
+            w.step(&[
+                player_input(1, "a", InputKind::Join, seq),
+                player_input(2, "b", InputKind::Join, seq),
+            ]);
+        }
+        assert!(w.snapshot().room.as_ref().unwrap().echo_opened_final_door);
+
+        for p in w.players.values_mut() {
+            p.x = 23_000;
+            p.z = if p.session == "a" { 3_500 } else { 4_500 };
+        }
+        let won = w.step(&[]);
+        assert_eq!(won.room.as_ref().unwrap().extraction_players, 2);
+        assert_eq!(won.room.as_ref().unwrap().phase, RoomPhase::Won as i32);
+        assert_eq!(won.room.as_ref().unwrap().ended_tick, won.server_tick);
+    }
+
+    #[test]
+    fn terminal_restart_resets_attempt_state_and_requires_readiness_again() {
+        let mut w = World::new("e".into());
+        start_attempt(&mut w);
+        w.echo_opened_final_door = true;
+        for p in w.players.values_mut() {
+            p.x = 23_000;
+            p.z = 4_000;
+            p.history.push_back(History {
+                tick: 1,
+                x: 1,
+                z: 1,
+            });
+        }
+        w.scheduled.entry(999).or_default().push(Scheduled {
+            player_id: 1,
+            target_id: 31,
+            acceptance_tick: 1,
+        });
+        assert_eq!(
+            w.step(&[]).room.as_ref().unwrap().phase,
+            RoomPhase::Won as i32
+        );
+
+        let reset = w.step(&[player_input(1, "a", InputKind::Restart, 1)]);
+        let room = reset.room.as_ref().unwrap();
+        assert_eq!(room.phase, RoomPhase::Lobby as i32);
+        assert_eq!(room.attempt, 2);
+        assert_eq!(room.ready_players, 0);
+        assert_eq!(room.started_tick, 0);
+        assert_eq!(room.deadline_tick, 0);
+        assert!(!room.echo_opened_final_door);
+        assert!(reset.actions.is_empty());
+        assert!(reset.echoes.is_empty());
+        assert!(reset.plates.iter().all(|m| !m.active));
+        assert!(reset.doors.iter().all(|m| !m.active));
+        assert_eq!(
+            reset
+                .players
+                .iter()
+                .find(|p| p.player_id == 1)
+                .unwrap()
+                .x_mm,
+            1_500
+        );
+        assert!(reset.sessions.iter().all(|s| !s.ready));
+
+        let still_lobby = w.step(&[player_input(1, "a", InputKind::Ready, 2)]);
+        assert_eq!(
+            still_lobby.room.as_ref().unwrap().phase,
+            RoomPhase::Lobby as i32
+        );
+        assert_eq!(still_lobby.room.as_ref().unwrap().ready_players, 1);
     }
 }

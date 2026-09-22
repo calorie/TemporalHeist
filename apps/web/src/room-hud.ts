@@ -1,0 +1,77 @@
+import type { Snapshot } from './generated/temporal_heist.ts';
+
+const LOBBY = 1;
+const ACTIVE = 2;
+const WON = 3;
+const FAILED = 4;
+
+function phaseName(phase: number) {
+  switch (phase) {
+    case LOBBY:
+      return 'LOBBY';
+    case ACTIVE:
+      return 'ACTIVE';
+    case WON:
+      return 'WON';
+    case FAILED:
+      return 'FAILED';
+    default:
+      return 'UNKNOWN';
+  }
+}
+
+export interface RoomHud {
+  phase: string;
+  objective: string;
+  timer: string;
+  readiness: string;
+  result: string;
+  canReady: boolean;
+  canRestart: boolean;
+}
+
+function clock(ticks: number) {
+  const seconds = Math.max(0, Math.ceil(ticks / 60));
+  return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+export function roomHud(snapshot: Snapshot | undefined, playerId: number): RoomHud {
+  const room = snapshot?.room;
+  if (!snapshot || !room) {
+    return {
+      phase: 'CONNECTING',
+      objective: 'Waiting for authority',
+      timer: '--:--',
+      readiness: 'Players ready: 0/2',
+      result: '',
+      canReady: false,
+      canRestart: false,
+    };
+  }
+
+  const ownSession = snapshot.sessions.find((session) => session.playerId === playerId);
+  const phase = phaseName(room.phase);
+  const active = room.phase === ACTIVE;
+  const terminal = room.phase === WON || room.phase === FAILED;
+  let objective = 'Ready up with your partner';
+  if (active && !room.echoOpenedFinalDoor) objective = 'Open the final door with Echo Presence';
+  if (active && room.echoOpenedFinalDoor)
+    objective = `Reach extraction together (${room.extractionPlayers}/2)`;
+  if (room.phase === WON) objective = 'Heist complete';
+  if (room.phase === FAILED) objective = 'Attempt failed';
+
+  return {
+    phase: `${phase} · ATTEMPT ${room.attempt}`,
+    objective,
+    timer: active ? clock(room.deadlineTick - snapshot.serverTick) : '--:--',
+    readiness: `Players ready: ${room.readyPlayers}/2${ownSession?.ready ? ' · YOU ARE READY' : ''}`,
+    result:
+      room.phase === WON
+        ? 'SUCCESS — press R or Restart to play again'
+        : room.phase === FAILED
+          ? 'TIME EXPIRED — press R or Restart to retry'
+          : '',
+    canReady: room.phase === LOBBY && Boolean(ownSession?.connected && !ownSession.ready),
+    canRestart: terminal,
+  };
+}

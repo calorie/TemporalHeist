@@ -3,6 +3,7 @@ import { type Input, InputKind, type Snapshot } from './generated/temporal_heist
 import { map } from './map.ts';
 import { MoqTransport } from './net/moq/transport.ts';
 import { WebGpuRenderer } from './render/webgpu.ts';
+import { roomHud } from './room-hud.ts';
 import { Timeline } from './timeline.ts';
 
 const params = new URLSearchParams(location.search);
@@ -33,6 +34,13 @@ function element<T extends Element>(selector: string): T {
 const status = element<HTMLElement>('#status');
 const details = element<HTMLElement>('#details');
 const unsupported = element<HTMLElement>('#unsupported');
+const phase = element<HTMLElement>('#phase');
+const objective = element<HTMLElement>('#objective');
+const timer = element<HTMLElement>('#timer');
+const readiness = element<HTMLElement>('#readiness');
+const result = element<HTMLElement>('#result');
+const readyButton = element<HTMLButtonElement>('#ready');
+const restartButton = element<HTMLButtonElement>('#restart');
 
 function input(kind: InputKind, sequence: number, x = 0, z = 0, targetId = 0): Input {
   return {
@@ -154,6 +162,16 @@ function action(targetId?: number) {
   const target = targetId ?? nearestTarget();
   transport?.sendAction(input(InputKind.ACTION, ++actionSequence, 0, 0, target));
 }
+function roomCommand(kind: InputKind) {
+  if (!joined) return;
+  transport?.sendAction(input(kind, ++actionSequence));
+}
+function ready() {
+  roomCommand(InputKind.READY);
+}
+function restart() {
+  roomCommand(InputKind.RESTART);
+}
 function nearestTarget() {
   const pose = timeline.latest?.players.find((item) => item.playerId === playerId);
   if (!pose) return 31;
@@ -169,6 +187,8 @@ const keys = new Set<string>();
 addEventListener('keydown', (event) => {
   keys.add(event.key.toLowerCase());
   if (event.key.toLowerCase() === 'e' && !event.repeat) action();
+  if (event.key === 'Enter' && !event.repeat) ready();
+  if (event.key.toLowerCase() === 'r' && !event.repeat) restart();
   updateKeys();
 });
 addEventListener('keyup', (event) => {
@@ -183,6 +203,8 @@ function updateKeys() {
       (keys.has('w') || keys.has('arrowup') ? 1 : 0),
   );
 }
+readyButton.addEventListener('click', ready);
+restartButton.addEventListener('click', restart);
 
 export interface TemporalHeistTestApi {
   status(): string;
@@ -190,6 +212,8 @@ export interface TemporalHeistTestApi {
   snapshot(): Snapshot | undefined;
   move(x: number, z: number): void;
   action(targetId?: number): void;
+  ready(): void;
+  restart(): void;
   timeline(): ReturnType<Timeline['inspect']>;
   rendererInfo(): ReturnType<WebGpuRenderer['info']> | undefined;
   errors(): string[];
@@ -206,6 +230,8 @@ window.th = {
   snapshot: () => timeline.latest,
   move,
   action,
+  ready,
+  restart,
   timeline: () => timeline.inspect(),
   rendererInfo: () => renderer?.info(),
   errors: () => [...errors, ...(renderer?.errors() ?? [])],
@@ -227,6 +253,14 @@ async function start() {
     const presentation = timeline.presentation();
     renderer?.render(map, presentation);
     const snap = presentation.snapshot;
+    const hud = roomHud(snap, playerId);
+    phase.textContent = hud.phase;
+    objective.textContent = hud.objective;
+    timer.textContent = hud.timer;
+    readiness.textContent = hud.readiness;
+    result.textContent = hud.result;
+    readyButton.hidden = !hud.canReady;
+    restartButton.hidden = !hud.canRestart;
     details.textContent = snap
       ? `tick ${snap.serverTick} · epoch ${snap.roomEpoch.slice(0, 8)} · ${timeline.length} samples · ${presentation.echoes.length} echoes`
       : `room ${room} · waiting for authority`;

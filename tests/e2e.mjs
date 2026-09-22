@@ -17,6 +17,7 @@ const flags = [
 
 const contexts = [];
 const evidence = { agent: process.env.TH_AGENT_ID, events: [] };
+const RoomPhase = Object.freeze({ LOBBY: 1, ACTIVE: 2, WON: 3, FAILED: 4 });
 
 async function snapshot(page) {
   return page.evaluate(() => window.th.snapshot());
@@ -53,6 +54,10 @@ async function waitFor(page, predicate, description, timeout = 20000) {
   throw new Error(`timed out waiting for ${description}`);
 }
 
+async function waitForPhase(page, phase, description, timeout = 20000) {
+  return waitFor(page, (state) => state.room?.phase === phase, description, timeout);
+}
+
 async function recordEchoPlate(pageA, plateId, doorId, x, z) {
   const outside = await moveTo(pageA, 1, x - 1000, z);
   assert.equal(outside.plates.find((plate) => plate.id === plateId)?.active, false);
@@ -62,9 +67,9 @@ async function recordEchoPlate(pageA, plateId, doorId, x, z) {
     `live presence on plate ${plateId}`);
   evidence.events.push({ event: 'live-plate', plateId, tick: entered.serverTick });
   await moveTo(pageA, 1, x, z);
-  // Record four seconds of plate occupancy, leaving enough delayed Echo window
+  // Record six seconds of plate occupancy, leaving enough delayed Echo window
   // for two live players to traverse an authority-controlled door in sequence.
-  await waitFor(pageA, (state) => state.serverTick >= entered.serverTick + 240,
+  await waitFor(pageA, (state) => state.serverTick >= entered.serverTick + 360,
     `recording window on plate ${plateId}`, 6000);
   await moveTo(pageA, 1, x - 1200, z);
   const left = await waitFor(pageA,
@@ -102,6 +107,35 @@ try {
     await page.waitForFunction(() => window.th?.joined(), { timeout: 30000 });
   }
   const [pageA, pageB] = contexts.map((context) => context.pages().at(-1));
+
+  const lobby = await waitFor(pageA, (state) =>
+    state.room?.phase === RoomPhase.LOBBY &&
+    state.sessions.filter((session) => session.connected).length === 2,
+  'two connected players in the lobby');
+  assert.equal(lobby.room.readyPlayers, 0);
+  assert(lobby.sessions.every((session) => !session.ready));
+
+  await pageA.evaluate(() => window.th.ready());
+  const playerAReady = await waitFor(pageB, (state) =>
+    state.room?.phase === RoomPhase.LOBBY &&
+    state.room.readyPlayers === 1 &&
+    state.sessions.find((session) => session.playerId === 1)?.ready,
+  'client B observing player A ready');
+  assert.equal(playerAReady.sessions.find((session) => session.playerId === 2)?.ready, false);
+
+  await pageB.evaluate(() => window.th.ready());
+  const activeA = await waitForPhase(pageA, RoomPhase.ACTIVE, 'first attempt on client A');
+  const activeB = await waitForPhase(pageB, RoomPhase.ACTIVE, 'first attempt on client B');
+  assert.equal(activeA.room.attempt, 1);
+  assert.equal(activeB.room.attempt, 1);
+  assert.equal(activeA.room.startedTick, activeB.room.startedTick);
+  assert.equal(activeA.room.deadlineTick - activeA.room.startedTick, 18_000);
+  assert.equal(activeA.room.readyPlayers, 2);
+  assert(activeA.sessions.every((session) => session.ready));
+  evidence.events.push({
+    event: 'attempt-started', attempt: activeA.room.attempt,
+    startedTick: activeA.room.startedTick, deadlineTick: activeA.room.deadlineTick,
+  });
 
   // A new MoQ publication for the same browser session must be consumed without
   // restarting the authority or disturbing the other player.
@@ -142,18 +176,74 @@ try {
   assert(finalB.doors.find((door) => door.id === 13)?.active);
   assert(finalOpen.doors.find((door) => door.id === 13)?.active);
 
-  evidence.finalTick = finalA.serverTick;
-  evidence.finalSnapshot = finalA;
+  // Both live players must enter extraction after Echo Presence has opened the
+  // final door. The authority, rather than either renderer, decides the result.
+  // Winning freezes authoritative movement as soon as A crosses x=22800, so
+  // target the extraction threshold instead of a point beyond the frozen pose.
+  await moveTo(pageA, 1, 22850, 4000);
+  const wonA = await waitForPhase(pageA, RoomPhase.WON, 'won result on client A');
+  const wonB = await waitForPhase(pageB, RoomPhase.WON, 'won result on client B');
+  assert.equal(wonA.room.attempt, 1);
+  assert.equal(wonA.room.extractionPlayers, 2);
+  assert.equal(wonB.room.extractionPlayers, 2);
+  assert.equal(wonA.room.echoOpenedFinalDoor, true);
+  assert.equal(wonB.room.echoOpenedFinalDoor, true);
+  assert.equal(wonA.room.endedTick, wonB.room.endedTick);
+  assert(wonA.room.endedTick >= wonA.room.startedTick);
+  evidence.events.push({
+    event: 'attempt-won', attempt: wonA.room.attempt, endedTick: wonA.room.endedTick,
+    extractionPlayers: wonA.room.extractionPlayers,
+  });
+
+  await Promise.all([pageA, pageB].map((page, index) =>
+    page.screenshot({ path: `${artifacts}/client-${index + 1}-won.png` })));
+
+  // One player may restart a terminal attempt. Restart clears transient attempt
+  // state and readiness, so the next attempt cannot begin until both ready again.
+  await pageA.evaluate(() => window.th.restart());
+  const resetA = await waitForPhase(pageA, RoomPhase.LOBBY, 'reset lobby on client A');
+  const resetB = await waitForPhase(pageB, RoomPhase.LOBBY, 'reset lobby on client B');
+  for (const reset of [resetA, resetB]) {
+    assert.equal(reset.room.attempt, 2);
+    assert.equal(reset.room.readyPlayers, 0);
+    assert.equal(reset.room.extractionPlayers, 0);
+    assert.equal(reset.room.echoOpenedFinalDoor, false);
+    assert(reset.sessions.every((session) => !session.ready));
+    assert.equal(reset.echoes.length, 0);
+    assert(reset.doors.every((door) => !door.active));
+  }
+  evidence.events.push({ event: 'attempt-reset', requestedBy: 1, tick: resetA.serverTick });
+
+  await pageA.evaluate(() => window.th.ready());
+  const waitingForB = await waitFor(pageA, (state) =>
+    state.room?.phase === RoomPhase.LOBBY && state.room.readyPlayers === 1,
+  'second attempt waiting for player B');
+  assert.equal(waitingForB.room.attempt, 2);
+  await pageB.evaluate(() => window.th.ready());
+  const secondActiveA = await waitForPhase(pageA, RoomPhase.ACTIVE, 'second attempt on client A');
+  const secondActiveB = await waitForPhase(pageB, RoomPhase.ACTIVE, 'second attempt on client B');
+  assert.equal(secondActiveA.room.attempt, 2);
+  assert.equal(secondActiveB.room.attempt, 2);
+  assert.equal(secondActiveA.room.startedTick, secondActiveB.room.startedTick);
+  assert(secondActiveA.room.startedTick > wonA.room.endedTick);
+  evidence.events.push({
+    event: 'attempt-started', attempt: secondActiveA.room.attempt,
+    startedTick: secondActiveA.room.startedTick,
+  });
+
+  evidence.finalTick = secondActiveA.serverTick;
+  evidence.wonSnapshot = wonA;
+  evidence.finalSnapshot = secondActiveA;
   evidence.renderers = await Promise.all([pageA, pageB].map((page) => page.evaluate(() => window.th.rendererInfo())));
   evidence.errors = await Promise.all([pageA, pageB].map((page) => page.evaluate(() => window.th.errors())));
   assert(evidence.renderers.every((renderer) => renderer?.backend === 'webgpu'));
   assert(evidence.renderers.every((renderer) => renderer?.adapter?.vendor));
-  assert(finalA.echoes.some((echo) => echo.playerId === 1));
-  assert(finalB.echoes.some((echo) => echo.playerId === 1));
+  assert(wonA.echoes.some((echo) => echo.playerId === 1));
+  assert(wonB.echoes.some((echo) => echo.playerId === 1));
   assert(evidence.errors.every((errors) => errors.length === 0));
   await Promise.all([pageA, pageB].map((page, index) => page.screenshot({ path: `${artifacts}/client-${index + 1}.png` })));
   await writeFile(`${artifacts}/evidence.json`, `${JSON.stringify(evidence, null, 2)}\n`);
-  console.log(JSON.stringify({ event: 'vertical-slice-passed', ...evidence }));
+  console.log(JSON.stringify({ event: 'p1-game-loop-passed', ...evidence }));
 } finally {
   await Promise.all(contexts.map((context) => context.close()));
 }

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { Timeline } from '../src/timeline.ts';
+import './room-hud.mjs';
 
 const snapshot = (epoch, tick, players) => ({
   protocolMajor: 1, roomEpoch: epoch, serverTick: tick, players,

@@ -10,7 +10,8 @@ Protocol source: `proto/temporal_heist.proto`. Protocol major 1; tick rate 60;
 Echo delay 600; authority history capacity 3601 samples per player. Integer
 coordinates are millimetres. Input axes range from -1000 through 1000.
 
-Input sequence watermarks are separate for JOIN/MOTION/ACTION/LEAVE per session.
+Input sequence watermarks are separate for JOIN/MOTION/ACTION/LEAVE/READY/RESTART
+per session.
 JOIN claims player slot 1 or 2 with a random session ID, and must carry the current
 epoch received from the authority. Slots owned by a different live session reject
 the claim. Snapshots acknowledge ownership through `sessions`. Wrong versions,
@@ -40,7 +41,22 @@ the browser controller; MoQ types remain inside `net/moq` modules. Broadcasts:
 
 The map source will be a checked-in JSON specification shared by simulation and
 renderer. It contains floor bounds, walls, plates and corresponding doors, stable
-IDs, action terminals, and player spawn positions. Three zones run along X.
+IDs, action terminals, player spawn positions, and the P1 extraction rectangle.
+Three zones run along X.
+
+P1 extends protocol major 1 additively with READY and RESTART input kinds,
+`Session.ready`, and `Snapshot.room`. Room state carries LOBBY, ACTIVE, WON, or
+FAILED plus attempt identity, authority-tick timing, readiness, extraction
+occupancy, and whether Echo Presence opened the final door in the current attempt.
+Older decoders may ignore these additions.
+
+The authority starts an attempt only while both player sessions are connected and
+ready. It records the start and five-minute deadline as server ticks. A win
+requires both live players inside extraction after Echo Presence has opened door
+13 during the same attempt. Deadline expiry produces failure. A restart accepted
+in a terminal phase returns the room to lobby, respawns connected players, clears
+readiness, history, scheduled actions, and mechanism state, and increments the
+attempt number.
 
 Pure simulation API: `World::new(epoch: String)`, `World::step(inputs: &[Input])
 -> Snapshot`, `World::snapshot() -> Snapshot`. `World` stores its history privately.

@@ -207,3 +207,21 @@ After the core slice works, candidates include:
 - procedural/heist level content.
 
 None of these should delay proof of the core two-player Echo scene.
+
+## P1 session loop
+
+The first playable-prototype layer wraps the facility in an authority-owned
+attempt:
+
+1. Both connected players explicitly become ready in the lobby.
+2. The authority starts attempt 1 and sets a five-minute deadline in server ticks.
+3. Movement, history, Echoes, actions, and mechanisms advance only while active.
+4. Door 13 must be opened by Echo Presence during the attempt.
+5. Both live players then enter extraction to win.
+6. Deadline expiry fails the attempt.
+7. Either connected player may restart a terminal result. The authority respawns
+   players, clears transient state, increments the attempt, and waits for both to
+   become ready again.
+
+The browser displays this state and sends intent, but cannot decide readiness,
+timing, completion, failure, or reset effects.

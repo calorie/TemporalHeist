@@ -37,6 +37,46 @@ h1 {
 p {
   margin: 4px 0;
 }
+.mission {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 10px 0 6px;
+  color: #ffda7b;
+}
+#objective {
+  color: #fff;
+}
+#readiness {
+  color: #a9c5d1;
+}
+#result {
+  min-height: 20px;
+  color: #7bffbd;
+  font-weight: 700;
+}
+#controls {
+  margin: 10px 0;
+  pointer-events: auto;
+}
+button {
+  padding: 8px 12px;
+  border: 1px solid #7bdbff;
+  color: #dcefff;
+  background: #103044;
+  font: inherit;
+  cursor: pointer;
+}
+button:hover,
+button:focus-visible {
+  background: #19506c;
+  outline: 2px solid #ffda7b;
+}
+kbd {
+  margin-left: 6px;
+  color: #90a7b1;
+  font-size: 11px;
+}
 .help {
   color: #90a7b1;
   font-size: 12px;

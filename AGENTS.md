@@ -111,6 +111,22 @@ Ask the user before an important design decision only when it materially changes
 
 Do not ask about reversible implementation details.
 
+When work is ambiguous or a check fails, keep progressing within the stated
+objective:
+
+- choose the smallest reversible interpretation consistent with the documented
+  product invariants;
+- record assumptions and their consequences in the active task's `DECISIONS.md`;
+- debug failed checks and continue all unaffected work instead of turning a
+  routine failure into a user decision;
+- report milestone outcomes, evidence, and the next action without requesting
+  confirmation for that next action;
+- ask only when the unresolved choice crosses an approval boundary above or no
+  safe reversible path remains after investigation.
+
+User corrections update the active objective. They do not require restarting
+completed investigation or waiting for renewed approval of unaffected work.
+
 The default branch is a hard integration boundary:
 
 - never merge a pull request without explicit user approval immediately before merge;
