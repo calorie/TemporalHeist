@@ -35,6 +35,9 @@ project_b=th-$run_b
 mkdir -p "$evidence_dir"
 log_a=$evidence_dir/acceptance-a.log
 log_b=$evidence_dir/acceptance-b.log
+TH_E2E_MOVE_TIMEOUT_MS=${TH_E2E_MOVE_TIMEOUT_MS:-120000}
+TH_E2E_RECORD_TICKS=${TH_E2E_RECORD_TICKS:-3000}
+export TH_E2E_MOVE_TIMEOUT_MS TH_E2E_RECORD_TICKS
 
 compose_a() { (cd "$worktree_a" && sh container "$run_a" "$@"); }
 compose_b() { (cd "$worktree_b" && sh container "$run_b" "$@"); }

@@ -10,6 +10,8 @@ const harness = await readFile(harnessPath, 'utf8');
 execFileSync('sh', ['-n', harnessPath]);
 assert.match(harness, /compose_a acceptance/);
 assert.match(harness, /compose_b acceptance/);
+assert.match(harness, /TH_E2E_MOVE_TIMEOUT_MS/);
+assert.match(harness, /TH_E2E_RECORD_TICKS/);
 assert.match(harness, /com\.docker\.compose\.service=browser/);
 assert.match(harness, /\.HostConfig\.PortBindings/);
 assert.match(harness, /docker network ls/);

@@ -6,6 +6,10 @@ const artifacts = `/artifacts/e2e-${process.env.TH_AGENT_ID}`;
 await mkdir(artifacts, { recursive: true });
 const viewport = { width: 1280, height: 720 };
 const stateTimeout = 30_000;
+const moveTimeout = Number(process.env.TH_E2E_MOVE_TIMEOUT_MS ?? 45_000);
+const recordingTicks = Number(process.env.TH_E2E_RECORD_TICKS ?? 1_200);
+assert(Number.isSafeInteger(moveTimeout) && moveTimeout >= 45_000);
+assert(Number.isSafeInteger(recordingTicks) && recordingTicks >= 1_200);
 const flags = [
   '--no-sandbox',
   '--enable-unsafe-webgpu',
@@ -116,7 +120,7 @@ async function capture(page, player, label) {
   evidence.screenshots.push({ file, player, label, ui: await uiState(page) });
 }
 
-async function moveTo(page, playerId, x, z, timeout = 45_000) {
+async function moveTo(page, playerId, x, z, timeout = moveTimeout) {
   const deadline = Date.now() + timeout;
   let lastState;
   while (Date.now() < deadline) {
@@ -187,11 +191,10 @@ async function recordEchoPlate(pageA, plateId, doorId, x, z, whileLive) {
     `live presence on plate ${plateId}`);
   evidence.events.push({ event: 'live-plate', plateId, tick: entered.serverTick });
   await moveTo(pageA, 1, x, z);
-  // Record twenty seconds of plate occupancy. The long replay window keeps the
-  // full-stack test valid even when a cold CI runner delays browser observation
-  // while authority ticks continue in real time.
-  await waitFor(pageA, (state) => state.serverTick >= entered.serverTick + 1200,
-    `recording window on plate ${plateId}`, 25_000);
+  // Keep a configurable replay window. Isolation runs extend it so two
+  // software-GPU stacks remain valid under heavy scheduler contention.
+  await waitFor(pageA, (state) => state.serverTick >= entered.serverTick + recordingTicks,
+    `recording window on plate ${plateId}`, Math.ceil(recordingTicks / 60 * 1_000) + 30_000);
   if (whileLive) await whileLive();
   await moveTo(pageA, 1, x - 1200, z);
   const left = await waitFor(pageA,
