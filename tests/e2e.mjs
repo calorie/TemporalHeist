@@ -4,6 +4,8 @@ import { mkdir, writeFile } from 'node:fs/promises';
 
 const artifacts = `/artifacts/e2e-${process.env.TH_AGENT_ID}`;
 await mkdir(artifacts, { recursive: true });
+const viewport = { width: 1280, height: 720 };
+const stateTimeout = 30_000;
 const flags = [
   '--no-sandbox',
   '--enable-unsafe-webgpu',
@@ -16,7 +18,12 @@ const flags = [
 ];
 
 const contexts = [];
-const evidence = { agent: process.env.TH_AGENT_ID, events: [] };
+const evidence = {
+  agent: process.env.TH_AGENT_ID,
+  viewport: { ...viewport, deviceScaleFactor: 1 },
+  events: [],
+  screenshots: [],
+};
 const RoomPhase = Object.freeze({ LOBBY: 1, ACTIVE: 2, WON: 3, FAILED: 4 });
 const FailureReason = Object.freeze({ UNSPECIFIED: 0, TIMEOUT: 1, SURVEILLANCE: 2 });
 const camera41 = Object.freeze({ x: 4500, z: 7500, directionX: 0, directionZ: -1000,
@@ -35,7 +42,81 @@ async function snapshot(page) {
   return page.evaluate(() => window.th.snapshot());
 }
 
-async function moveTo(page, playerId, x, z, timeout = 30000) {
+async function uiState(page) {
+  return page.evaluate(() => ({
+    briefing: document.querySelector('#briefing')?.textContent?.trim(),
+    echoStatus: document.querySelector('#echo-status')?.textContent?.trim(),
+    hudPhase: document.querySelector('#hud')?.getAttribute('data-phase'),
+    mutePressed: document.querySelector('#mute')?.getAttribute('aria-pressed'),
+    objective: document.querySelector('#objective')?.textContent?.trim(),
+    phase: document.querySelector('#phase')?.textContent?.trim(),
+    readiness: document.querySelector('#readiness')?.textContent?.trim(),
+    result: document.querySelector('#result')?.textContent?.trim(),
+    resultState: document.querySelector('#result')?.getAttribute('data-state'),
+    timer: document.querySelector('#timer')?.textContent?.trim(),
+  }));
+}
+
+async function waitForText(page, selector, pattern, description, timeout = stateTimeout) {
+  const locator = page.locator(selector);
+  await locator.waitFor({ state: 'visible', timeout });
+  const deadline = Date.now() + timeout;
+  let text = '';
+  while (Date.now() < deadline) {
+    text = (await locator.innerText()).trim();
+    if (pattern.test(text)) return text;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`timed out waiting for ${description}; ${selector}=${JSON.stringify(text)}`);
+}
+
+async function waitForPresentation(page, phase, resultState, resultPattern) {
+  await page.waitForFunction(
+    ({ phase, resultState }) =>
+      document.querySelector('#hud')?.getAttribute('data-phase') === phase &&
+      document.querySelector('#result')?.getAttribute('data-state') === resultState,
+    { phase, resultState },
+    { timeout: stateTimeout },
+  );
+  const ui = await uiState(page);
+  if (resultPattern) assert.match(ui.result ?? '', resultPattern);
+  return ui;
+}
+
+async function assertOnboarding(page) {
+  const briefing = await waitForText(page, '#briefing', /ECHO/i, 'Echo onboarding');
+  for (const expected of [
+    /WASD|ARROW/i,
+    /INTERACT|\bE\b/i,
+    /READY|ENTER/i,
+    /PLATE/i,
+    /LEAVE/i,
+    /10.SECONDS|00:10/i,
+    /DOOR/i,
+    /SURVEILLANCE|CAMERA/i,
+    /EXTRACTION/i,
+    /RESTART|RETRY/i,
+  ]) assert.match(briefing, expected);
+  const mute = page.locator('#mute');
+  await mute.waitFor({ state: 'visible', timeout: stateTimeout });
+  assert.equal(await mute.getAttribute('aria-pressed'), 'false');
+}
+
+async function useVisibleControl(page, selector, key) {
+  const control = page.locator(selector);
+  await control.waitFor({ state: 'visible', timeout: stateTimeout });
+  assert.equal(await control.isEnabled(), true, `${selector} is disabled`);
+  if (key) await page.keyboard.press(key);
+  else await control.click();
+}
+
+async function capture(page, player, label) {
+  const file = `player-${player}-${label}.png`;
+  await page.screenshot({ path: `${artifacts}/${file}` });
+  evidence.screenshots.push({ file, player, label, ui: await uiState(page) });
+}
+
+async function moveTo(page, playerId, x, z, timeout = 45_000) {
   const deadline = Date.now() + timeout;
   let lastState;
   while (Date.now() < deadline) {
@@ -65,7 +146,7 @@ async function moveTo(page, playerId, x, z, timeout = 30000) {
   })}`);
 }
 
-async function waitFor(page, predicate, description, timeout = 20000) {
+async function waitFor(page, predicate, description, timeout = stateTimeout) {
   const deadline = Date.now() + timeout;
   let lastState;
   while (Date.now() < deadline) {
@@ -83,7 +164,7 @@ async function waitFor(page, predicate, description, timeout = 20000) {
   })}`);
 }
 
-async function waitForPhase(page, phase, description, timeout = 20000) {
+async function waitForPhase(page, phase, description, timeout = stateTimeout) {
   return waitFor(page, (state) => state.room?.phase === phase, description, timeout);
 }
 
@@ -99,7 +180,7 @@ async function recordEchoPlate(pageA, plateId, doorId, x, z) {
   // Record six seconds of plate occupancy, leaving enough delayed Echo window
   // for two live players to traverse an authority-controlled door in sequence.
   await waitFor(pageA, (state) => state.serverTick >= entered.serverTick + 360,
-    `recording window on plate ${plateId}`, 6000);
+    `recording window on plate ${plateId}`, 10_000);
   await moveTo(pageA, 1, x - 1200, z);
   const left = await waitFor(pageA,
     (state) => !state.plates.find((plate) => plate.id === plateId)?.active,
@@ -109,7 +190,7 @@ async function recordEchoPlate(pageA, plateId, doorId, x, z) {
     const plate = state.plates.find((candidate) => candidate.id === plateId);
     const door = state.doors.find((candidate) => candidate.id === doorId);
     return plate?.echoPresence > 0 && door?.active;
-  }, `Echo presence on plate ${plateId}`, 15000);
+  }, `Echo presence on plate ${plateId}`, 25_000);
   const observedDelay = echoed.serverTick - entered.serverTick;
   const echo = echoed.echoes.find((candidate) => candidate.playerId === 1);
   assert.equal(echo?.sourceTick, echoed.serverTick - 600);
@@ -133,12 +214,12 @@ async function recordEchoPlate(pageA, plateId, doorId, x, z) {
 try {
   for (const player of [1, 2]) {
     const context = await chromium.launchPersistentContext(`${artifacts}/client-${player}`, {
-      channel: 'chromium', headless: true, args: flags,
+      channel: 'chromium', headless: true, viewport, deviceScaleFactor: 1, args: flags,
     });
     contexts.push(context);
-    const page = await context.newPage();
+    const page = context.pages()[0] ?? await context.newPage();
     await page.goto(`http://web:5173/?player=${player}&room=${process.env.TH_ROOM_ID}`);
-    await page.waitForFunction(() => window.th?.joined(), { timeout: 30000 });
+    await page.waitForFunction(() => window.th?.joined(), undefined, { timeout: 45_000 });
   }
   const [pageA, pageB] = contexts.map((context) => context.pages().at(-1));
 
@@ -148,8 +229,20 @@ try {
   'two connected players in the lobby');
   assert.equal(lobby.room.readyPlayers, 0);
   assert(lobby.sessions.every((session) => !session.ready));
+  await Promise.all([pageA, pageB].map(assertOnboarding));
+  for (const page of [pageA, pageB]) {
+    const ui = await waitForPresentation(page, 'lobby', 'none');
+    assert.match(ui.phase ?? '', /LOBBY.*ATTEMPT 1/i);
+    assert.match(ui.objective ?? '', /READY/i);
+    assert.match(ui.readiness ?? '', /0\/2/);
+    assert.match(ui.echoStatus ?? '', /STARTS 10 SECONDS AFTER LAUNCH/i);
+  }
+  await Promise.all([
+    capture(pageA, 1, 'lobby-onboarding'),
+    capture(pageB, 2, 'lobby-onboarding'),
+  ]);
 
-  await pageA.evaluate(() => window.th.ready());
+  await useVisibleControl(pageA, '#ready');
   const playerAReady = await waitFor(pageB, (state) =>
     state.room?.phase === RoomPhase.LOBBY &&
     state.room.readyPlayers === 1 &&
@@ -157,7 +250,7 @@ try {
   'client B observing player A ready');
   assert.equal(playerAReady.sessions.find((session) => session.playerId === 2)?.ready, false);
 
-  await pageB.evaluate(() => window.th.ready());
+  await useVisibleControl(pageB, '#ready', 'Enter');
   const activeA = await waitForPhase(pageA, RoomPhase.ACTIVE, 'first attempt on client A');
   const activeB = await waitForPhase(pageB, RoomPhase.ACTIVE, 'first attempt on client B');
   assert.equal(activeA.room.attempt, 1);
@@ -166,6 +259,15 @@ try {
   assert.equal(activeA.room.deadlineTick - activeA.room.startedTick, 18_000);
   assert.equal(activeA.room.readyPlayers, 2);
   assert(activeA.sessions.every((session) => session.ready));
+  for (const page of [pageA, pageB]) {
+    const ui = await waitForPresentation(page, 'active', 'none');
+    assert.match(ui.phase ?? '', /ACTIVE.*ATTEMPT 1/i);
+    assert.match(ui.objective ?? '', /ECHO PRESENCE/i);
+    assert.match(ui.timer ?? '', /^0[0-5]:[0-5][0-9]$/);
+    assert.match(ui.readiness ?? '', /2\/2/);
+    await waitForText(page, '#echo-status', /^ECHO IN 00:[0-9]{2}$/,
+      'first-Echo authority countdown');
+  }
   evidence.events.push({
     event: 'attempt-started', attempt: activeA.room.attempt,
     startedTick: activeA.room.startedTick, deadlineTick: activeA.room.deadlineTick,
@@ -209,6 +311,13 @@ try {
   assert(finalA.doors.find((door) => door.id === 13)?.active);
   assert(finalB.doors.find((door) => door.id === 13)?.active);
   assert(finalOpen.doors.find((door) => door.id === 13)?.active);
+  for (const page of [pageA, pageB]) {
+    assert.equal(
+      await waitForText(page, '#echo-status', /^ECHO REPLAYING · 10 SECONDS BEHIND$/,
+        'human-facing Echo replay status'),
+      'ECHO REPLAYING · 10 SECONDS BEHIND',
+    );
+  }
 
   // Both live players must enter extraction after Echo Presence has opened the
   // final door. The authority, rather than either renderer, decides the result.
@@ -224,17 +333,20 @@ try {
   assert.equal(wonB.room.echoOpenedFinalDoor, true);
   assert.equal(wonA.room.endedTick, wonB.room.endedTick);
   assert(wonA.room.endedTick >= wonA.room.startedTick);
+  for (const page of [pageA, pageB]) {
+    const ui = await waitForPresentation(page, 'won', 'success', /SUCCESS/i);
+    assert.match(ui.objective ?? '', /HEIST COMPLETE/i);
+  }
   evidence.events.push({
     event: 'attempt-won', attempt: wonA.room.attempt, endedTick: wonA.room.endedTick,
     extractionPlayers: wonA.room.extractionPlayers,
   });
 
-  await Promise.all([pageA, pageB].map((page, index) =>
-    page.screenshot({ path: `${artifacts}/client-${index + 1}-won.png` })));
+  await Promise.all([capture(pageA, 1, 'attempt-1-won'), capture(pageB, 2, 'attempt-1-won')]);
 
   // One player may restart a terminal attempt. Restart clears transient attempt
   // state and readiness, so the next attempt cannot begin until both ready again.
-  await pageA.evaluate(() => window.th.restart());
+  await useVisibleControl(pageA, '#restart');
   const resetA = await waitForPhase(pageA, RoomPhase.LOBBY, 'reset lobby on client A');
   const resetB = await waitForPhase(pageB, RoomPhase.LOBBY, 'reset lobby on client B');
   for (const reset of [resetA, resetB]) {
@@ -248,12 +360,12 @@ try {
   }
   evidence.events.push({ event: 'attempt-reset', requestedBy: 1, tick: resetA.serverTick });
 
-  await pageA.evaluate(() => window.th.ready());
+  await useVisibleControl(pageA, '#ready', 'Enter');
   const waitingForB = await waitFor(pageA, (state) =>
     state.room?.phase === RoomPhase.LOBBY && state.room.readyPlayers === 1,
   'second attempt waiting for player B');
   assert.equal(waitingForB.room.attempt, 2);
-  await pageB.evaluate(() => window.th.ready());
+  await useVisibleControl(pageB, '#ready');
   const secondActiveA = await waitForPhase(pageA, RoomPhase.ACTIVE, 'second attempt on client A');
   const secondActiveB = await waitForPhase(pageB, RoomPhase.ACTIVE, 'second attempt on client B');
   assert.equal(secondActiveA.room.attempt, 2);
@@ -269,7 +381,7 @@ try {
   // Hazard detection is evaluated from live authoritative players only.
   const secondEcho = await waitFor(pageA,
     (state) => state.room?.phase === RoomPhase.ACTIVE && state.echoes.length > 0,
-    'second-attempt Echo without surveillance detection', 15000);
+    'second-attempt Echo without surveillance detection', 25_000);
   const quietCamera = secondEcho.hazards.find((hazard) => hazard.id === 41);
   assert(quietCamera, 'camera 41 missing from authoritative snapshot');
   assert.equal(quietCamera.active, false);
@@ -307,6 +419,10 @@ try {
   assert(detectedPose, 'detected player missing from failed snapshot');
   assert(cameraContains(camera41, detectedPose),
     `surveillance detected player outside camera cone: ${JSON.stringify(detectedPose)}`);
+  for (const page of [pageA, pageB]) {
+    const ui = await waitForPresentation(page, 'failed', 'failure', /SURVEILLANCE.*CAMERA 41/i);
+    assert.match(ui.objective ?? '', /ATTEMPT FAILED/i);
+  }
 
   // Terminal attempts keep publishing canonical ticks, but authoritative poses
   // remain frozen on both clients.
@@ -326,10 +442,12 @@ try {
     detectedPose,
   });
 
-  await Promise.all([pageA, pageB].map((page, index) =>
-    page.screenshot({ path: `${artifacts}/client-${index + 1}-surveillance-failed.png` })));
+  await Promise.all([
+    capture(pageA, 1, 'attempt-2-surveillance-failed'),
+    capture(pageB, 2, 'attempt-2-surveillance-failed'),
+  ]);
 
-  await pageB.evaluate(() => window.th.restart());
+  await useVisibleControl(pageB, '#restart', 'r');
   const cleanLobbyA = await waitForPhase(pageA, RoomPhase.LOBBY,
     'clean lobby after surveillance failure on client A');
   const cleanLobbyB = await waitForPhase(pageB, RoomPhase.LOBBY,
@@ -354,12 +472,13 @@ try {
   evidence.finalSnapshot = cleanLobbyA;
   evidence.renderers = await Promise.all([pageA, pageB].map((page) => page.evaluate(() => window.th.rendererInfo())));
   evidence.errors = await Promise.all([pageA, pageB].map((page) => page.evaluate(() => window.th.errors())));
+  evidence.finalUi = await Promise.all([pageA, pageB].map(uiState));
   assert(evidence.renderers.every((renderer) => renderer?.backend === 'webgpu'));
   assert(evidence.renderers.every((renderer) => renderer?.adapter?.vendor));
   assert(wonA.echoes.some((echo) => echo.playerId === 1));
   assert(wonB.echoes.some((echo) => echo.playerId === 1));
   assert(evidence.errors.every((errors) => errors.length === 0));
-  await Promise.all([pageA, pageB].map((page, index) => page.screenshot({ path: `${artifacts}/client-${index + 1}.png` })));
+  await Promise.all([capture(pageA, 1, 'attempt-3-clean-lobby'), capture(pageB, 2, 'attempt-3-clean-lobby')]);
   await writeFile(`${artifacts}/evidence.json`, `${JSON.stringify(evidence, null, 2)}\n`);
   console.log(JSON.stringify({ event: 'p1-game-loop-passed', ...evidence }));
 } finally {
