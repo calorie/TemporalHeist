@@ -140,5 +140,21 @@ the task brief's detected-player phrase is a non-blocking plan overreach.
 
 ## Next action
 
-Complete the cube-mesh visual follow-up and release two-stack isolation before
-requesting integration approval.
+Run final integrated acceptance/visual verification and release two-stack
+isolation before requesting integration approval.
+
+## Cube mesh repair verification (`p2-cube` namespace)
+
+- `sh container p2-cube run --rm dev node apps/web/test/cube-mesh.mjs` — failed
+  before the source fix with `107 !== 108`, then passed after the fix.
+- `sh container p2-cube verify` — passed, including the cube mesh regression,
+  Rust/TypeScript checks, Vite build, and SwiftShader WebGPU with zero errors.
+- `sh container p2-cube visual` — passed for both container Chromium players.
+- Canvas readbacks found guard-body color at all four rectangle corners plus wall
+  and floor colors, proving the repaired mesh fills its rectangles.
+- `sh container p2-cube down --volumes --remove-orphans` — passed.
+
+The cube-only branch still used the older `--disable-vulkan-surface` flag and
+therefore produced black canvas screenshots. Task 5 independently removed that
+flag and proved opaque, visible WebGPU scenes; the final integrated visual run
+must verify both fixes together.

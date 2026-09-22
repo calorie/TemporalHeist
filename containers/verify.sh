@@ -13,6 +13,7 @@ npx tsc -p apps/web/tsconfig.json
 npx biome check apps/web/src
 node apps/web/test/timeline.mjs
 node apps/web/test/guard-view.mjs
+node apps/web/test/cube-mesh.mjs
 node apps/web/test/room-hud.mjs
 node apps/web/test/surveillance-view.mjs
 node apps/web/test/audio.mjs
