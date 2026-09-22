@@ -11,6 +11,7 @@ services:
       CARGO_BUILD_JOBS: "2"
       npm_config_cache: /cache/npm
       TH_ROOM_ID: ${TH_AGENT_ID}
+      TH_E2E_MOVE_TIMEOUT_MS: ${TH_E2E_MOVE_TIMEOUT_MS:-45000}
       TH_E2E_START_DELAY_MS: ${TH_E2E_START_DELAY_MS:-0}
     volumes:
       - .:/workspace

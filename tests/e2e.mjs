@@ -6,7 +6,9 @@ const artifacts = `/artifacts/e2e-${process.env.TH_AGENT_ID}`;
 await mkdir(artifacts, { recursive: true });
 const viewport = { width: 1280, height: 720 };
 const stateTimeout = 30_000;
+const moveTimeout = Number(process.env.TH_E2E_MOVE_TIMEOUT_MS ?? 45_000);
 const startDelay = Number(process.env.TH_E2E_START_DELAY_MS ?? 0);
+assert(Number.isSafeInteger(moveTimeout) && moveTimeout >= 45_000);
 assert(Number.isSafeInteger(startDelay) && startDelay >= 0);
 const flags = [
   '--no-sandbox',
@@ -118,7 +120,7 @@ async function capture(page, player, label) {
   evidence.screenshots.push({ file, player, label, ui: await uiState(page) });
 }
 
-async function moveTo(page, playerId, x, z, timeout = 45_000) {
+async function moveTo(page, playerId, x, z, timeout = moveTimeout) {
   const deadline = Date.now() + timeout;
   let lastState;
   while (Date.now() < deadline) {

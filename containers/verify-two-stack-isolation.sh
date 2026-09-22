@@ -45,7 +45,8 @@ mkdir -p "$evidence_dir"
 log_a=$evidence_dir/acceptance-a.log
 log_b=$evidence_dir/acceptance-b.log
 TH_ISOLATION_B_START_DELAY_MS=${TH_ISOLATION_B_START_DELAY_MS:-240000}
-export TH_ISOLATION_B_START_DELAY_MS
+TH_E2E_MOVE_TIMEOUT_MS=${TH_E2E_MOVE_TIMEOUT_MS:-120000}
+export TH_ISOLATION_B_START_DELAY_MS TH_E2E_MOVE_TIMEOUT_MS
 
 compose_a() { (cd "$worktree_a" && sh container "$run_a" "$@"); }
 compose_b() {

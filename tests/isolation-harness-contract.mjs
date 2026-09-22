@@ -12,6 +12,7 @@ assert.match(harness, /compose_a acceptance/);
 assert.match(harness, /compose_b acceptance/);
 assert.match(harness, /TH_ISOLATION_B_START_DELAY_MS/);
 assert.match(harness, /TH_E2E_START_DELAY_MS/);
+assert.match(harness, /TH_E2E_MOVE_TIMEOUT_MS/);
 assert.match(harness, /com\.docker\.compose\.service=browser/);
 assert.match(harness, /\.HostConfig\.PortBindings/);
 assert.match(harness, /docker network ls/);
