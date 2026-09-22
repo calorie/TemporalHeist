@@ -1,8 +1,8 @@
 use serde::Deserialize;
 use std::collections::{BTreeMap, VecDeque};
 use th_protocol::{
-    AppliedAction, ECHO_DELAY_TICKS, HISTORY_TICKS, Input, InputKind, Mechanism, PROTOCOL_MAJOR,
-    Pose, RoomPhase, RoomState, Session, Snapshot,
+    AppliedAction, ECHO_DELAY_TICKS, FailureReason, HISTORY_TICKS, Hazard, Input, InputKind,
+    Mechanism, PROTOCOL_MAJOR, Pose, RoomPhase, RoomState, Session, Snapshot,
 };
 
 const MOTION_TIMEOUT: u64 = 30;
@@ -23,6 +23,7 @@ struct Map {
     plates: Vec<Plate>,
     terminals: Vec<Terminal>,
     extraction: Area,
+    cameras: Vec<Camera>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -72,6 +73,17 @@ struct Terminal {
     x: i32,
     z: i32,
     capability: Capability,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Camera {
+    id: u32,
+    x: i32,
+    z: i32,
+    direction_x: i32,
+    direction_z: i32,
+    range: i32,
+    half_width: i32,
 }
 #[derive(Clone, Copy, Deserialize, PartialEq)]
 enum Capability {
@@ -148,6 +160,9 @@ pub struct World {
     ended_tick: u64,
     deadline_tick: u64,
     echo_opened_final_door: bool,
+    failure_reason: FailureReason,
+    failure_hazard_id: u32,
+    hazards: Vec<Hazard>,
 }
 
 impl World {
@@ -170,6 +185,14 @@ impl World {
                 ..Default::default()
             })
             .collect();
+        let hazards = map
+            .cameras
+            .iter()
+            .map(|camera| Hazard {
+                id: camera.id,
+                ..Default::default()
+            })
+            .collect();
         Self {
             epoch,
             tick: 0,
@@ -186,6 +209,9 @@ impl World {
             ended_tick: 0,
             deadline_tick: 0,
             echo_opened_final_door: false,
+            failure_reason: FailureReason::Unspecified,
+            failure_hazard_id: 0,
+            hazards,
         }
     }
     pub fn step(&mut self, inputs: &[Input]) -> Snapshot {
@@ -200,6 +226,7 @@ impl World {
             self.commit_history();
             self.replay_actions();
             self.presence();
+            self.surveillance();
             self.update_room_result();
         }
         self.trim_actions();
@@ -253,7 +280,10 @@ impl World {
                 ready_players,
                 extraction_players,
                 echo_opened_final_door: self.echo_opened_final_door,
+                failure_reason: self.failure_reason as i32,
+                failure_hazard_id: self.failure_hazard_id,
             }),
+            hazards: self.hazards.clone(),
         }
     }
     fn apply(&mut self, i: &Input) {
@@ -372,6 +402,9 @@ impl World {
             self.ended_tick = 0;
             self.deadline_tick = self.tick + ATTEMPT_TICKS;
             self.echo_opened_final_door = false;
+            self.failure_reason = FailureReason::Unspecified;
+            self.failure_hazard_id = 0;
+            self.clear_hazards();
             self.scheduled.clear();
             self.actions.clear();
             for p in self.players.values_mut() {
@@ -399,6 +432,8 @@ impl World {
         } else if self.tick >= self.deadline_tick {
             self.room_phase = RoomPhase::Failed;
             self.ended_tick = self.tick;
+            self.failure_reason = FailureReason::Timeout;
+            self.failure_hazard_id = 0;
         }
     }
     fn extraction_players(&self) -> u32 {
@@ -420,6 +455,9 @@ impl World {
         self.ended_tick = 0;
         self.deadline_tick = 0;
         self.echo_opened_final_door = false;
+        self.failure_reason = FailureReason::Unspecified;
+        self.failure_hazard_id = 0;
+        self.clear_hazards();
         self.scheduled.clear();
         self.actions.clear();
         self.next_action_id = 1;
@@ -597,6 +635,37 @@ impl World {
             door.active = l + e > 0;
         }
     }
+    fn surveillance(&mut self) {
+        self.clear_hazards();
+        let detection = self.map.cameras.iter().find_map(|camera| {
+            self.players
+                .iter()
+                .filter(|(_, player)| player.connected)
+                .find(|(_, player)| camera_contains(camera, player.x, player.z))
+                .map(|(&player_id, _)| (camera.id, player_id))
+        });
+        let Some((camera_id, player_id)) = detection else {
+            return;
+        };
+        if let Some(hazard) = self
+            .hazards
+            .iter_mut()
+            .find(|hazard| hazard.id == camera_id)
+        {
+            hazard.active = true;
+            hazard.detected_player_id = player_id;
+        }
+        self.room_phase = RoomPhase::Failed;
+        self.ended_tick = self.tick;
+        self.failure_reason = FailureReason::Surveillance;
+        self.failure_hazard_id = camera_id;
+    }
+    fn clear_hazards(&mut self) {
+        for hazard in &mut self.hazards {
+            hazard.active = false;
+            hazard.detected_player_id = 0;
+        }
+    }
     fn trim_actions(&mut self) {
         while self
             .actions
@@ -606,6 +675,19 @@ impl World {
             self.actions.pop_front();
         }
     }
+}
+fn camera_contains(camera: &Camera, x: i32, z: i32) -> bool {
+    let dx = i64::from(x - camera.x);
+    let dz = i64::from(z - camera.z);
+    let direction_x = i64::from(camera.direction_x);
+    let direction_z = i64::from(camera.direction_z);
+    let forward = dx * direction_x + dz * direction_z;
+    let max_forward = i64::from(camera.range) * 1_000;
+    if !(0..=max_forward).contains(&forward) {
+        return false;
+    }
+    let lateral = (dx * direction_z - dz * direction_x).abs();
+    lateral * i64::from(camera.range) <= i64::from(camera.half_width) * forward
 }
 fn collides(map: &Map, doors: &[Rect], x: i32, z: i32) -> bool {
     let r = map.radius;
@@ -632,6 +714,7 @@ fn inside(x: i32, z: i32, cx: i32, cz: i32, r: i32) -> bool {
 mod tests {
     use super::*;
     use prost::Message;
+    use th_protocol::FailureReason;
 
     fn input(kind: InputKind, seq: u64) -> Input {
         Input {
@@ -970,6 +1053,119 @@ mod tests {
             RoomPhase::Failed as i32
         );
         assert_eq!(failed.room.as_ref().unwrap().ended_tick, deadline);
+        assert_eq!(
+            failed.room.as_ref().unwrap().failure_reason,
+            FailureReason::Timeout as i32
+        );
+        assert_eq!(failed.room.as_ref().unwrap().failure_hazard_id, 0);
+    }
+
+    #[test]
+    fn live_human_center_inside_camera_cone_fails_immediately() {
+        let mut w = World::new("e".into());
+        start_attempt(&mut w);
+        {
+            let player = w.players.get_mut(&1).unwrap();
+            player.x = 4_500;
+            player.z = 6_000;
+        }
+
+        let failed = w.step(&[]);
+        let room = failed.room.as_ref().unwrap();
+        assert_eq!(room.phase, RoomPhase::Failed as i32);
+        assert_eq!(room.ended_tick, failed.server_tick);
+        assert_eq!(room.failure_reason, FailureReason::Surveillance as i32);
+        assert_eq!(room.failure_hazard_id, 41);
+        assert_eq!(failed.hazards.len(), 1);
+        assert!(failed.hazards[0].active);
+        assert_eq!(failed.hazards[0].detected_player_id, 1);
+    }
+
+    #[test]
+    fn camera_cone_uses_inclusive_integer_triangular_boundaries() {
+        let camera = &World::new("e".into()).map.cameras[0];
+        assert!(camera_contains(camera, 5_700, 5_300));
+        assert!(!camera_contains(camera, 5_701, 5_300));
+        assert!(!camera_contains(camera, 4_500, 7_501));
+        assert!(!camera_contains(camera, 4_500, 5_299));
+    }
+
+    #[test]
+    fn surveillance_ignores_disconnected_humans() {
+        let mut w = World::new("e".into());
+        start_attempt(&mut w);
+        {
+            let player = w.players.get_mut(&1).unwrap();
+            player.x = 4_500;
+            player.z = 6_000;
+            player.connected = false;
+        }
+        let disconnected = w.step(&[]);
+        assert_eq!(
+            disconnected.room.as_ref().unwrap().phase,
+            RoomPhase::Active as i32
+        );
+        assert!(!disconnected.hazards[0].active);
+    }
+
+    #[test]
+    fn echo_inside_camera_cone_does_not_trigger_surveillance() {
+        let mut w = World::new("e".into());
+        start_attempt(&mut w);
+        w.tick = ECHO_DELAY_TICKS;
+        w.deadline_tick = w.tick + ATTEMPT_TICKS;
+        {
+            let player = w.players.get_mut(&1).unwrap();
+            player.x = 1_500;
+            player.z = 2_500;
+            player.last_input = w.tick;
+            player.history.push_back(History {
+                tick: 1,
+                x: 4_500,
+                z: 6_000,
+            });
+        }
+        w.players.get_mut(&2).unwrap().last_input = w.tick;
+
+        let snapshot = w.step(&[]);
+        assert!(
+            snapshot
+                .echoes
+                .iter()
+                .any(|echo| { echo.player_id == 1 && echo.x_mm == 4_500 && echo.z_mm == 6_000 })
+        );
+        assert_eq!(
+            snapshot.room.as_ref().unwrap().phase,
+            RoomPhase::Active as i32
+        );
+        assert!(!snapshot.hazards[0].active);
+    }
+
+    #[test]
+    fn restart_clears_surveillance_failure_and_hazard_state() {
+        let mut w = World::new("e".into());
+        start_attempt(&mut w);
+        {
+            let player = w.players.get_mut(&1).unwrap();
+            player.x = 4_500;
+            player.z = 6_000;
+        }
+        assert_eq!(
+            w.step(&[]).room.as_ref().unwrap().failure_reason,
+            FailureReason::Surveillance as i32
+        );
+
+        let reset = w.step(&[player_input(1, "a", InputKind::Restart, 2)]);
+        let room = reset.room.as_ref().unwrap();
+        assert_eq!(room.phase, RoomPhase::Lobby as i32);
+        assert_eq!(room.failure_reason, FailureReason::Unspecified as i32);
+        assert_eq!(room.failure_hazard_id, 0);
+        assert!(
+            reset
+                .hazards
+                .iter()
+                .all(|hazard| { !hazard.active && hazard.detected_player_id == 0 })
+        );
     }
 
     #[test]
