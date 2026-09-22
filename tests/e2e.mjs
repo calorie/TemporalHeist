@@ -31,7 +31,10 @@ async function moveTo(page, playerId, x, z, timeout = 30000) {
       await page.evaluate(() => window.th.move(0, 0));
       return state;
     }
-    assert(pose, `player ${playerId} missing from authoritative snapshot`);
+    if (!pose) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      continue;
+    }
     const dx = Math.abs(pose.xMm - x) <= 120 ? 0 : Math.sign(x - pose.xMm);
     const dz = Math.abs(pose.zMm - z) <= 120 ? 0 : Math.sign(z - pose.zMm);
     await page.evaluate(([mx, mz]) => window.th.move(mx, mz), [dx, dz]);

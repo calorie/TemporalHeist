@@ -17,6 +17,7 @@ let transport: MoqTransport | undefined;
 let state = 'starting';
 let joined = false;
 let joiningEpoch = '';
+let joinAttemptTick = -60;
 let desired = { x: 0, z: 0 };
 let joinSequence = 0;
 let motionSequence = 0;
@@ -58,13 +59,18 @@ function onSnapshot(snapshot: Snapshot) {
   if (changedEpoch) {
     joined = false;
     joiningEpoch = '';
+    joinAttemptTick = -60;
   }
   joined = snapshot.sessions.some(
     (session) =>
       session.playerId === playerId && session.sessionId === sessionId && session.connected,
   );
-  if (!joined && joiningEpoch !== snapshot.roomEpoch) {
+  if (
+    !joined &&
+    (joiningEpoch !== snapshot.roomEpoch || snapshot.serverTick >= joinAttemptTick + 60)
+  ) {
     joiningEpoch = snapshot.roomEpoch;
+    joinAttemptTick = snapshot.serverTick;
     transport?.sendAction(input(InputKind.JOIN, ++joinSequence));
     setState('joining');
   }
@@ -93,6 +99,7 @@ async function reconnect() {
   reconnecting = true;
   joined = false;
   joiningEpoch = '';
+  joinAttemptTick = -60;
   transport?.close();
   setState('reconnecting');
   try {
