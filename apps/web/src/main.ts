@@ -1,4 +1,5 @@
 import './style.css';
+import { AudioCues } from './audio.ts';
 import { type Input, InputKind, type Snapshot } from './generated/temporal_heist.ts';
 import { map } from './map.ts';
 import { MoqTransport } from './net/moq/transport.ts';
@@ -12,6 +13,7 @@ const room = params.get('room') ?? 'dev';
 const relay = new URL(params.get('relay') ?? 'http://relay:4443/anon');
 const sessionId = params.get('session') ?? crypto.randomUUID();
 const timeline = new Timeline();
+const audio = new AudioCues();
 const errors: string[] = [];
 let renderer: WebGpuRenderer | undefined;
 let transport: MoqTransport | undefined;
@@ -32,15 +34,18 @@ function element<T extends Element>(selector: string): T {
   return found;
 }
 const status = element<HTMLElement>('#status');
+const hudElement = element<HTMLElement>('#hud');
 const details = element<HTMLElement>('#details');
 const unsupported = element<HTMLElement>('#unsupported');
 const phase = element<HTMLElement>('#phase');
 const objective = element<HTMLElement>('#objective');
 const timer = element<HTMLElement>('#timer');
+const echoStatus = element<HTMLElement>('#echo-status');
 const readiness = element<HTMLElement>('#readiness');
 const result = element<HTMLElement>('#result');
 const readyButton = element<HTMLButtonElement>('#ready');
 const restartButton = element<HTMLButtonElement>('#restart');
+const muteButton = element<HTMLButtonElement>('#mute');
 
 function input(kind: InputKind, sequence: number, x = 0, z = 0, targetId = 0): Input {
   return {
@@ -185,6 +190,7 @@ function nearestTarget() {
 
 const keys = new Set<string>();
 addEventListener('keydown', (event) => {
+  void audio.unlock().catch(() => {});
   keys.add(event.key.toLowerCase());
   if (event.key.toLowerCase() === 'e' && !event.repeat) action();
   if (event.key === 'Enter' && !event.repeat) ready();
@@ -194,6 +200,15 @@ addEventListener('keydown', (event) => {
 addEventListener('keyup', (event) => {
   keys.delete(event.key.toLowerCase());
   updateKeys();
+});
+addEventListener('pointerdown', () => void audio.unlock().catch(() => {}), { once: true });
+function releaseKeys() {
+  keys.clear();
+  move(0, 0);
+}
+addEventListener('blur', releaseKeys);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) releaseKeys();
 });
 function updateKeys() {
   move(
@@ -205,6 +220,12 @@ function updateKeys() {
 }
 readyButton.addEventListener('click', ready);
 restartButton.addEventListener('click', restart);
+muteButton.addEventListener('click', () => {
+  const muted = audio.toggle();
+  muteButton.ariaPressed = String(muted);
+  muteButton.ariaLabel = muted ? 'Unmute sound' : 'Mute sound';
+  muteButton.textContent = muted ? 'SOUND OFF' : 'SOUND ON';
+});
 
 export interface TemporalHeistTestApi {
   status(): string;
@@ -257,11 +278,15 @@ async function start() {
     renderer?.render(map, presentation);
     const snap = presentation.snapshot;
     const hud = roomHud(snap, playerId);
+    audio.update(snap);
+    hudElement.dataset.phase = hud.phaseState;
     phase.textContent = hud.phase;
     objective.textContent = hud.objective;
     timer.textContent = hud.timer;
+    echoStatus.textContent = hud.echoStatus;
     readiness.textContent = hud.readiness;
     result.textContent = hud.result;
+    result.dataset.state = hud.resultState;
     readyButton.hidden = !hud.canReady;
     restartButton.hidden = !hud.canRestart;
     details.textContent = snap

@@ -1,1 +1,44 @@
-<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Temporal Heist</title></head><body><canvas id="game"></canvas><aside id="hud"><h1>TEMPORAL HEIST</h1><p id="status">Starting…</p><div class="mission"><strong id="phase">CONNECTING</strong><strong id="timer">--:--</strong></div><p id="objective">Waiting for authority</p><p id="readiness">Players ready: 0/2</p><p id="result" role="status"></p><div id="controls"><button id="ready" type="button" hidden>READY <kbd>ENTER</kbd></button><button id="restart" type="button" hidden>RESTART <kbd>R</kbd></button></div><p id="details"></p><p class="help">Move: WASD / arrows · interact: E</p></aside><div id="unsupported" hidden></div><script type="module" src="/src/main.ts"></script></body></html>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Temporal Heist</title>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <aside id="hud" data-phase="connecting" aria-labelledby="title">
+      <header>
+        <h1 id="title">TEMPORAL HEIST</h1>
+        <button id="mute" type="button" aria-pressed="false" aria-label="Mute sound">SOUND ON</button>
+      </header>
+      <p id="status">Starting…</p>
+      <div class="mission">
+        <strong id="phase" aria-live="polite">CONNECTING</strong>
+        <strong id="timer">--:--</strong>
+      </div>
+      <p id="objective">Waiting for authority</p>
+      <p id="echo-status" role="status">ECHO · WAITING FOR ATTEMPT</p>
+      <p id="readiness">Players ready: 0/2</p>
+      <p id="result" data-state="none" role="status" aria-live="assertive"></p>
+      <div id="controls">
+        <button id="ready" type="button" hidden>READY <kbd>ENTER</kbd></button>
+        <button id="restart" type="button" hidden>RESTART <kbd>R</kbd></button>
+      </div>
+      <section id="briefing" aria-labelledby="briefing-title">
+        <h2 id="briefing-title">HOW TO STEAL TIME</h2>
+        <ol>
+          <li>Move with <kbd>WASD</kbd> / arrows. Interact with <kbd>E</kbd>.</li>
+          <li>Both players press Ready to launch.</li>
+          <li>Stand on the plate, then leave. Your Echo repeats it 10 seconds later.</li>
+          <li>Use Echo Presence to open the final door.</li>
+          <li>Avoid surveillance and reach extraction together.</li>
+          <li>After success or failure, press <kbd>R</kbd> or Restart to retry.</li>
+        </ol>
+      </section>
+      <p id="details"></p>
+    </aside>
+    <div id="unsupported" hidden></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
