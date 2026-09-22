@@ -1,6 +1,14 @@
 # Project-level configuration loaded by Codex for trusted projects.
+# Optimize long-running engineering throughput on ChatGPT Plus:
+# - primary agent: stronger model at low effort for architecture/integration;
+# - default implementation subagents: cost-efficient model at medium effort;
+# - specialist roles: explicit escalation only where complexity justifies it.
+#
 # Routine repository development should proceed autonomously. Human approval is
 # reserved for explicit merge/integration boundaries and important design choices.
+
+model = "gpt-5.6-sol"
+model_reasoning_effort = "low"
 
 default_permissions = "agentic-development"
 
@@ -24,6 +32,48 @@ enabled = true
 
 [agents]
 enabled = true
+default_subagent_model = "gpt-5.6-terra"
+default_subagent_reasoning_effort = "medium"
+
+# Low-cost repository exploration and dependency/API mapping.
+[agents.code_explorer]
+description = "Read-heavy repository explorer. Map code paths, dependencies, APIs, and constraints concisely before implementation."
+config_file = "./agents/code-explorer.toml"
+
+# Default scoped implementation role.
+[agents.implementer]
+description = "Implement a clearly bounded component or fix with tests, preserving repository contracts and architecture invariants."
+config_file = "./agents/implementer.toml"
+
+# Independent correctness review without expensive flagship escalation.
+[agents.reviewer]
+description = "Review changes for correctness, regressions, missing tests, and contract violations; prioritize substantive findings."
+config_file = "./agents/reviewer.toml"
+
+# Evolving/niche MoQ integration benefits from the stronger model, but still at low effort.
+[agents.moq_specialist]
+description = "Investigate and implement MoQ/WebTransport integration, verifying current APIs and keeping transport details behind adapters."
+config_file = "./agents/moq-specialist.toml"
+
+# WebGPU is normally well-scoped enough for Terra/Medium.
+[agents.webgpu_specialist]
+description = "Implement and verify raw WebGPU/WGSL rendering and containerized Chromium WebGPU behavior without affecting gameplay authority."
+config_file = "./agents/webgpu-specialist.toml"
+
+# Protocol and generated-code work should remain contract-driven and economical.
+[agents.protocol_specialist]
+description = "Own protobuf/application protocol work, generated-code reproducibility, and Rust-TypeScript compatibility tests."
+config_file = "./agents/protocol-specialist.toml"
+
+# Container isolation/orchestration is scoped implementation work.
+[agents.container_specialist]
+description = "Own container-only developer/test workflows and per-agent runtime isolation, including parallel Compose stacks and CI parity."
+config_file = "./agents/container-specialist.toml"
+
+# Use only after ordinary implementation/debugging has failed or for cross-component failures.
+[agents.integration_debugger]
+description = "Escalation role for difficult cross-component failures, race conditions, protocol mismatches, and integration debugging."
+config_file = "./agents/integration-debugger.toml"
 
 [marketplaces.agentic-engineering]
 source_type = "git"
