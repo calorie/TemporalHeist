@@ -3,7 +3,7 @@
 ## Status
 
 The P2 protocol and authored map contract are frozen and container-verified.
-Deterministic guard simulation is next.
+Deterministic guard simulation is implemented on branch `p2/guard-sim`.
 
 ## Completed
 
@@ -22,6 +22,12 @@ Deterministic guard simulation is next.
   legacy snapshots that omit field 12.
 - Updated existing Rust snapshot construction for additive compatibility; guard
   simulation remains intentionally empty until the next implementation task.
+- Added checked-in-map guard parsing and validation, integer patrol movement and
+  view-cone detection, Echo investigation/search/return, snapshot publication,
+  and full attempt reset.
+- Added focused guard tests covering patrol clamping, Echo selection and search,
+  deterministic return, live-human failure priority, phase freeze, reset, map
+  validation, cone boundaries, and missing-target recovery.
 
 ## Verification
 
@@ -45,11 +51,23 @@ fresh run ID stopped earlier because its isolated Node volume had not yet receiv
 `npm ci`; after installing locked dependencies, the expected missing-contract
 failure was observed.
 
+Task 2 used the isolated `p2-sim` container namespace. The first guard test run
+failed to compile because `Map.guards`, `World.guards`, and `validate_guards` were
+absent. After implementation, a missing-investigation-target test failed with
+Investigate instead of Patrol, then passed after the recovery branch was added.
+Final checks passed:
+
+- `sh container p2-sim run --rm dev cargo fmt --all --check`
+- `sh container p2-sim run --rm dev cargo clippy --workspace --all-targets -- -D warnings`
+- `sh container p2-sim run --rm dev cargo test -p th-sim` — 28 passed.
+
 ## Blockers
 
-None.
+The frozen `RoomState` publishes the guard failure reason and guard ID but has no
+guard-detected-player field. The approved design requires reason and guard ID;
+the task brief's detected-player phrase is a non-blocking plan overreach.
 
 ## Next action
 
-Rebase dependent worktrees onto this contract commit, then implement and
-container-verify deterministic guard simulation.
+Integrate the simulation branch with parallel client and renderer work, then run
+the full P2 acceptance and visual checks.

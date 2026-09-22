@@ -37,3 +37,22 @@ positive X, moving 20 mm per tick, with range 2600 mm, half-width 1400 mm, and a
 `(17200, 4000)` followed by waypoint 512 at `(20500, 4000)`. The guarded passage
 is the rectangle X `18500..19500`, Z `3000..5000`, which intersects the patrol
 route and gives E2E a stable authored crossing target. No navigation mesh is added.
+
+## 2026-09-23 — Simulation implementation
+
+An active tick advances the guard, resolves connected live-human visibility first,
+then examines authoritative Echo poses. Search expiry is set once on arrival and
+is never extended by continuing Echo visibility. A new Echo can trigger another
+investigation after a gap in visibility and a different observation key. Returning
+chooses the closest route waypoint by squared integer distance, with route order
+breaking ties.
+
+The guard snapshot's waypoint ID is its next patrol or return target. The initial
+guard starts at waypoint 511 and targets 512. An absent internal investigation
+target recovers to Patrol. The optional protobuf target remains absent outside
+Investigate.
+
+The task brief mentioned detected-player diagnostics, but the frozen protobuf
+offers only `failure_reason` and `failure_guard_id` for guard failures. The
+approved design requires those fields, so simulation preserves the contract and
+does not invent a new serialized field.
