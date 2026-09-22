@@ -123,8 +123,6 @@ async function capture(page, player, label) {
 async function moveTo(page, playerId, x, z, timeout = moveTimeout) {
   const deadline = Date.now() + timeout;
   let lastState;
-  let settledTicks = 0;
-  let lastSettledTick = -1;
   while (Date.now() < deadline) {
     const state = await snapshot(page);
     lastState = state;
@@ -141,17 +139,8 @@ async function moveTo(page, playerId, x, z, timeout = moveTimeout) {
     }
     if (pose && Math.abs(pose.xMm - x) <= 180 && Math.abs(pose.zMm - z) <= 180) {
       await page.evaluate(() => window.th.move(0, 0));
-      if (state.serverTick !== lastSettledTick) {
-        settledTicks += 1;
-        lastSettledTick = state.serverTick;
-      }
-      // Keep sending stop long enough for delayed input publications to drain.
-      if (settledTicks >= 10) return state;
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      continue;
+      return state;
     }
-    settledTicks = 0;
-    lastSettledTick = -1;
     if (!pose) {
       await new Promise((resolve) => setTimeout(resolve, 50));
       continue;
@@ -168,6 +157,34 @@ async function moveTo(page, playerId, x, z, timeout = moveTimeout) {
     phase: lastState?.room?.phase,
     failureReason: lastState?.room?.failureReason,
     failureHazardId: lastState?.room?.failureHazardId,
+  })}`);
+}
+
+async function occupyPlate(page, playerId, plateId, x, z, timeout = moveTimeout) {
+  const deadline = Date.now() + timeout;
+  let consecutivePresence = 0;
+  let lastState;
+  while (Date.now() < deadline) {
+    const state = await snapshot(page);
+    lastState = state;
+    const pose = state?.players.find((candidate) => candidate.playerId === playerId);
+    const present = state?.plates.find((plate) => plate.id === plateId)?.livePresence > 0;
+    if (present) {
+      await page.evaluate(() => window.th.move(0, 0));
+      consecutivePresence += 1;
+      if (consecutivePresence >= 10) return state;
+    } else if (pose) {
+      consecutivePresence = 0;
+      const dx = Math.abs(pose.xMm - x) <= 120 ? 0 : Math.sign(x - pose.xMm);
+      const dz = Math.abs(pose.zMm - z) <= 120 ? 0 : Math.sign(z - pose.zMm);
+      await page.evaluate(([mx, mz]) => window.th.move(mx, mz), [dx, dz]);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`player ${playerId} did not settle on plate ${plateId}; ${JSON.stringify({
+    tick: lastState?.serverTick,
+    pose: lastState?.players.find((candidate) => candidate.playerId === playerId),
+    plate: lastState?.plates.find((candidate) => candidate.id === plateId),
   })}`);
 }
 
@@ -194,21 +211,15 @@ async function waitForPhase(page, phase, description, timeout = stateTimeout) {
 }
 
 async function recordEchoPlate(pageA, plateId, doorId, x, z, whileLive) {
-  const outside = await moveTo(pageA, 1, x - 1000, z);
+  const outside = await moveTo(pageA, 1, x - 2000, z);
   assert.equal(outside.plates.find((plate) => plate.id === plateId)?.active, false);
-  // Drive to the plate using authoritative position feedback. A single held
-  // input can skip across the trigger between sparse browser observations on
-  // a heavily contended software-GPU runner.
-  await moveTo(pageA, 1, x, z);
-  const entered = await waitFor(pageA,
-    (state) => state.plates.find((plate) => plate.id === plateId)?.livePresence > 0,
-    `live presence on plate ${plateId}`);
+  const entered = await occupyPlate(pageA, 1, plateId, x, z);
   evidence.events.push({ event: 'live-plate', plateId, tick: entered.serverTick });
   // Record twenty seconds so a cold CI runner still observes a useful replay window.
   await waitFor(pageA, (state) => state.serverTick >= entered.serverTick + 1_200,
     `recording window on plate ${plateId}`, 25_000);
   if (whileLive) await whileLive();
-  await moveTo(pageA, 1, x - 1200, z);
+  await moveTo(pageA, 1, x - 2000, z);
   const left = await waitFor(pageA,
     (state) => state.plates.find((plate) => plate.id === plateId)?.livePresence === 0,
     `live player release of plate ${plateId}`);
