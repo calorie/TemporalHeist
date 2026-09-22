@@ -87,3 +87,19 @@ concurrent stack.
 its ephemeral loopback Chrome DevTools Protocol (CDP) endpoint. Open
 `chrome://inspect`, add the printed `127.0.0.1:<port>` target, and select **inspect**.
 The inspected Chromium, profile, services, and port belong only to that run ID.
+
+To prove release isolation with two distinct checkouts, run the production acceptance
+flow concurrently through the host-side Docker orchestrator:
+
+~~~sh
+sh containers/verify-two-stack-isolation.sh \
+  /path/to/worktree-a release-a \
+  /path/to/worktree-b release-b \
+  /tmp/temporal-heist-release-isolation
+~~~
+
+The harness waits for both containerized browser services to be live, rejects
+published host ports, records disjoint Compose resources, and waits for both
+acceptance runs. It then removes stack A with its volumes and verifies stack B's
+resource IDs and in-network web health before cleaning up. `evidence.json` and both
+acceptance logs remain in the selected evidence directory.

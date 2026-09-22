@@ -231,3 +231,24 @@ Parallel isolation is verified when:
 6. tearing one stack down with volumes does not interrupt the other.
 
 Document the exact verification command and evidence in `.agent/tasks/vertical-slice/STATE.md`.
+
+The production isolation harness accepts two existing, distinct Git worktrees and
+two unique run IDs:
+
+~~~sh
+sh containers/verify-two-stack-isolation.sh \
+  /path/to/worktree-a isolation-a \
+  /path/to/worktree-b isolation-b \
+  /tmp/temporal-heist-isolation-evidence
+~~~
+
+It starts `acceptance` in both worktrees concurrently and observes both Compose
+`browser` services live at the same time. Before waiting for the game scene, it
+asserts that labeled containers, networks, and writable volumes are disjoint and
+that neither project publishes a host port. After both runs pass, it removes stack
+A with volumes, proves stack B retained the same container/network/volume IDs, and
+runs an HTTP health request from stack B's web container. It cleans both stacks on
+every exit while preserving `evidence.json`, `acceptance-a.log`, and
+`acceptance-b.log` in the caller-selected directory. The default browser-observation
+timeout is 20 minutes so cold image and dependency builds can overlap safely;
+`TH_ISOLATION_OBSERVE_TIMEOUT_SECONDS` may override it.

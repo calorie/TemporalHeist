@@ -10,6 +10,7 @@ sh container <run-id> bootstrap
 sh container <run-id> verify
 sh container <run-id> acceptance
 sh container <run-id> visual
+sh containers/verify-two-stack-isolation.sh <worktree-a> <run-a> <worktree-b> <run-b> [evidence-dir]
 sh container <run-id> up -d relay authority web
 sh container <run-id> --profile test run --rm browser
 sh container <run-id> down --volumes --remove-orphans
@@ -21,6 +22,13 @@ the run ID. Only commands recorded as passed in the task `STATE.md` are verifica
 evidence. The `visual` command starts player A and B as separate Chromium services
 with separate persistent profiles and ephemeral CDP ports. Host commands may
 orchestrate Docker and Git only.
+
+`verify-two-stack-isolation.sh` is the release-level two-worktree check. It runs the
+existing containerized acceptance entry point twice in parallel, observes both
+browser services, verifies disjoint Compose resources and no host ports, tears one
+project down with volumes, and checks that the other project and its in-network
+health remain intact. It writes JSON evidence and acceptance logs outside both
+worktrees.
 
 ## Dependency / toolchain
 
