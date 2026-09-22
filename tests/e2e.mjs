@@ -322,7 +322,7 @@ try {
   // Echo opens the current door, and B crosses while A remains elsewhere.
   await moveTo(pageB, 2, 21500, 4000);
   const finalOpen = await recordEchoPlate(pageA, 23, 13, 19500, 2500);
-  await moveTo(pageB, 2, 23000, 4000);
+  await moveTo(pageB, 2, 23500, 4000);
   const finalA = await waitFor(pageA,
     (state) => state.players.find((player) => player.playerId === 2)?.xMm > 22400,
     'client A observing player B beyond the co-op door');
@@ -343,9 +343,10 @@ try {
 
   // Both live players must enter extraction after Echo Presence has opened the
   // final door. The authority, rather than either renderer, decides the result.
-  // Winning freezes authoritative movement as soon as A crosses x=22800, so
-  // target the extraction threshold instead of a point beyond the frozen pose.
-  await moveTo(pageA, 1, 22850, 4000);
+  // Aim well inside extraction so the movement tolerance cannot accept a pose
+  // before x=22800. The terminal-state branch handles authority's immediate
+  // movement freeze once both players qualify.
+  await moveTo(pageA, 1, 23500, 4000);
   const wonA = await waitForPhase(pageA, RoomPhase.WON, 'won result on client A');
   const wonB = await waitForPhase(pageB, RoomPhase.WON, 'won result on client B');
   assert.equal(wonA.room.attempt, 1);
