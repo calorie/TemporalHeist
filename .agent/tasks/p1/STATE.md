@@ -147,8 +147,7 @@ Passed in containers on 2026-09-23:
 
 ## Current work
 
-1. Verify two concurrent worktree stacks on the split runtime images.
-2. Publish the container-efficiency PR and monitor container-only CI.
+1. Publish the container-efficiency PR and monitor container-only CI.
 
 ## Blockers
 
@@ -197,3 +196,10 @@ Finish verification, publish the container-efficiency PR, and monitor its CI.
   stack measured below one host core rather than about 7.4 cores.
 - The official relay avoids recurring Rust compilation and maximizes cold-start
   efficiency, but its image is larger than the former custom 179 MB runtime image.
+- `sh containers/verify-two-stack-isolation.sh ... efficiency-a ... efficiency-b
+  /tmp/temporal-heist-efficiency-isolation` passed at `3d70647`. Both full stacks
+  and browser runners were live concurrently with disjoint container and network
+  IDs, separate artifact volumes, and no published ports. Both acceptance runs
+  exited 0. Removing stack A with volumes preserved every stack B resource and
+  stack B's in-network web health check passed. Machine evidence and separate logs
+  are in `/tmp/temporal-heist-efficiency-isolation/`.
