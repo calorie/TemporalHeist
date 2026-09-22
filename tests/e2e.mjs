@@ -222,6 +222,28 @@ async function moveRightPast(page, playerId, x, z, timeout = moveTimeout) {
   })}`);
 }
 
+async function enterSurveillance(page, playerId, x, z, timeout = moveTimeout) {
+  const deadline = Date.now() + timeout;
+  let lastState;
+  while (Date.now() < deadline) {
+    const state = await snapshot(page);
+    lastState = state;
+    if (state?.room?.phase === RoomPhase.FAILED) return state;
+    const pose = state?.players.find((candidate) => candidate.playerId === playerId);
+    if (pose) {
+      const dx = Math.abs(pose.xMm - x) <= 120 ? 0 : Math.sign(x - pose.xMm);
+      const dz = Math.abs(pose.zMm - z) <= 120 ? 0 : Math.sign(z - pose.zMm);
+      await page.evaluate(([mx, mz]) => window.th.move(mx, mz), [dx, dz]);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`player ${playerId} did not trigger surveillance; ${JSON.stringify({
+    tick: lastState?.serverTick,
+    pose: lastState?.players.find((candidate) => candidate.playerId === playerId),
+    room: lastState?.room,
+  })}`);
+}
+
 async function waitFor(page, predicate, description, timeout = stateTimeout) {
   const deadline = Date.now() + timeout;
   let lastState;
@@ -473,13 +495,10 @@ try {
   });
 
   // Approach from the cone's east side. Both waypoints remain outside the
-  // triangle even when transport-delayed input overshoots, then one westward
-  // command crosses the visible edge deterministically.
+  // triangle; authoritative feedback then steers through the visible edge.
   await moveTo(pageA, 1, 6750, 2500);
   await moveTo(pageA, 1, 6750, 6000);
-  await pageA.evaluate(() => window.th.move(-1, 0));
-  const failedA = await waitForPhase(pageA, RoomPhase.FAILED,
-    'surveillance failure on client A');
+  const failedA = await enterSurveillance(pageA, 1, 4500, 6000);
   const failedB = await waitForPhase(pageB, RoomPhase.FAILED,
     'surveillance failure on client B');
   for (const failed of [failedA, failedB]) {
