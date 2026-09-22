@@ -44,7 +44,6 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, tomllib
-          from pathlib import Path
 
           with open(".claude/settings.json", encoding="utf-8") as f:
               claude = json.load(f)
@@ -65,6 +64,11 @@ jobs:
           assert codex["agents"]["enabled"] is True
           assert codex["agents"]["default_subagent_model"] == "gpt-5.6-terra"
           assert codex["agents"]["default_subagent_reasoning_effort"] == "medium"
+          assert set(codex["agents"]) == {
+              "enabled",
+              "default_subagent_model",
+              "default_subagent_reasoning_effort",
+          }
           assert codex["plugins"]["agentic-engineering@agentic-engineering"]["enabled"] is True
           assert codex["default_permissions"] == "agentic-development"
 
@@ -77,28 +81,6 @@ jobs:
           assert profile["extends"] == ":workspace"
           assert profile["filesystem"][":workspace_roots"][".git"] == "write"
           assert profile["network"]["enabled"] is True
-
-          expected_roles = {
-              "code_explorer": ("gpt-5.6-terra", "low"),
-              "implementer": ("gpt-5.6-terra", "medium"),
-              "reviewer": ("gpt-5.6-terra", "medium"),
-              "moq_specialist": ("gpt-5.6-sol", "low"),
-              "webgpu_specialist": ("gpt-5.6-terra", "medium"),
-              "protocol_specialist": ("gpt-5.6-terra", "medium"),
-              "container_specialist": ("gpt-5.6-terra", "medium"),
-              "integration_debugger": ("gpt-5.6-sol", "medium"),
-          }
-
-          for role, (model, effort) in expected_roles.items():
-              declaration = codex["agents"][role]
-              path = Path(".codex") / declaration["config_file"]
-              with path.open("rb") as f:
-                  role_config = tomllib.load(f)
-              assert role_config["model"] == model, (role, role_config["model"])
-              assert role_config["model_reasoning_effort"] == effort, (role, role_config["model_reasoning_effort"])
-              assert role_config["name"]
-              assert role_config["description"]
-              assert role_config["developer_instructions"].strip()
           PY
       - name: Enforce English agent infrastructure
         run: |
@@ -115,7 +97,6 @@ jobs:
               Path(".codex/config.toml"),
               Path(".codex/rules/approval-boundaries.rules"),
               Path(".github/pull_request_template.md"),
-              *sorted(Path(".codex/agents").glob("*.toml")),
           ]
 
           failures = []
@@ -141,8 +122,8 @@ jobs:
           test -f .claude/settings.json
           test -f .codex/config.toml
           test -f .codex/rules/approval-boundaries.rules
-          test -d .codex/agents
           test -d .agent/tasks
           test ! -e .agentic/agentic.json
+          test ! -d .codex/agents
           test ! -d scripts
           test ! -d .agent/plans
