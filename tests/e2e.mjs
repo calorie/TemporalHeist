@@ -253,10 +253,11 @@ async function recordEchoPlate(pageA, plateId, doorId, x, z, whileLive) {
   await waitFor(pageA, (state) => state.serverTick >= entered.serverTick + 1_200,
     `recording window on plate ${plateId}`, 25_000);
   if (whileLive) await whileLive();
-  await moveTo(pageA, 1, x - 2000, z);
+  await pageA.evaluate(() => window.th.move(-1, 0));
   const left = await waitFor(pageA,
     (state) => state.plates.find((plate) => plate.id === plateId)?.livePresence === 0,
     `live player release of plate ${plateId}`);
+  await pageA.evaluate(() => window.th.move(0, 0));
   assert(left.serverTick > entered.serverTick);
   const echoed = await waitFor(pageA, (state) => {
     const plate = state.plates.find((candidate) => candidate.id === plateId);
