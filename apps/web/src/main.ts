@@ -1,9 +1,10 @@
 import './style.css';
 import { AudioCues } from './audio.ts';
 import { type Input, InputKind, type Snapshot } from './generated/temporal_heist.ts';
+import { isInteractiveTarget, keyboardDecision } from './input-contract.ts';
+import { interactionDecision } from './interaction-decision.ts';
 import { map } from './map.ts';
 import { MoqTransport } from './net/moq/transport.ts';
-import { nearestActionTarget } from './objective-view.ts';
 import { WebGpuRenderer } from './render/webgpu.ts';
 import { roomHud } from './room-hud.ts';
 import { Timeline } from './timeline.ts';
@@ -47,6 +48,9 @@ const echoStatus = element<HTMLElement>('#echo-status');
 const guardStatus = element<HTMLElement>('#guard-status');
 const readiness = element<HTMLElement>('#readiness');
 const result = element<HTMLElement>('#result');
+const identity = element<HTMLElement>('#identity');
+const missionSteps = element<HTMLOListElement>('#mission-steps');
+const interaction = element<HTMLElement>('#interaction');
 const readyButton = element<HTMLButtonElement>('#ready');
 const restartButton = element<HTMLButtonElement>('#restart');
 const muteButton = element<HTMLButtonElement>('#mute');
@@ -168,7 +172,7 @@ function sendMotion() {
 }
 function action(targetId?: number) {
   if (!joined) return;
-  const target = targetId ?? nearestActionTarget(map, timeline.presentation(), playerId) ?? 0;
+  const target = targetId ?? interactionDecision(timeline.latest, playerId, map)?.targetId ?? 0;
   transport?.sendAction(input(InputKind.ACTION, ++actionSequence, 0, 0, target));
 }
 function roomCommand(kind: InputKind) {
@@ -184,14 +188,23 @@ function restart() {
 const keys = new Set<string>();
 addEventListener('keydown', (event) => {
   void audio.unlock().catch(() => {});
-  keys.add(event.key.toLowerCase());
-  if (event.key.toLowerCase() === 'e' && !event.repeat) action();
-  if (event.key === 'Enter' && !event.repeat) ready();
-  if (event.key.toLowerCase() === 'r' && !event.repeat) restart();
+  const decision = keyboardDecision(
+    event.key,
+    timeline.latest?.room?.phase,
+    isInteractiveTarget(event.target),
+    event.repeat,
+  );
+  if (decision.consume) event.preventDefault();
+  if (decision.command === 'movement') keys.add(event.key.toLowerCase());
+  if (decision.command === 'action') action();
+  if (decision.command === 'ready') ready();
+  if (decision.command === 'restart') restart();
   updateKeys();
 });
 addEventListener('keyup', (event) => {
   keys.delete(event.key.toLowerCase());
+  const decision = keyboardDecision(event.key, timeline.latest?.room?.phase, false, false);
+  if (decision.command === 'movement') event.preventDefault();
   updateKeys();
 });
 addEventListener('pointerdown', () => void audio.unlock().catch(() => {}), { once: true });
@@ -291,6 +304,17 @@ const frame = () => {
   result.dataset.state = hud.resultState;
   readyButton.hidden = !hud.canReady;
   restartButton.hidden = !hud.canRestart;
+  identity.textContent = `${hud.identity.self} · ${hud.identity.partner}${hud.identity.echoes.length ? ` · ${hud.identity.echoes.join(' · ')}` : ''}`;
+  missionSteps.replaceChildren(
+    ...hud.steps.map((step) => {
+      const item = document.createElement('li');
+      item.dataset.state = step.state;
+      item.textContent = step.label;
+      return item;
+    }),
+  );
+  interaction.textContent = hud.interaction;
+  interaction.hidden = !hud.interaction;
   details.textContent = snap
     ? `tick ${snap.serverTick} · epoch ${snap.roomEpoch.slice(0, 8)} · ${timeline.length} samples · ${presentation.echoes.length} echoes`
     : `room ${room} · waiting for authority`;

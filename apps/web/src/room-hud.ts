@@ -1,4 +1,6 @@
 import type { Snapshot } from './generated/temporal_heist.ts';
+import { map } from './map.ts';
+import { type MissionStep, type PlayerIdentity, playerExperience } from './player-experience.ts';
 
 const LOBBY = 1;
 const ACTIVE = 2;
@@ -35,6 +37,9 @@ export interface RoomHud {
   resultState: 'none' | 'success' | 'failure';
   canReady: boolean;
   canRestart: boolean;
+  identity: PlayerIdentity;
+  steps: MissionStep[];
+  interaction: string;
 }
 
 function clock(ticks: number) {
@@ -43,6 +48,7 @@ function clock(ticks: number) {
 }
 
 export function roomHud(snapshot: Snapshot | undefined, playerId: number): RoomHud {
+  const experience = playerExperience(map, snapshot, playerId);
   const room = snapshot?.room;
   if (!snapshot || !room) {
     return {
@@ -57,6 +63,9 @@ export function roomHud(snapshot: Snapshot | undefined, playerId: number): RoomH
       resultState: 'none',
       canReady: false,
       canRestart: false,
+      identity: experience.identity,
+      steps: experience.steps,
+      interaction: '',
     };
   }
 
@@ -76,13 +85,13 @@ export function roomHud(snapshot: Snapshot | undefined, playerId: number): RoomH
   if (room.phase === WON) objective = 'Heist complete';
   if (room.phase === FAILED) objective = 'Attempt failed';
 
-  let failure = 'ATTEMPT FAILED — press R or Restart to retry';
+  let failure = 'ATTEMPT FAILED — review the route, then press R or Restart to retry';
   if (room.failureReason === FAILURE_TIMEOUT)
-    failure = 'TIME EXPIRED — press R or Restart to retry';
+    failure = 'TIME EXPIRED — move through cleared doors sooner, then press R or Restart';
   if (room.failureReason === FAILURE_SURVEILLANCE)
-    failure = `SURVEILLANCE DETECTED — CAMERA ${room.failureHazardId} — press R or Restart to retry`;
+    failure = `SURVEILLANCE DETECTED — CAMERA ${room.failureHazardId} — avoid its cone, then press R or Restart`;
   if (room.failureReason === FAILURE_GUARD)
-    failure = `GUARD ${room.failureGuardId} DETECTED YOU — press R or Restart to retry`;
+    failure = `GUARD ${room.failureGuardId} DETECTED YOU — distract it with an Echo, then press R or Restart`;
 
   return {
     phase: `${phase} · ATTEMPT ${room.attempt}`,
@@ -112,5 +121,10 @@ export function roomHud(snapshot: Snapshot | undefined, playerId: number): RoomH
     resultState: room.phase === WON ? 'success' : room.phase === FAILED ? 'failure' : 'none',
     canReady: room.phase === LOBBY && Boolean(ownSession?.connected && !ownSession.ready),
     canRestart: terminal,
+    identity: experience.identity,
+    steps: experience.steps,
+    interaction: experience.interaction
+      ? `[${experience.interaction.key}] ${experience.interaction.label}`
+      : '',
   };
 }
