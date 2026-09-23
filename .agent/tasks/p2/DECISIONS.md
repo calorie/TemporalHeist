@@ -171,7 +171,8 @@ Echo delay: a safely recorded pose would replay at the same patrol phase.
 Starting at 19100 gives a 140-tick period and 40-tick replay offset without
 changing range 2600, half-width 1400, speed 20, or search duration 180.
 The authored decoy is now near `(17400,3800)`, recorded as the guard moves east
-out of range. Both players stage near X 17800 and wait until the Echo draws the
+out of range. A retreats north, returns around the safe west edge at X 15800,
+then joins B near `(17800,6000)`, south of the recorded lure. Both wait until the Echo draws the
 guard to its search point before entering its former watch area. The HUD says
 "CROSS WHEN CLEAR": entering Investigate alone does not instantly clear sight.
 The exact 600-tick Echo source rule,
@@ -183,3 +184,10 @@ constrains entry to that Z interval and maximum motion 60 cannot skip that slab.
 The convex radial-clipped cone contains the whole slab if it contains its four
 corners. Thus no no-Echo route can cross the barrier during Patrol, independently
 of the concrete reviewed path. Existing Echo/search/Return/reset tests also pass.
+
+The first clean browser run at `0054844` rejected both bypasses and confirmed
+the exact delayed lure, but caught A waiting north at `(17440,1895)`: the guard
+at `(19215,3772)` was looking toward the retained target `(17440,3185)`.
+The investigation's rotated cone correctly covered that waiting point. Both
+players now wait south of the northwest diversion and cross during its search;
+the simulation, cone, and map required no additional change.

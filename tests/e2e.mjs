@@ -407,7 +407,11 @@ async function guardDiversion(pageA, pageB) {
   evidence.events.push({ event: 'guard-decoy-recorded', sourceStartTick: sourceStart.serverTick,
     tick: lure.serverTick, pose: lure.players.find((pose) => pose.playerId === 1), guard: guardOf(lure) });
   await dash(pageA, 1, 17400, 2000);
-  await dash(pageA, 1, 17800, 2000);
+  // The replay turns the investigating cone northwest. Reposition around the
+  // out-of-range west edge so both live players wait behind it to the south.
+  await dash(pageA, 1, 15800, 2000);
+  await dash(pageA, 1, 15800, 6000);
+  await dash(pageA, 1, 17800, 6000);
   const investigating = await waitFor(pageA, (state) => {
     assert.equal(state.room.phase, RoomPhase.ACTIVE);
     const guard = guardOf(state);
