@@ -2,7 +2,8 @@
 
 ## Status
 
-Stack 2 renderer/readability is implemented and verified on `p4/renderer-readability`.
+Stack 3 responsive/accessibility browser integration is implemented and verified on
+`p4/browser-ux`.
 
 ## Review stack
 
@@ -57,8 +58,24 @@ Stack 2 renderer/readability is implemented and verified on `p4/renderer-readabi
   phase as well as range and unsecured objective state. Pure tests cover ACTIVE,
   LOBBY, FAILED, and WON; the focused presentation test, TypeScript, and Biome pass
   in `p4-renderer-agent` containers.
+- `sh container p4-browser-agent verify` passed on 2026-09-23. It includes all Rust,
+  protocol, TypeScript, Biome, browser contract, production build, and raw WebGPU
+  checks plus a short containerized Chromium UX test at 1280x720 and 800x600.
+- The Chromium UX test verifies viewport-safe ACTIVE HUD geometry, lobby/terminal
+  scrolling, ACTIVE briefing collapse, terminal briefing restoration, reduced-motion
+  styling, canvas/HUD/identity/objective/readiness semantics, and native Enter on the
+  focused mute button without leaking into the global ready shortcut.
+- WebGPU evidence remained clean in Chromium 153: Mesa Vulkan llvmpipe hosted ANGLE
+  and the WebGPU fallback adapter reported SwiftShader with zero shader or validation
+  errors.
+- Review follow-up removed the redundant JavaScript `hidden` mutation so
+  `data-phase` CSS is the single briefing lifecycle mechanism. The Chromium check now
+  asserts that contract directly, fills every critical ACTIVE HUD field with
+  representative worst-case text, and proves all fields are visible, viewport-bound,
+  and vertically non-overlapping at both target sizes. It also observes the real
+  focused Enter event (`defaultPrevented: false`) and exactly one native mute click.
 
 ## Next action
 
-Commit and publish Stack 2, then build responsive and accessible browser integration
-in Stack 3.
+Commit and publish Stack 3, then extend release acceptance with two-client semantic,
+keyboard, responsive, and isolation evidence in Stack 4.

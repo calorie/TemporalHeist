@@ -331,6 +331,7 @@ const frame = () => {
       ...hud.steps.map((step) => {
         const item = document.createElement('li');
         item.dataset.state = step.state;
+        if (step.state === 'current') item.setAttribute('aria-current', 'step');
         item.textContent = step.label;
         return item;
       }),

@@ -22,6 +22,8 @@ body {
   top: 18px;
   left: 18px;
   width: min(390px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
   padding: 14px 18px;
   border: 1px solid #397087;
   background: #071019dc;
@@ -159,6 +161,9 @@ kbd {
   color: #a9c5d1;
   font-size: 11px;
 }
+#briefing[hidden] {
+  display: none;
+}
 #briefing ol {
   margin: 0;
   padding-left: 20px;
@@ -170,6 +175,11 @@ kbd {
   margin-top: 9px;
   color: #90a7b1;
   font-size: 10px;
+}
+#hud[data-phase="active"] #briefing,
+#hud[data-phase="active"] #readiness,
+#hud[data-phase="active"] #details {
+  display: none;
 }
 #unsupported {
   position: fixed;
@@ -184,4 +194,33 @@ kbd {
 }
 #unsupported[hidden] {
   display: none;
+}
+@media (max-height: 640px), (max-width: 840px) {
+  #hud {
+    top: 10px;
+    left: 10px;
+    width: min(360px, calc(100vw - 20px));
+    max-height: calc(100vh - 20px);
+    padding: 10px 14px;
+  }
+  h1 {
+    margin-bottom: 4px;
+    font-size: 15px;
+  }
+  .mission {
+    margin: 6px 0 4px;
+  }
+  #mission-steps,
+  #controls {
+    margin-top: 5px;
+    margin-bottom: 5px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  #hud {
+    transition-duration: 0s;
+  }
 }

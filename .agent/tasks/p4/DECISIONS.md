@@ -46,3 +46,17 @@ positions at 1280x720 while keeping the full map visible at both target viewport
 Draw presentation-only cues for the local live player and the canonical current goal:
 vault before theft, plate 23 before the final Echo door proof, then extraction. Pass
 the local player ID into the renderer; no authority or map contract changes.
+
+## 2026-09-23 — Accessible responsive browser shell
+
+Keep the full briefing available in the lobby and terminal phases inside a bounded,
+scrollable HUD, and collapse it only during ACTIVE play. At the two supported desktop
+viewports, compact spacing keeps identity, current objective, mission progress, Echo
+state, and controls in the viewport. Describe the raw WebGPU canvas as the mission map
+and connect it to the semantic identity and objective text. Announce objective and
+readiness transitions politely while leaving the per-second timer and Echo countdown
+outside live regions. Respect `prefers-reduced-motion` by disabling the HUD transition.
+
+Use a short real-Chromium test inside the existing `verify` entry point for DOM,
+focus, reduced-motion, and responsive geometry. This avoids adding dependencies or a
+second full mission run; Stack 4 retains ownership of live two-client acceptance.

@@ -6,24 +6,26 @@
     <title>Temporal Heist</title>
   </head>
   <body>
-    <canvas id="game"></canvas>
-    <aside id="hud" data-phase="connecting" aria-labelledby="title">
+    <canvas id="game" role="img" aria-label="Temporal Heist mission map" aria-describedby="identity objective">
+      Top-down mission map showing both players, Echoes, hazards, objectives, and extraction.
+    </canvas>
+    <aside id="hud" data-phase="connecting" aria-label="Mission status and controls">
       <header>
         <h1 id="title">TEMPORAL HEIST</h1>
         <button id="mute" type="button" aria-pressed="false" aria-label="Mute sound">SOUND ON</button>
       </header>
       <p id="status">Starting…</p>
-      <p id="identity">YOU · P1 · PARTNER · P2</p>
+      <p id="identity" aria-label="Player identity">YOU · P1 · PARTNER · P2</p>
       <div class="mission">
         <strong id="phase" aria-live="polite">CONNECTING</strong>
         <strong id="timer">--:--</strong>
       </div>
-      <p id="objective">Waiting for authority</p>
+      <p id="objective" aria-live="polite" aria-atomic="true">Waiting for authority</p>
       <ol id="mission-steps" aria-label="Mission progress"></ol>
       <p id="interaction" role="status" hidden></p>
-      <p id="echo-status" role="status">ECHO · WAITING FOR ATTEMPT</p>
+      <p id="echo-status">ECHO · WAITING FOR ATTEMPT</p>
       <p id="guard-status" role="status" aria-live="polite" hidden></p>
-      <p id="readiness">Players ready: 0/2</p>
+      <p id="readiness" aria-live="polite" aria-atomic="true">Players ready: 0/2</p>
       <p id="result" data-state="none" role="status" aria-live="assertive"></p>
       <div id="controls">
         <button id="ready" type="button" hidden>READY <kbd>ENTER</kbd></button>
