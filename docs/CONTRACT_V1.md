@@ -76,12 +76,12 @@ layer the simulation publishes `false`; the authority mission layer will publish
 the attempt's secured state.
 
 The authority starts an attempt only while both player sessions are connected and
-ready. It records the start and five-minute deadline as server ticks. A win
-requires both live players inside extraction after Echo Presence has opened door
-13 during the same attempt. Deadline expiry produces failure. A restart accepted
-in a terminal phase returns the room to lobby, respawns connected players, clears
-readiness, history, scheduled actions, and mechanism state, and increments the
-attempt number.
+ready. It records the start and five-minute deadline as server ticks. P3 victory
+requires the objective secured, Echo Presence to have opened door 13 during the
+same attempt, and both live players inside extraction. Deadline expiry produces
+failure. A restart accepted in a terminal phase returns the room to lobby,
+respawns connected players, clears readiness, history, scheduled actions, and
+mechanism state, and increments the attempt number.
 
 P1.2 adds static surveillance cameras to the map source. Each camera has a stable
 ID, origin, normalized integer direction (length 1000), range, and half-width at

@@ -286,8 +286,8 @@ authority ticks later, A's first-generation Echo follows that route and draws th
 guard west, away from the choke. Both players wait until it has been drawn clear
 of the opening, then cross while it investigates.
 Plate 23 at `(19500, 2500)`, door 13 and extraction retain their existing geometry.
-The players still need Echo Presence on door 13 and both live players in extraction
-to win. Terminal and
+P3 victory requires a live human to secure objective 61, Echo Presence on
+door 13, and both live players in extraction. Terminal and
 lobby phases freeze guard movement and timers; restart restores its initial patrol
 state. The HUD, guard body, route, view cone, and target marker explain the window
 to cross, while the Rust authority alone decides detection and results.
