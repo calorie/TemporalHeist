@@ -28,16 +28,44 @@ fn main() {
             ready_players: 2,
             extraction_players: 1,
             echo_opened_final_door: true,
-            failure_reason: FailureReason::Surveillance as i32,
-            failure_hazard_id: 41,
+            failure_reason: FailureReason::Guard as i32,
+            failure_hazard_id: 0,
+            failure_guard_id: 51,
         }),
         hazards: vec![Hazard {
             id: 41,
             active: true,
             detected_player_id: 2,
         }],
+        guards: vec![
+            Guard {
+                id: 51,
+                x_mm: 18_000,
+                z_mm: 4_000,
+                facing_x: 1_000,
+                facing_z: 0,
+                state: GuardState::Investigate as i32,
+                waypoint_id: 512,
+                investigation_target: Some(GuardTarget {
+                    x_mm: 18_750,
+                    z_mm: 4_000,
+                }),
+                state_entered_tick: 420,
+                search_expires_tick: 600,
+            },
+            Guard {
+                id: 52,
+                state: GuardState::Patrol as i32,
+                ..Default::default()
+            },
+            Guard {
+                id: 53,
+                state: GuardState::Return as i32,
+                ..Default::default()
+            },
+        ],
         ..Default::default()
     };
     std::fs::write("/artifacts/rust-snapshot.bin", snapshot.encode_to_vec()).unwrap();
-    println!("Rust decoded TypeScript Ready input and encoded P1 room state");
+    println!("Rust decoded TypeScript Ready input and encoded P2 guard state");
 }

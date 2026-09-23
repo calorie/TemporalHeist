@@ -38,6 +38,7 @@ assert.deepEqual(roomHud(undefined, 1), {
   readiness: 'Players ready: 0/2',
   result: '',
   resultState: 'none',
+  guardStatus: '',
   canReady: false,
   canRestart: false,
 });
@@ -56,6 +57,24 @@ assert.equal(active.objective, 'Open the final door with Echo Presence');
 assert.equal(active.echoStatus, 'ECHO IN 00:10');
 assert.equal(active.phaseState, 'active');
 assert.equal(active.canReady, false);
+
+const guarded = roomHud({ ...snapshot(RoomPhase.ACTIVE), guards: [{ id: 51, state: 1 }] }, 1);
+assert.equal(guarded.objective, 'Use your Echo to distract Guard 51');
+assert.equal(guarded.guardStatus, 'GUARD 51 PATROLLING · HUMANS ARE CAUGHT, ECHOES DISTRACT');
+const investigating = roomHud(
+  { ...snapshot(RoomPhase.ACTIVE), guards: [{ id: 51, state: 2 }] },
+  1,
+);
+assert.equal(investigating.guardStatus, 'GUARD 51 INVESTIGATING — CROSS WHEN CLEAR');
+assert.equal(
+  roomHud({ ...snapshot(RoomPhase.ACTIVE), guards: [{ id: 51, state: 3 }] }, 1).guardStatus,
+  'GUARD 51 RETURNING',
+);
+assert.equal(
+  roomHud({ ...snapshot(RoomPhase.ACTIVE), guards: [{ id: 51, state: -1 }] }, 1).guardStatus,
+  '',
+);
+assert.equal(roomHud(snapshot(RoomPhase.ACTIVE), 1).guardStatus, '');
 
 const echoBoundary = roomHud(
   { ...snapshot(RoomPhase.ACTIVE, { startedTick: 120 }), serverTick: 719 },
@@ -91,5 +110,12 @@ const surveillance = roomHud(
 assert.match(surveillance.result, /SURVEILLANCE/);
 assert.match(surveillance.result, /CAMERA 41/);
 assert.doesNotMatch(surveillance.result, /TIME EXPIRED/);
+
+const guardFailure = roomHud(
+  snapshot(RoomPhase.FAILED, { failureReason: 3, failureGuardId: 51 }),
+  1,
+);
+assert.match(guardFailure.result, /GUARD 51/);
+assert.match(guardFailure.result, /DETECTED/);
 
 console.log('room HUD tests passed');

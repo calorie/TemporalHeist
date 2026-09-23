@@ -13,6 +13,7 @@ import {
   WORLD_DEPTH_SCALE,
 } from '../surveillance-view.ts';
 import type { Presentation } from '../timeline.ts';
+import { guardPrimitives } from './guard-geometry.ts';
 import shader from './shader.wgsl?raw';
 
 type Instance = {
@@ -24,6 +25,7 @@ type Instance = {
   sz: number;
   color: [number, number, number, number];
   matrix?: number[];
+  radialRange?: number;
 };
 type PixelProbe = {
   x: number;
@@ -34,8 +36,8 @@ type PixelProbe = {
 const cube = new Float32Array([
   -1, -1, -1, 1, -1, -1, 1, 1, -1, -1, -1, -1, 1, 1, -1, -1, 1, -1, -1, -1, 1, 1, -1, 1, 1, 1, 1,
   -1, -1, 1, 1, 1, 1, -1, 1, 1, -1, -1, -1, -1, -1, 1, -1, 1, 1, -1, -1, -1, -1, 1, -1, -1, 1, 1, 1,
-  -1, 1, -1, -1, -1, 1, 1, -1, 1, 1, 1, 1, -1, -1, 1, 1, 1, 1, 1, -1, 1, -1, -1, -1, -1, -1, 1, -1,
-  -1, 1, 1, -1, -1, -1, -1, 1, 1, -1, 1, -1, 1, -1, 1, -1, 1, 1, 1, 1, -1, 1, -1, 1,
+  -1, -1, 1, 1, -1, 1, 1, 1, 1, -1, -1, 1, 1, 1, 1, -1, 1, -1, -1, -1, 1, -1, -1, 1, -1, 1, -1, -1,
+  -1, 1, -1, 1, -1, -1, 1, -1, 1, -1, -1, 1, 1, 1, 1, 1, -1, 1, -1, 1, 1, 1, 1, 1, -1,
 ]);
 const wedge = new Float32Array([
   0, 0, 0, -1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, -1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1,
@@ -89,7 +91,7 @@ export class WebGpuRenderer {
         buffers: [
           { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] },
           {
-            arrayStride: 80,
+            arrayStride: 84,
             stepMode: 'instance',
             attributes: [
               { shaderLocation: 1, offset: 0, format: 'float32x4' },
@@ -97,6 +99,7 @@ export class WebGpuRenderer {
               { shaderLocation: 3, offset: 32, format: 'float32x4' },
               { shaderLocation: 4, offset: 48, format: 'float32x4' },
               { shaderLocation: 5, offset: 64, format: 'float32x4' },
+              { shaderLocation: 6, offset: 80, format: 'float32' },
             ],
           },
         ],
@@ -122,7 +125,7 @@ export class WebGpuRenderer {
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     this.#instances = device.createBuffer({
-      size: 80 * 256,
+      size: 84 * 256,
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
     this.#cubeVertices = device.createBuffer({
@@ -210,6 +213,9 @@ export class WebGpuRenderer {
         color: camera.bodyColor,
       });
     }
+    const guards = guardPrimitives(map, p);
+    cones.push(...guards.cones);
+    objects.push(...guards.objects);
     for (const pose of p.live)
       objects.push({
         x: pose.xMm,
@@ -290,14 +296,16 @@ export class WebGpuRenderer {
     }
   }
   #instanceData(objects: Instance[]) {
-    const data = new Float32Array(objects.length * 20);
+    const data = new Float32Array(objects.length * 21);
     objects.forEach((o, i) => {
       const matrix = o.matrix ?? [o.sx, 0, 0, 0, 0, o.sy, 0, 0, 0, 0, o.sz, 0, o.x, o.y, o.z, 1];
-      data.set([...matrix, ...o.color], i * 20);
+      data.set([...matrix, ...o.color, o.radialRange ?? 0], i * 21);
     });
     return data;
   }
   #draw(cones: Instance[], objects: Instance[], clearColor: [number, number, number, number]) {
+    if (cones.length + objects.length > 256)
+      throw new Error('Scene exceeds the persistent WebGPU instance buffer');
     const depth = this.#depth;
     if (!depth) return;
     const aspect = this.canvas.width / this.canvas.height;
@@ -322,7 +330,7 @@ export class WebGpuRenderer {
       1,
     ]);
     this.#device.queue.writeBuffer(this.#uniform, 0, view);
-    const coneBytes = cones.length * 80;
+    const coneBytes = cones.length * 84;
     if (cones.length > 0)
       this.#device.queue.writeBuffer(this.#instances, 0, this.#instanceData(cones));
     this.#device.queue.writeBuffer(this.#instances, coneBytes, this.#instanceData(objects));

@@ -9,7 +9,7 @@ Two players move through a top-down 2.5D facility. Each player acquires one auth
 - Browser client: TypeScript, Vite, raw WebGPU, WGSL.
 - Authority server: Rust, deterministic 60 Hz room simulation.
 - Realtime data plane: MoQ through `moq-dev/moq`, with browser `@moq/net`, Rust `moq-net`, and `moq-relay`.
-- Wire schema: Protocol Buffers unless an implementation spike finds a concrete blocker.
+- Wire schema: Protocol Buffers, with generated Rust and TypeScript bindings.
 - Initial target: desktop Chromium.
 - MVP scope: two players, one 10-second Echo generation, one small three-room facility, no account system or persistent database.
 - Execution model: all application build/run/test/browser/WebGPU processes run in containers; concurrent agents use fully isolated per-worktree container stacks.
@@ -20,11 +20,11 @@ MoQ is intentionally isolated behind application adapters. The game domain must 
 
 Repository-wide durable facts are in `.agentic/PROJECT.md`.
 
-The active implementation task is:
+The completed P2 task is:
 
-- `.agent/tasks/p1/SPEC.md` — playable-prototype milestones and acceptance criteria.
-- `.agent/tasks/p1/DECISIONS.md` — durable P1 design and verification decisions.
-- `.agent/tasks/p1/STATE.md` — current implementation state and next action.
+- `.agent/tasks/p2/SPEC.md` — guard and Echo stealth acceptance criteria.
+- `.agent/tasks/p2/DECISIONS.md` — frozen guard and protocol decisions.
+- `.agent/tasks/p2/STATE.md` — release verification evidence and remaining review items.
 
 Supporting design documents:
 
@@ -45,7 +45,7 @@ codex plugin add agentic-engineering@agentic-engineering
 
 Then start Codex in this repository and give it this objective:
 
-> Continue the active `p1` task. Read `.agentic/PROJECT.md`, `.agent/tasks/p1/{SPEC,STATE,DECISIONS}.md`, the vertical-slice task, and the design docs. Implement the task end-to-end, maintaining durable task state and verification evidence. Resolve reversible engineering choices autonomously. Do not change product semantics or architecture invariants without recording the reason and requesting input only when the decision is genuinely product-level or irreversible.
+> Read `.agentic/PROJECT.md`, `.agent/tasks/p2/{SPEC,STATE,DECISIONS}.md`, and the gameplay, architecture, and protocol docs. Continue from the recorded release state, maintaining durable verification evidence. Resolve reversible engineering choices autonomously.
 
 Codex should choose its own effort, subagent use, worktrees, verification strategy, and PR topology according to `AGENTS.md`; the user should not need to orchestrate agents.
 
@@ -63,11 +63,15 @@ See `docs/CONTAINERS.md` and `docs/ARCHITECTURE.md` for the normative isolation 
 4. Player B passes through the door while A is elsewhere.
 5. Two browser clients observe the same authoritative result.
 
-That scene, running through the real relay/authority/browser path and rendered with WebGPU, is the first vertical-slice milestone.
+P2 adds a guarded passage: player A records a decoy route; 600 authority ticks
+later, A's Echo draws guard 51 into investigation while player B crosses. A live
+human in the guard's view fails the attempt. Both players then complete the
+existing Echo-door and extraction objectives through the real relay, authority,
+browser, and raw WebGPU path.
 
 ## Status
 
-P0 and P1.1–P1.3 are merged; P1.4 release verification is implemented. Bootstrap
+P0 and P1 are complete; P2 guard stealth is implemented and release-verified. Bootstrap
 and run every project command through the container wrapper:
 
 ~~~sh
@@ -77,6 +81,23 @@ sh container local acceptance
 sh container local visual
 sh container local down --volumes --remove-orphans
 ~~~
+
+Use a fresh lowercase run ID for each checkout and run. `verify` covers generated
+protocol compatibility, Rust/TypeScript checks, browser contracts, the production
+build, and containerized Chromium WebGPU/WGSL validation. `acceptance` runs the
+complete two-player stealth and extraction loop. `visual` captures both players'
+container-owned Chromium views. Inspect and copy artifacts from the run's private
+`artifacts` volume before `down --volumes` removes it.
+
+The P2 release run passed `p2-final verify` and `acceptance`, `p2-visual visual`,
+and two concurrent full-stack acceptances from clean detached worktrees at
+`b35349d`. Both clients used the SwiftShader WebGPU adapter with a Mesa
+llvmpipe Vulkan compositor; no shader, validation, browser, or renderer errors
+were reported. The exact tick, screenshot, adapter, and isolation evidence is
+in `.agent/tasks/p2/STATE.md`. Its ignored JSON/PNG handoff lives under the
+release checkout's `.superpowers/sdd/p2/artifacts/`; isolation evidence remains
+at `/tmp/temporal-heist-p2-isolation/`. The implementation is ready for
+independent review and PR integration.
 
 `acceptance` runs a private relay, release Rust authority, nginx static server, and two containerized
 Chromium clients. It records JSON evidence and both client screenshots in that run's

@@ -194,12 +194,10 @@ P0 presentation may use:
 
 Do not make presentation state authoritative.
 
-## Post-P0 candidates
+## Post-P2 candidates
 
 After the core slice works, candidates include:
 
-- static surveillance cameras and detection cones;
-- guards reacting to humans and/or Echo Sensors;
 - multiple Echo delays/generations;
 - gadgets whose delayed effects compose with Echoes;
 - richer Action targets;
@@ -253,3 +251,43 @@ the scene for authoritative success and failure; these colors never feed back
 into gameplay. Short synthesized Web Audio cues announce Echo, door, success,
 and failure transitions after user interaction unlocks audio. The mute control
 is local presentation state and has no gameplay effect.
+
+## P2 guard and Echo stealth
+
+The facility has one authored guard, ID 51, patrolling between waypoints 511 at
+`(19100, 4000)` and 512 at `(20500, 4000)` in millimetres. It watches west during
+both directions of Patrol; movement and watch facing are deliberately separate.
+Investigate and Return face their movement targets, and resuming Patrol restores
+westward watching before detection. Published facing drives the visible cone.
+Its view covers a
+2600 mm radial range and the angular slope defined by a 1400 mm half-width
+at 2600 mm forward distance. The renderer clips the cone at that same radius.
+The guarded passage occupies X `18100..18500`, Z `3300..4700`. Wall 107 extends
+north from it to Z 0; wall 108 extends south to Z 8000. Every live route to
+plate 23 and the final door therefore goes through the central opening. The route
+and passage are checked-in map data; guard movement follows straight segments.
+Every reachable west-entry point stays in view across the complete patrol, so a
+player cannot follow behind it through the opening and escape north. The patrol
+period is 140 ticks, giving a 40-tick phase offset for the 600-tick Echo replay.
+
+During an active attempt, a connected live human in the guard's view immediately
+fails the attempt. The result identifies guard 51. If a human and Echo are visible
+on the same tick, the human failure wins. An Echo never causes a failure or changes
+its historical route. Instead, the guard investigates the last observed Echo
+position, searches there for 180 authority ticks, and returns to its patrol. A
+continuous 30-tick Echo observation window can update the last-seen position but
+cannot extend the search timer indefinitely.
+
+Player A can record a west-side decoy near `(17200, 3800)` while the guard moves
+east through X `20000..20200`, out of range. A then retreats north and returns
+around the west edge at X 15800 to join B near `(17800,6000)`, south of the lure.
+Both players remain west of the choke. Exactly 600
+authority ticks later, A's first-generation Echo follows that route and draws the
+guard west, away from the choke. Both players wait until it has been drawn clear
+of the opening, then cross while it investigates.
+Plate 23 at `(19500, 2500)`, door 13 and extraction retain their existing geometry.
+The players still need Echo Presence on door 13 and both live players in extraction
+to win. Terminal and
+lobby phases freeze guard movement and timers; restart restores its initial patrol
+state. The HUD, guard body, route, view cone, and target marker explain the window
+to cross, while the Rust authority alone decides detection and results.

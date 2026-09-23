@@ -209,6 +209,7 @@ mod tests {
             }],
             room: None,
             hazards: vec![],
+            guards: vec![],
         }
     }
 

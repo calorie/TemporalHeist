@@ -25,6 +25,7 @@ RUN npm ci
 FROM node-deps AS browser
 COPY containers ./containers
 COPY tests ./tests
+COPY map ./map
 
 FROM node-deps AS web-build
 COPY apps ./apps

@@ -1,8 +1,9 @@
 use serde::Deserialize;
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use th_protocol::{
-    AppliedAction, ECHO_DELAY_TICKS, FailureReason, HISTORY_TICKS, Hazard, Input, InputKind,
-    Mechanism, PROTOCOL_MAJOR, Pose, RoomPhase, RoomState, Session, Snapshot,
+    AppliedAction, ECHO_DELAY_TICKS, FailureReason, Guard, GuardState, GuardTarget, HISTORY_TICKS,
+    Hazard, Input, InputKind, Mechanism, PROTOCOL_MAJOR, Pose, RoomPhase, RoomState, Session,
+    Snapshot,
 };
 
 const MOTION_TIMEOUT: u64 = 30;
@@ -10,6 +11,7 @@ const SESSION_TIMEOUT: u64 = 300;
 const ACTION_LOG: u64 = 3_600;
 const ACTION_RANGE: i32 = 1_000;
 const ATTEMPT_TICKS: u64 = 18_000;
+const ECHO_OBSERVATION_WINDOW_TICKS: u64 = 30;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -24,6 +26,27 @@ struct Map {
     terminals: Vec<Terminal>,
     extraction: Area,
     cameras: Vec<Camera>,
+    guards: Vec<GuardConfig>,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GuardConfig {
+    id: u32,
+    x: i32,
+    z: i32,
+    facing_x: i32,
+    facing_z: i32,
+    speed_per_tick: i32,
+    range: i32,
+    half_width: i32,
+    search_ticks: u64,
+    waypoints: Vec<Waypoint>,
+}
+#[derive(Deserialize)]
+struct Waypoint {
+    id: u32,
+    x: i32,
+    z: i32,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -143,6 +166,38 @@ struct Scheduled {
     target_id: u32,
     acceptance_tick: u64,
 }
+struct GuardRuntime {
+    config_index: usize,
+    x: i32,
+    z: i32,
+    facing_x: i32,
+    facing_z: i32,
+    state: GuardState,
+    waypoint_index: usize,
+    state_entered_tick: u64,
+    search_expires_tick: u64,
+    investigation: Option<(i32, i32)>,
+    observed_echo: Option<(u32, u64)>,
+    echo_visible_last_tick: bool,
+}
+impl GuardRuntime {
+    fn initial(config_index: usize, config: &GuardConfig) -> Self {
+        Self {
+            config_index,
+            x: config.x,
+            z: config.z,
+            facing_x: config.facing_x,
+            facing_z: config.facing_z,
+            state: GuardState::Patrol,
+            waypoint_index: if config.waypoints.len() > 1 { 1 } else { 0 },
+            state_entered_tick: 0,
+            search_expires_tick: 0,
+            investigation: None,
+            observed_echo: None,
+            echo_visible_last_tick: false,
+        }
+    }
+}
 
 pub struct World {
     epoch: String,
@@ -163,12 +218,21 @@ pub struct World {
     failure_reason: FailureReason,
     failure_hazard_id: u32,
     hazards: Vec<Hazard>,
+    guards: Vec<GuardRuntime>,
+    failure_guard_id: u32,
 }
 
 impl World {
     pub fn new(epoch: String) -> Self {
         let map: Map = serde_json::from_str(include_str!("../../../map/facility.json"))
             .expect("valid facility map");
+        validate_guards(&map).expect("valid facility guard routes");
+        let guards = map
+            .guards
+            .iter()
+            .enumerate()
+            .map(|(index, config)| GuardRuntime::initial(index, config))
+            .collect();
         let plates = map
             .plates
             .iter()
@@ -212,6 +276,8 @@ impl World {
             failure_reason: FailureReason::Unspecified,
             failure_hazard_id: 0,
             hazards,
+            guards,
+            failure_guard_id: 0,
         }
     }
     pub fn step(&mut self, inputs: &[Input]) -> Snapshot {
@@ -227,6 +293,9 @@ impl World {
             self.replay_actions();
             self.presence();
             self.surveillance();
+            if self.room_phase == RoomPhase::Active {
+                self.guards();
+            }
             self.update_room_result();
         }
         self.trim_actions();
@@ -282,8 +351,30 @@ impl World {
                 echo_opened_final_door: self.echo_opened_final_door,
                 failure_reason: self.failure_reason as i32,
                 failure_hazard_id: self.failure_hazard_id,
+                failure_guard_id: self.failure_guard_id,
             }),
             hazards: self.hazards.clone(),
+            guards: self
+                .guards
+                .iter()
+                .map(|guard| {
+                    let config = &self.map.guards[guard.config_index];
+                    Guard {
+                        id: config.id,
+                        x_mm: guard.x,
+                        z_mm: guard.z,
+                        facing_x: guard.facing_x,
+                        facing_z: guard.facing_z,
+                        state: guard.state as i32,
+                        waypoint_id: config.waypoints[guard.waypoint_index].id,
+                        investigation_target: guard
+                            .investigation
+                            .map(|(x, z)| GuardTarget { x_mm: x, z_mm: z }),
+                        state_entered_tick: guard.state_entered_tick,
+                        search_expires_tick: guard.search_expires_tick,
+                    }
+                })
+                .collect(),
         }
     }
     fn apply(&mut self, i: &Input) {
@@ -404,6 +495,7 @@ impl World {
             self.echo_opened_final_door = false;
             self.failure_reason = FailureReason::Unspecified;
             self.failure_hazard_id = 0;
+            self.failure_guard_id = 0;
             self.clear_hazards();
             self.scheduled.clear();
             self.actions.clear();
@@ -457,6 +549,11 @@ impl World {
         self.echo_opened_final_door = false;
         self.failure_reason = FailureReason::Unspecified;
         self.failure_hazard_id = 0;
+        self.failure_guard_id = 0;
+        for guard in &mut self.guards {
+            *guard =
+                GuardRuntime::initial(guard.config_index, &self.map.guards[guard.config_index]);
+        }
         self.clear_hazards();
         self.scheduled.clear();
         self.actions.clear();
@@ -660,6 +757,135 @@ impl World {
         self.failure_reason = FailureReason::Surveillance;
         self.failure_hazard_id = camera_id;
     }
+    fn guards(&mut self) {
+        let echoes = self.echoes();
+        for guard in &mut self.guards {
+            let config = &self.map.guards[guard.config_index];
+            let route = &config.waypoints;
+            if guard.state == GuardState::Investigate && guard.investigation.is_none() {
+                guard.state = GuardState::Patrol;
+                guard.state_entered_tick = self.tick;
+                guard.search_expires_tick = 0;
+            }
+            let target = match guard.state {
+                GuardState::Patrol | GuardState::Return => {
+                    let waypoint = &route[guard.waypoint_index];
+                    Some((waypoint.x, waypoint.z))
+                }
+                GuardState::Investigate => guard.investigation,
+                GuardState::Unspecified => None,
+            };
+            if let Some((tx, tz)) = target {
+                if (guard.x, guard.z) != (tx, tz) {
+                    guard.facing_x = tx - guard.x;
+                    guard.facing_z = tz - guard.z;
+                }
+                let arrived =
+                    move_toward(&mut guard.x, &mut guard.z, tx, tz, config.speed_per_tick);
+                if arrived {
+                    match guard.state {
+                        GuardState::Patrol => {
+                            guard.waypoint_index = (guard.waypoint_index + 1) % route.len()
+                        }
+                        GuardState::Investigate if guard.search_expires_tick == 0 => {
+                            guard.search_expires_tick = self.tick + config.search_ticks;
+                        }
+                        GuardState::Return => {
+                            guard.state = GuardState::Patrol;
+                            guard.state_entered_tick = self.tick;
+                            guard.waypoint_index = (guard.waypoint_index + 1) % route.len();
+                            guard.investigation = None;
+                            guard.search_expires_tick = 0;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            // Patrol watches the authored entrance, including while walking
+            // away from it. Investigation/return face their movement target.
+            if guard.state == GuardState::Patrol {
+                guard.facing_x = config.facing_x;
+                guard.facing_z = config.facing_z;
+            }
+            let origin = (guard.x, guard.z);
+            let facing = (guard.facing_x, guard.facing_z);
+            if self
+                .players
+                .iter()
+                .filter(|(_, player)| player.connected)
+                .any(|(_, player)| {
+                    visible(
+                        origin,
+                        facing,
+                        (player.x, player.z),
+                        config.range,
+                        config.half_width,
+                    )
+                })
+            {
+                self.room_phase = RoomPhase::Failed;
+                self.ended_tick = self.tick;
+                self.failure_reason = FailureReason::Guard;
+                self.failure_guard_id = config.id;
+                return;
+            }
+            let seen = echoes
+                .iter()
+                .filter(|echo| {
+                    visible(
+                        origin,
+                        facing,
+                        (echo.x_mm, echo.z_mm),
+                        config.range,
+                        config.half_width,
+                    )
+                })
+                .max_by_key(|echo| (echo.source_tick, std::cmp::Reverse(echo.player_id)));
+            if let Some(echo) = seen {
+                let key = (
+                    echo.player_id,
+                    echo.source_tick / ECHO_OBSERVATION_WINDOW_TICKS,
+                );
+                if !guard.echo_visible_last_tick
+                    && guard.observed_echo != Some(key)
+                    && guard.state != GuardState::Investigate
+                {
+                    guard.state = GuardState::Investigate;
+                    guard.state_entered_tick = self.tick;
+                    guard.search_expires_tick = 0;
+                    guard.investigation = Some((echo.x_mm, echo.z_mm));
+                    guard.observed_echo = Some(key);
+                } else if guard.state == GuardState::Investigate
+                    && guard.search_expires_tick == 0
+                    && guard.observed_echo == Some(key)
+                {
+                    guard.investigation = Some((echo.x_mm, echo.z_mm));
+                }
+                guard.echo_visible_last_tick = true;
+            } else {
+                guard.echo_visible_last_tick = false;
+            }
+            if guard.state == GuardState::Investigate
+                && guard.search_expires_tick != 0
+                && self.tick >= guard.search_expires_tick
+            {
+                guard.state = GuardState::Return;
+                guard.state_entered_tick = self.tick;
+                guard.search_expires_tick = 0;
+                guard.investigation = None;
+                guard.waypoint_index = route
+                    .iter()
+                    .enumerate()
+                    .min_by_key(|(_, waypoint)| {
+                        let dx = i64::from(guard.x - waypoint.x);
+                        let dz = i64::from(guard.z - waypoint.z);
+                        dx * dx + dz * dz
+                    })
+                    .unwrap()
+                    .0;
+            }
+        }
+    }
     fn clear_hazards(&mut self) {
         for hazard in &mut self.hazards {
             hazard.active = false;
@@ -675,6 +901,79 @@ impl World {
             self.actions.pop_front();
         }
     }
+}
+fn validate_guards(map: &Map) -> Result<(), String> {
+    if map.guards.is_empty() {
+        return Err("guard routes: no guards configured".into());
+    }
+    let mut guard_ids = BTreeSet::new();
+    let mut waypoint_ids = BTreeSet::new();
+    for guard in &map.guards {
+        if !guard_ids.insert(guard.id) {
+            return Err(format!("guard {}: duplicate guard ID", guard.id));
+        }
+        if guard.speed_per_tick <= 0
+            || guard.range <= 0
+            || guard.half_width <= 0
+            || guard.search_ticks == 0
+            || (guard.facing_x, guard.facing_z) == (0, 0)
+        {
+            return Err(format!(
+                "guard {}: movement, view, and search values must be positive",
+                guard.id
+            ));
+        }
+        let Some(first) = guard.waypoints.first() else {
+            return Err(format!("guard {}: waypoint route is empty", guard.id));
+        };
+        if (guard.x, guard.z) != (first.x, first.z) {
+            return Err(format!(
+                "guard {}: initial pose must match first waypoint",
+                guard.id
+            ));
+        }
+        for waypoint in &guard.waypoints {
+            if !waypoint_ids.insert(waypoint.id) {
+                return Err(format!(
+                    "guard {}: duplicate waypoint ID {}",
+                    guard.id, waypoint.id
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+fn move_toward(x: &mut i32, z: &mut i32, tx: i32, tz: i32, step: i32) -> bool {
+    let dx = i64::from(tx) - i64::from(*x);
+    let dz = i64::from(tz) - i64::from(*z);
+    let distance_squared = (dx * dx + dz * dz) as u64;
+    if distance_squared <= (step as u64).pow(2) {
+        *x = tx;
+        *z = tz;
+        return true;
+    }
+    let distance = distance_squared.isqrt() as i64;
+    *x += (dx * i64::from(step) / distance) as i32;
+    *z += (dz * i64::from(step) / distance) as i32;
+    (*x, *z) == (tx, tz)
+}
+fn visible(
+    origin: (i32, i32),
+    facing: (i32, i32),
+    target: (i32, i32),
+    range: i32,
+    half_width: i32,
+) -> bool {
+    let dx = i64::from(target.0) - i64::from(origin.0);
+    let dz = i64::from(target.1) - i64::from(origin.1);
+    let fx = i64::from(facing.0);
+    let fz = i64::from(facing.1);
+    let forward = dx * fx + dz * fz;
+    if forward < 0 || dx * dx + dz * dz > i64::from(range).pow(2) {
+        return false;
+    }
+    let lateral = (dx * fz - dz * fx).abs();
+    lateral * i64::from(range) <= i64::from(half_width) * forward
 }
 fn camera_contains(camera: &Camera, x: i32, z: i32) -> bool {
     let dx = i64::from(x - camera.x);
@@ -1181,7 +1480,7 @@ mod tests {
         {
             let p = w.players.get_mut(&1).unwrap();
             p.x = 18_000;
-            p.z = 4_000;
+            p.z = 2_500;
         }
         while w.tick < source_tick + ECHO_DELAY_TICKS {
             let seq = w.tick + 2;
@@ -1255,5 +1554,361 @@ mod tests {
             RoomPhase::Lobby as i32
         );
         assert_eq!(still_lobby.room.as_ref().unwrap().ready_players, 1);
+    }
+
+    fn place_echo(w: &mut World, player_id: u32, x: i32, z: i32) {
+        let source_tick = w.tick + 1 - ECHO_DELAY_TICKS;
+        w.players
+            .get_mut(&player_id)
+            .unwrap()
+            .history
+            .push_back(History {
+                tick: source_tick,
+                x,
+                z,
+            });
+    }
+
+    #[test]
+    fn move_toward_reports_exact_diagonal_arrival() {
+        let (mut x, mut z) = (0, 0);
+
+        let arrived = move_toward(&mut x, &mut z, 20, 1, 20);
+
+        assert_eq!((x, z), (20, 1));
+        assert!(arrived);
+    }
+
+    #[test]
+    fn patrol_rejects_following_behind_then_escaping_north_without_echo() {
+        let mut w = World::new("e".into());
+        start_attempt(&mut w);
+        let p = w.players.get_mut(&1).unwrap();
+        (p.x, p.z) = (17_700, 6_000);
+        let guard = &mut w.guards[0];
+        (guard.x, guard.z) = (19_000, 4_000);
+        (guard.facing_x, guard.facing_z) = (1_000, 0);
+        guard.waypoint_index = 1;
+
+        // Review counterexample: approach for 30 ticks, follow east for 20,
+        // then leave north before the old movement-facing patrol turns around.
+        for (ticks, mx, mz) in [(30, 0, -1_000), (20, 1_000, 0), (45, 0, -1_000)] {
+            for _ in 0..ticks {
+                let mut motion = player_input(1, "a", InputKind::Motion, w.tick + 1);
+                (motion.move_x, motion.move_z) = (mx, mz);
+                w.step(&[motion]);
+                assert_eq!(w.guards[0].state, GuardState::Patrol);
+                assert!(w.echoes().is_empty());
+            }
+        }
+        assert_eq!(
+            w.room_phase,
+            RoomPhase::Failed,
+            "patrol-only escape reached ({}, {}) without an Echo diversion",
+            w.players[&1].x,
+            w.players[&1].z
+        );
+        assert_eq!(w.failure_reason, FailureReason::Guard);
+        assert_eq!(w.failure_guard_id, 51);
+        assert!(w.players[&1].x < 18_100);
+    }
+
+    #[test]
+    fn recorded_decoy_opens_a_safe_crossing_after_exact_echo_delay() {
+        fn drive(w: &mut World, mx: i32, mz: i32, ticks: u64) {
+            for _ in 0..ticks {
+                let mut motion = player_input(1, "a", InputKind::Motion, w.tick + 1);
+                (motion.move_x, motion.move_z) = (mx, mz);
+                w.step(&[motion]);
+                assert_eq!(w.room_phase, RoomPhase::Active, "caught at tick {}", w.tick);
+            }
+        }
+        // Cover both ends of the browser's recording-position tolerance and
+        // its whole departure window, with real committed source history.
+        for decoy_x in [17_200, 17_380] {
+            for guard_x in [20_000, 20_100, 20_200] {
+                let mut w = World::new("e".into());
+                start_attempt(&mut w);
+                let p = w.players.get_mut(&1).unwrap();
+                (p.x, p.z) = (decoy_x, 2_200);
+                w.guards[0].x = guard_x;
+                w.guards[0].waypoint_index = 1;
+                drive(&mut w, 0, 1_000, 27);
+                drive(&mut w, 0, -1_000, 30);
+                drive(&mut w, -1_000, 0, ((decoy_x - 15_820) / 60) as u64);
+                drive(&mut w, 0, 1_000, 66);
+                drive(&mut w, 1_000, 0, 33);
+                while w.guards[0].state == GuardState::Patrol && w.tick < 660 {
+                    drive(&mut w, 0, 0, 1);
+                }
+                assert_eq!(w.guards[0].state, GuardState::Investigate);
+                assert!(w.guards[0].state_entered_tick >= ECHO_DELAY_TICKS);
+                let echo = w.echoes().into_iter().find(|p| p.player_id == 1).unwrap();
+                assert_eq!(w.tick - echo.source_tick, 600);
+                while w.guards[0].search_expires_tick == 0 && w.tick < 900 {
+                    drive(&mut w, 0, 0, 1);
+                }
+                assert!(w.guards[0].search_expires_tick > 0);
+                drive(&mut w, 0, -1_000, 30);
+                drive(&mut w, 1_000, 0, 22);
+                assert_eq!((w.players[&1].x, w.players[&1].z), (19_120, 4_180));
+                assert_eq!(w.guards[0].state, GuardState::Investigate);
+            }
+        }
+    }
+
+    #[test]
+    fn patrol_watches_every_reachable_choke_entry_at_every_route_tick() {
+        let mut w = World::new("e".into());
+        let mut visited = BTreeSet::new();
+        for _ in 0..=330 {
+            w.tick += 1;
+            w.guards();
+            let guard = &w.guards[0];
+            visited.insert(guard.x);
+            assert_eq!(guard.state, GuardState::Patrol);
+            let config = &w.map.guards[0];
+            // Radius 250 leaves center Z 3550..4450. A 60 mm step entering
+            // X 18100 cannot skip this slab. The cone is convex, so covering
+            // its four corners covers every reachable entry point between.
+            for point in [
+                (18_100, 3_550),
+                (18_160, 3_550),
+                (18_100, 4_450),
+                (18_160, 4_450),
+            ] {
+                assert!(
+                    visible(
+                        (guard.x, guard.z),
+                        (guard.facing_x, guard.facing_z),
+                        point,
+                        config.range,
+                        config.half_width
+                    ),
+                    "unwatched choke entry {point:?} at patrol x={}, facing={}",
+                    guard.x,
+                    guard.facing_x
+                );
+            }
+        }
+        for waypoint in &w.map.guards[0].waypoints {
+            assert!(visited.contains(&waypoint.x));
+        }
+    }
+
+    #[test]
+    fn guarded_passage_has_no_north_or_south_live_bypass() {
+        // Exercise live collision for every millimetre of each side lane,
+        // including rounded wall corners and the facility boundary.
+        let mut w = World::new("e".into());
+        join(&mut w);
+        for z in 250..=7_750 {
+            if (3_300..=4_700).contains(&z) {
+                continue;
+            }
+            let p = w.players.get_mut(&1).unwrap();
+            p.x = 17_700;
+            p.z = z;
+            p.mx = 1_000;
+            p.mz = 0;
+            for _ in 0..40 {
+                w.move_players();
+            }
+            assert!(w.players[&1].x < 18_100, "live bypass at z={z}");
+        }
+        // The central opening, plate 23, door 13 and extraction remain reachable.
+        for (x, z) in [
+            (18_300, 4_000),
+            (19_500, 2_500),
+            (22_200, 4_000),
+            (23_000, 4_000),
+        ] {
+            assert!(!collides(&w.map, &[], x, z));
+        }
+    }
+
+    #[test]
+    fn guard_patrol_clamps_to_waypoint_and_cycles() {
+        let mut w = World::new("e".into());
+        w.map.guards[0].waypoints[1].x = 19_125;
+        start_attempt(&mut w);
+        w.guards[0] = GuardRuntime::initial(0, &w.map.guards[0]);
+        let first = w.step(&[]).guards.remove(0);
+        assert_eq!((first.x_mm, first.waypoint_id), (19_120, 512));
+        let second = w.step(&[]).guards.remove(0);
+        assert_eq!((second.x_mm, second.waypoint_id), (19_125, 511));
+        let third = w.step(&[]).guards.remove(0);
+        assert_eq!((third.x_mm, third.waypoint_id), (19_105, 511));
+        for snapshot in [first, second, third] {
+            assert_eq!((snapshot.facing_x, snapshot.facing_z), (-1_000, 0));
+        }
+    }
+
+    #[test]
+    fn guard_echo_enters_investigate_without_failure() {
+        let mut w = World::new("e".into());
+        start_attempt(&mut w);
+        w.tick = ECHO_DELAY_TICKS;
+        for p in w.players.values_mut() {
+            p.last_input = w.tick;
+        }
+        place_echo(&mut w, 1, 19_000, 4_000);
+        let s = w.step(&[]);
+        let g = &s.guards[0];
+        assert_eq!(g.state, th_protocol::GuardState::Investigate as i32);
+        assert_eq!(
+            (
+                g.investigation_target.as_ref().unwrap().x_mm,
+                g.investigation_target.as_ref().unwrap().z_mm
+            ),
+            (19_000, 4_000)
+        );
+        assert_eq!(w.guards[0].observed_echo, Some((1, 0)));
+        assert_eq!(s.room.as_ref().unwrap().phase, RoomPhase::Active as i32);
+    }
+
+    #[test]
+    fn continuous_echo_visibility_does_not_extend_search_forever() {
+        let mut w = World::new("e".into());
+        start_attempt(&mut w);
+        w.tick = ECHO_DELAY_TICKS;
+        for p in w.players.values_mut() {
+            p.last_input = w.tick;
+        }
+        let mut completed_search = false;
+        for _ in 0..210 {
+            place_echo(&mut w, 1, 19_080, 4_000);
+            w.step(&[]);
+            completed_search |= w.guards[0].state == th_protocol::GuardState::Return;
+        }
+        assert!(completed_search);
+    }
+
+    #[test]
+    fn guard_returns_to_deterministic_rejoin_waypoint_then_patrols() {
+        let mut w = World::new("e".into());
+        start_attempt(&mut w);
+        w.tick = ECHO_DELAY_TICKS;
+        for p in w.players.values_mut() {
+            p.last_input = w.tick;
+        }
+        place_echo(&mut w, 1, 19_080, 4_000);
+        w.step(&[]);
+        while w.guards[0].search_expires_tick == 0 {
+            w.step(&[]);
+        }
+        let expires = w.guards[0].search_expires_tick;
+        while w.tick <= expires {
+            w.step(&[]);
+        }
+        while w.guards[0].state == th_protocol::GuardState::Return {
+            w.step(&[]);
+        }
+        assert_eq!(w.guards[0].state, th_protocol::GuardState::Patrol);
+        assert_eq!(w.snapshot().guards[0].waypoint_id, 512);
+        assert_eq!(w.guards[0].x, 19_100);
+        let returned = w.snapshot().guards[0];
+        assert_eq!((returned.facing_x, returned.facing_z), (-1_000, 0));
+    }
+
+    #[test]
+    fn live_human_wins_detection_priority_over_echo() {
+        let mut w = World::new("e".into());
+        start_attempt(&mut w);
+        w.tick = ECHO_DELAY_TICKS;
+        for p in w.players.values_mut() {
+            p.last_input = w.tick;
+        }
+        place_echo(&mut w, 1, 19_000, 4_000);
+        let p = w.players.get_mut(&2).unwrap();
+        p.x = 18_000;
+        p.z = 4_000;
+        let s = w.step(&[]);
+        let room = s.room.unwrap();
+        assert_eq!(room.failure_reason, FailureReason::Guard as i32);
+        assert_eq!(room.failure_guard_id, 51);
+        assert_eq!(room.ended_tick, s.server_tick);
+        assert_eq!(s.guards[0].state, th_protocol::GuardState::Patrol as i32);
+    }
+
+    #[test]
+    fn guard_state_freezes_outside_active_attempt() {
+        let mut w = World::new("e".into());
+        let lobby = w.snapshot().guards[0];
+        for _ in 10..20 {
+            w.step(&[]);
+        }
+        assert_eq!(w.snapshot().guards[0], lobby);
+        start_attempt(&mut w);
+        w.room_phase = RoomPhase::Failed;
+        let failed = w.snapshot().guards[0];
+        for _ in 0..10 {
+            w.step(&[]);
+        }
+        assert_eq!(w.snapshot().guards[0], failed);
+    }
+
+    #[test]
+    fn restart_restores_complete_guard_initial_state() {
+        let mut w = World::new("e".into());
+        let initial = w.snapshot().guards[0];
+        start_attempt(&mut w);
+        w.guards[0].observed_echo = Some((1, 10));
+        w.guards[0].investigation = Some((19_000, 4_000));
+        w.guards[0].search_expires_tick = 999;
+        w.guards[0].state = th_protocol::GuardState::Investigate;
+        w.room_phase = RoomPhase::Failed;
+        let reset = w.step(&[player_input(1, "a", InputKind::Restart, 1)]);
+        assert_eq!(reset.guards[0], initial);
+        assert_eq!(w.guards[0].observed_echo, None);
+    }
+
+    #[test]
+    fn invalid_guard_route_has_clear_validation_error() {
+        let mut map: Map =
+            serde_json::from_str(include_str!("../../../map/facility.json")).unwrap();
+        map.guards[0].waypoints[1].id = 511;
+        assert!(validate_guards(&map).unwrap_err().contains("guard 51"));
+        map.guards[0].waypoints[1].id = 512;
+        map.guards[0].waypoints.clear();
+        assert!(validate_guards(&map).unwrap_err().contains("guard 51"));
+    }
+
+    #[test]
+    fn guard_cone_includes_edges_and_rejects_behind_or_outside_range() {
+        let origin = (0, 0);
+        let facing = (1000, 0);
+        assert!(visible(origin, facing, (2600, 0), 2600, 1400));
+        assert!(!visible(origin, facing, (2601, 0), 2600, 1400));
+        assert!(visible(origin, facing, (1300, 700), 2600, 1400));
+        assert!(!visible(origin, facing, (1300, 701), 2600, 1400));
+        assert!(!visible(origin, facing, (-1, 0), 2600, 1400));
+        // These exact world offsets are also sampled by guard-cone-gpu.mjs.
+        assert!(visible(origin, facing, (2200, 1000), 2600, 1400));
+        assert!(!visible(origin, facing, (2500, 1200), 2600, 1400));
+        assert!(!visible(origin, facing, (2000, 1200), 2600, 1400));
+    }
+
+    #[test]
+    fn guard_route_rejects_invalid_motion_and_start_pose() {
+        let mut map: Map =
+            serde_json::from_str(include_str!("../../../map/facility.json")).unwrap();
+        map.guards[0].speed_per_tick = 0;
+        assert!(validate_guards(&map).is_err());
+        map.guards[0].speed_per_tick = 20;
+        map.guards[0].x += 1;
+        assert!(validate_guards(&map).is_err());
+    }
+
+    #[test]
+    fn guard_missing_investigation_target_resumes_patrol() {
+        let mut w = World::new("e".into());
+        start_attempt(&mut w);
+        w.guards[0].state = GuardState::Investigate;
+        w.guards[0].investigation = None;
+        w.guards[0].search_expires_tick = 0;
+        let guard = w.step(&[]).guards[0];
+        assert_eq!(guard.state, GuardState::Patrol as i32);
+        assert!(guard.investigation_target.is_none());
     }
 }

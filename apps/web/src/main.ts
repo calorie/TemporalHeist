@@ -43,6 +43,7 @@ const phase = element<HTMLElement>('#phase');
 const objective = element<HTMLElement>('#objective');
 const timer = element<HTMLElement>('#timer');
 const echoStatus = element<HTMLElement>('#echo-status');
+const guardStatus = element<HTMLElement>('#guard-status');
 const readiness = element<HTMLElement>('#readiness');
 const result = element<HTMLElement>('#result');
 const readyButton = element<HTMLButtonElement>('#ready');
@@ -293,6 +294,8 @@ const frame = () => {
   objective.textContent = hud.objective;
   timer.textContent = hud.timer;
   echoStatus.textContent = hud.echoStatus;
+  guardStatus.textContent = hud.guardStatus;
+  guardStatus.hidden = !hud.guardStatus;
   readiness.textContent = hud.readiness;
   result.textContent = hud.result;
   result.dataset.state = hud.resultState;

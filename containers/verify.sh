@@ -12,11 +12,17 @@ cargo test --workspace
 npx tsc -p apps/web/tsconfig.json
 npx biome check apps/web/src
 node apps/web/test/timeline.mjs
+node apps/web/test/guard-view.mjs
+node apps/web/test/cube-mesh.mjs
 node apps/web/test/room-hud.mjs
 node apps/web/test/surveillance-view.mjs
 node apps/web/test/audio.mjs
 node apps/web/test/presentation-view.mjs
 node tests/visual-browser-contract.mjs
+node tests/guard-agreement-contract.mjs
+node tests/guard-lure-contract.mjs
+node tests/screenshot-contract.mjs
+node tests/guard-cone-gpu.mjs
 node tests/isolation-harness-contract.mjs
 npx vite build apps/web
 node spikes/gpu/test.mjs

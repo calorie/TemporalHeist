@@ -14,6 +14,7 @@ const snapshot = (phase, serverTick, overrides = {}) => ({
   actions: [],
   sessions: [],
   hazards: [],
+  guards: [],
   room: {
     phase,
     attempt: 1,
@@ -77,5 +78,19 @@ assert.deepEqual(audioTransitions(won, won), [], 'success cue fires once');
 const failed = audioFrame(snapshot(RoomPhase.FAILED, 703));
 assert.deepEqual(audioTransitions(afterEcho, failed), ['failure']);
 assert.deepEqual(audioTransitions(failed, failed), [], 'failure cue fires once');
+
+const patrolling = audioFrame({ ...snapshot(RoomPhase.ACTIVE, 710), guards: [{ id: 51, state: 1 }] });
+const investigating = audioFrame({ ...snapshot(RoomPhase.ACTIVE, 711), guards: [{ id: 51, state: 2 }] });
+assert.deepEqual(audioTransitions(patrolling, investigating), ['guard'], 'Investigate alerts once');
+assert.deepEqual(audioTransitions(investigating, investigating), [], 'continued investigation is silent');
+assert.deepEqual(audioTransitions(undefined, investigating), [], 'first guard snapshot is silent');
+assert.deepEqual(
+  audioTransitions(
+    audioFrame({ ...snapshot(RoomPhase.ACTIVE, 710), guards: [{ id: 51, state: -1 }] }),
+    investigating,
+  ),
+  [],
+  'unknown guard state is silent',
+);
 
 console.log('audio transition tests passed');

@@ -44,6 +44,22 @@ renderer. It contains floor bounds, walls, plates and corresponding doors, stabl
 IDs, action terminals, player spawn positions, and the P1 extraction rectangle.
 Three zones run along X.
 
+P2's serialized final-review map correction adds walls 107 and 108 at
+X `18100..18500`, spanning Z `0..3300` and `4700..8000` respectively. The
+`guardedPassage` rectangle is their opening, X `18100..18500`, Z `3300..4700`.
+Live collision and rendering consume those same walls; passage metadata alone
+does not impose collision. Guard 51 starts at waypoint 511 `(19100,4000)` and
+patrols to waypoint 512 `(20500,4000)` while retaining its configured westward
+watch facing `(-1000,0)`. Investigate and Return face their movement targets;
+rejoining Patrol restores the watch facing before detection and publication.
+The entire reachable west-entry slab stays in view throughout Patrol, so it
+cannot be crossed by following behind the guard without an Echo diversion.
+The 140-tick route period avoids synchronizing with the exact 600-tick Echo.
+Plate 23, door 13, and extraction keep their coordinates; all IDs remain stable.
+Guard perception uses
+integer angular comparisons clipped by a 2600 mm radial range; the raw WebGPU
+cone clips the same radial boundary without feeding results into gameplay.
+
 P1 extends protocol major 1 additively with READY and RESTART input kinds,
 `Session.ready`, `Snapshot.room`, and `Snapshot.hazards`. Room state carries LOBBY, ACTIVE, WON, or
 FAILED plus attempt identity, authority-tick timing, readiness, extraction
