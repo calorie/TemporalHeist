@@ -49,6 +49,10 @@ worktrees.
 - `sh container <run-id> verify` validates the real production renderer in one
   Chromium session at both supported viewports; the retired standalone GPU spike
   is no longer a verification path.
+- Full mission acceptance records a `temporal-bridge-agreement` event from the exact
+  presentation frame submitted to WebGPU. It matches both clients by canonical tick
+  and verifies bridge owner/endpoints/counts against GPU segment, pulse, draw, and
+  upload statistics. The read-only browser test API is presentation evidence only.
 
 ## Architecture invariants
 
