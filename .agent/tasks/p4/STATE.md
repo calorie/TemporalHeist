@@ -107,6 +107,7 @@ criteria are implemented and verified entirely through containers.
 
 ## Next action
 
-Publish Stack 4 for review. After merge, begin P5 Release Candidate work from the
-merged P4 baseline: release packaging, production configuration, observability,
-fresh-machine bootstrap verification, and a final performance/reliability pass.
+Run the published top-stack CI and merge the four PRs bottom-up only after explicit
+user authorization. After merge, begin P5 Release Candidate work from the merged P4
+baseline: release packaging, production configuration, observability, fresh-machine
+bootstrap verification, and a final performance/reliability pass.
