@@ -60,3 +60,17 @@ outside live regions. Respect `prefers-reduced-motion` by disabling the HUD tran
 Use a short real-Chromium test inside the existing `verify` entry point for DOM,
 focus, reduced-motion, and responsive geometry. This avoids adding dependencies or a
 second full mission run; Stack 4 retains ownership of live two-client acceptance.
+
+## 2026-09-23 — Release acceptance reuses the complete mission
+
+Extend the existing two-client production mission instead of adding another browser
+suite. Assert P4 semantics at their real canonical transitions: identity and briefing
+in LOBBY, collapsed HUD and initial step in ACTIVE, absent/present vault prompt around
+the authored radius, actual keyboard `E` theft, vault/door/extraction step changes,
+and all-complete WON presentation. Use one short real keyboard movement as evidence
+that global gameplay input reaches the authority; retain the deterministic test API
+for the long route so software-rendered CI stays reliable.
+
+The release gate remains `acceptance`; the separate two-worktree harness owns
+concurrent-stack isolation and teardown survival. This keeps one authoritative
+end-to-end path without adding image-diff infrastructure or duplicating gameplay.

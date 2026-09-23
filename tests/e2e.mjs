@@ -55,9 +55,18 @@ async function snapshot(page) {
 async function uiState(page) {
   return page.evaluate(() => ({
     briefing: document.querySelector('#briefing')?.textContent?.trim(),
+    briefingVisible: Boolean(document.querySelector('#briefing')?.getClientRects().length),
     echoStatus: document.querySelector('#echo-status')?.textContent?.trim(),
     guardStatus: document.querySelector('#guard-status')?.textContent?.trim(),
     hudPhase: document.querySelector('#hud')?.getAttribute('data-phase'),
+    identity: document.querySelector('#identity')?.textContent?.trim(),
+    interaction: document.querySelector('#interaction')?.textContent?.trim(),
+    interactionVisible: Boolean(document.querySelector('#interaction')?.getClientRects().length),
+    missionSteps: [...document.querySelectorAll('#mission-steps li')].map((item) => ({
+      label: item.textContent?.trim(),
+      state: item.getAttribute('data-state'),
+      current: item.getAttribute('aria-current'),
+    })),
     mutePressed: document.querySelector('#mute')?.getAttribute('aria-pressed'),
     objective: document.querySelector('#objective')?.textContent?.trim(),
     phase: document.querySelector('#phase')?.textContent?.trim(),
@@ -66,6 +75,12 @@ async function uiState(page) {
     resultState: document.querySelector('#result')?.getAttribute('data-state'),
     timer: document.querySelector('#timer')?.textContent?.trim(),
   }));
+}
+
+function assertMissionSteps(ui, expectedStates) {
+  assert.deepEqual(ui.missionSteps.map((step) => step.state), expectedStates);
+  const current = ui.missionSteps.filter((step) => step.current === 'step');
+  assert.equal(current.length, expectedStates.includes('current') ? 1 : 0);
 }
 
 async function waitForText(page, selector, pattern, description, timeout = stateTimeout) {
@@ -528,8 +543,11 @@ try {
     assert.equal((await snapshot(page)).room.objectiveSecured, false);
   assert(lobby.sessions.every((session) => !session.ready));
   await Promise.all([pageA, pageB].map(assertOnboarding));
-  for (const page of [pageA, pageB]) {
+  for (const [index, page] of [pageA, pageB].entries()) {
     const ui = await waitForPresentation(page, 'lobby', 'none');
+    assert.equal(ui.identity, index === 0 ? 'YOU · P1 · PARTNER · P2' : 'YOU · P2 · PARTNER · P1');
+    assert.equal(ui.briefingVisible, true);
+    assertMissionSteps(ui, ['current', 'upcoming', 'upcoming']);
     assert.match(ui.phase ?? '', /LOBBY.*ATTEMPT 1/i);
     assert.match(ui.objective ?? '', /READY/i);
     assert.match(ui.readiness ?? '', /0\/2/);
@@ -559,6 +577,9 @@ try {
   assert(activeA.sessions.every((session) => session.ready));
   for (const page of [pageA, pageB]) {
     const ui = await waitForPresentation(page, 'active', 'none');
+    assert.equal(ui.briefingVisible, false);
+    assert.equal(ui.interactionVisible, false);
+    assertMissionSteps(ui, ['current', 'upcoming', 'upcoming']);
     assert.match(ui.phase ?? '', /ACTIVE.*ATTEMPT 1/i);
     assert.match(ui.objective ?? '', /STEAL.*VAULT DATA/i);
     assert.match(ui.timer ?? '', /^0[0-5]:[0-5][0-9]$/);
@@ -570,6 +591,18 @@ try {
     event: 'attempt-started', attempt: activeA.room.attempt,
     startedTick: activeA.room.startedTick, deadlineTick: activeA.room.deadlineTick,
   });
+
+  // Exercise the actual browser keyboard path before the deterministic long route.
+  const keyboardStart = activeA.players.find((player) => player.playerId === 1);
+  assert(keyboardStart, 'player 1 missing before keyboard movement');
+  await pageA.keyboard.down('d');
+  const keyboardMoved = await waitFor(pageA, (state) =>
+    (state.players.find((player) => player.playerId === 1)?.xMm ?? 0) >= keyboardStart.xMm + 120,
+  'real keyboard movement from client A');
+  await pageA.keyboard.up('d');
+  evidence.events.push({ event: 'keyboard-movement', playerId: 1,
+    fromX: keyboardStart.xMm,
+    toX: keyboardMoved.players.find((player) => player.playerId === 1)?.xMm });
 
   await guardPixel(pageA, GuardState.PATROL);
   // First demonstrate that a human cannot simply walk through the patrol.
@@ -632,6 +665,11 @@ try {
   const westStaging = await snapshot(pageA);
   const westPose = westStaging.players.find((player) => player.playerId === 1);
   assert(Math.hypot(westPose.xMm - 21000, westPose.zMm - 4000) > 750);
+  for (const page of [pageA, pageB]) {
+    const ui = await uiState(page);
+    assert.equal(ui.interactionVisible, false);
+    assert.doesNotMatch(ui.interaction ?? '', /STEAL VAULT DATA/i);
+  }
   await pageA.evaluate(() => window.th.action(61));
   for (const page of [pageA, pageB]) {
     const rejected = await waitFor(page, (state) => state.serverTick >= westStaging.serverTick + 60,
@@ -661,15 +699,21 @@ try {
       Math.hypot(pose.xMm - 21000, pose.zMm - 4000) <= 750;
   }, 'authoritative live player within the vault interaction radius');
   assert.equal(atVault.room.objectiveSecured, false);
-  await pageA.evaluate(() => window.th.action(61));
+  await waitForText(pageA, '#interaction', /E.*STEAL VAULT DATA/i, 'in-range vault prompt');
+  const vaultUi = await uiState(pageA);
+  assert.equal(vaultUi.interactionVisible, true);
+  assert.match(vaultUi.interaction ?? '', /E.*STEAL VAULT DATA/i);
+  await pageA.keyboard.press('e');
   const secured = await sharedObjectiveSnapshot(pageA, pageB);
   evidence.events.push({ event: 'objective-secured', targetId: 61, playerId: 1,
     roomEpoch: secured.roomEpoch, serverTick: secured.serverTick, clientAgreement: true,
     actionPose: atVault.players.find((player) => player.playerId === 1) });
   // Leave the patrol lane before waiting for software-rendered screenshots.
   await dash(pageA, 1, 21000, 1500);
-  for (const page of [pageA, pageB])
+  for (const page of [pageA, pageB]) {
     await waitForText(page, '#objective', /DATA SECURED|FINAL DOOR.*ECHO/i, 'post-theft objective');
+    assertMissionSteps(await uiState(page), ['complete', 'current', 'upcoming']);
+  }
   await Promise.all([capture(pageA, 1, 'objective-secured', true), capture(pageB, 2, 'objective-secured', true)]);
 
   // The crossing and vault approach replay too. Let those Echoes and their
@@ -688,6 +732,10 @@ try {
   const finalOpen = await recordEchoPlate(pageA, 23, 13, 19500, 2500, undefined, true);
   assert.equal(finalOpen.plates.find((plate) => plate.id === 23)?.livePresence, 0);
   assert(finalOpen.plates.find((plate) => plate.id === 23)?.echoPresence > 0);
+  for (const page of [pageA, pageB]) {
+    await waitForText(page, '#objective', /REACH EXTRACTION/i, 'extraction objective');
+    assertMissionSteps(await uiState(page), ['complete', 'complete', 'current']);
+  }
   await dash(pageA, 1, 21500, 2200);
   for (const page of [pageA, pageB]) {
     assert.equal(
@@ -737,6 +785,8 @@ try {
   for (const page of [pageA, pageB]) {
     const ui = await waitForPresentation(page, 'won', 'success', /SUCCESS/i);
     assert.match(ui.objective ?? '', /HEIST COMPLETE/i);
+    assert.equal(ui.briefingVisible, true);
+    assertMissionSteps(ui, ['complete', 'complete', 'complete']);
   }
   evidence.events.push({
     event: 'attempt-won', attempt: wonA.room.attempt, endedTick: wonA.room.endedTick,
@@ -889,12 +939,12 @@ try {
   assert(browserErrors.every((errors) => errors.length === 0));
   await Promise.all([capture(pageA, 1, 'attempt-4-clean-lobby', false), capture(pageB, 2, 'attempt-4-clean-lobby', false)]);
   await writeFile(`${artifacts}/evidence.json`, `${JSON.stringify(evidence, null, 2)}\n`);
-  console.log(JSON.stringify({ event: 'p3-game-loop-passed', ...evidence }));
+  console.log(JSON.stringify({ event: 'p4-player-experience-passed', ...evidence }));
 } catch (error) {
   evidence.failure = String(error);
   evidence.lastSnapshots = await Promise.all(contexts.map((context) => snapshot(context.pages().at(-1))));
   await writeFile(`${artifacts}/failure.json`, `${JSON.stringify(evidence, null, 2)}\n`);
-  console.error(JSON.stringify({ event: 'p3-acceptance-failed', ...evidence }));
+  console.error(JSON.stringify({ event: 'p4-acceptance-failed', ...evidence }));
   throw error;
 } finally {
   await Promise.all(contexts.map((context) => context.close()));
