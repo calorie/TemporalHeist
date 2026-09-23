@@ -33,9 +33,9 @@ assert.deepEqual(worldPixel(23275, 4000, 1280, 720).map(Math.round), [1195, 360]
 
 const guard = {
   id: 51,
-  xMm: 17200,
+  xMm: 19100,
   zMm: 4000,
-  facingX: 1000,
+  facingX: -1000,
   facingZ: 0,
   state: 1,
   waypointId: 512,
@@ -51,12 +51,12 @@ const presentation = (state, investigationTarget) => ({
 const patrol = guardPrimitives(map, presentation(1));
 assert.equal(patrol.cones.length, 1);
 assert.deepEqual(patrol.cones[0].color, [0.12, 0.75, 0.72, 0.22]);
-assert.deepEqual(patrol.cones[0].matrix, [0, 0, 1400, 0, 0, 20, 0, 0, 2600, 0, 0, 0, 17200, 400, 4000, 1]);
+assert.deepEqual(patrol.cones[0].matrix, [0, 0, -1400, 0, 0, 20, 0, 0, -2600, 0, 0, 0, 19100, 400, 4000, 1]);
 assert.equal(patrol.objects.length, 3, 'body, facing indicator, and authored route');
 assert.deepEqual(patrol.objects[0].color, [0.95, 0.72, 0.16, 1]);
 assert.deepEqual(
   [patrol.objects[1].x, patrol.objects[1].z, patrol.objects[2].x, patrol.objects[2].z],
-  [17460, 4000, 18850, 4000],
+  [18840, 4000, 19800, 4000],
 );
 assert(patrol.objects[2].y > patrol.cones[0].y + patrol.cones[0].sy, 'route stays visible over the cone');
 const investigate = guardPrimitives(
