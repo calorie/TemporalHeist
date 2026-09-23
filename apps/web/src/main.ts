@@ -55,6 +55,7 @@ const interaction = element<HTMLElement>('#interaction');
 const readyButton = element<HTMLButtonElement>('#ready');
 const restartButton = element<HTMLButtonElement>('#restart');
 const muteButton = element<HTMLButtonElement>('#mute');
+const briefing = element<HTMLElement>('#briefing');
 const hudCache = new Map<string, string>();
 
 function input(kind: InputKind, sequence: number, x = 0, z = 0, targetId = 0): Input {
@@ -296,6 +297,7 @@ const frame = () => {
   audio.update(snap);
   renderIfChanged(hudCache, 'phase-state', hud.phaseState, () => {
     hudElement.dataset.phase = hud.phaseState;
+    briefing.hidden = hud.phaseState === 'active';
   });
   for (const [key, target, value] of [
     ['phase', phase, hud.phase],
@@ -331,6 +333,7 @@ const frame = () => {
       ...hud.steps.map((step) => {
         const item = document.createElement('li');
         item.dataset.state = step.state;
+        if (step.state === 'current') item.setAttribute('aria-current', 'step');
         item.textContent = step.label;
         return item;
       }),

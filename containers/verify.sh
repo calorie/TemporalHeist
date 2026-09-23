@@ -30,4 +30,5 @@ node tests/guard-cone-gpu.mjs
 node tests/isolation-harness-contract.mjs
 node tests/stacked-ci-contract.mjs
 npx vite build apps/web
+node tests/browser-ux.mjs
 node spikes/gpu/test.mjs
