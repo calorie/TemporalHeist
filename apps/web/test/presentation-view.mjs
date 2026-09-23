@@ -61,6 +61,18 @@ const missionPresentation = (room, playerId = 1) => ({
 const vaultGuidance = guidancePrimitives(map, missionPresentation({ objectiveSecured: false }), 1);
 assert.deepEqual([vaultGuidance[0].x, vaultGuidance[0].z], [1500, 2500], 'self marker follows local player');
 assert.deepEqual([vaultGuidance[1].x, vaultGuidance[1].z], [21000, 4000], 'vault is the first goal');
+const nearVault = (phase) => ({
+  ...missionPresentation({ phase, objectiveSecured: false }),
+  live: [{ playerId: 1, xMm: 21000, zMm: 4000 }],
+});
+const activeVault = guidancePrimitives(map, nearVault(RoomPhase.ACTIVE), 1)[1];
+assert.deepEqual(activeVault.color, [1, 0.9, 0.12, 0.95], 'ACTIVE in-range vault is actionable');
+assert.equal(activeVault.sx, 420);
+for (const phase of [1, RoomPhase.FAILED, RoomPhase.WON]) {
+  const inactiveVault = guidancePrimitives(map, nearVault(phase), 1)[1];
+  assert.deepEqual(inactiveVault.color, [0.55, 0.95, 1, 0.82], 'non-ACTIVE vault stays informational');
+  assert.equal(inactiveVault.sx, 320);
+}
 const echoGuidance = guidancePrimitives(
   map,
   missionPresentation({ objectiveSecured: true, echoOpenedFinalDoor: false }),

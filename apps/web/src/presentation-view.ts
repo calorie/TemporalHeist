@@ -4,6 +4,7 @@ import type { Presentation } from './timeline.ts';
 
 export type Color = [number, number, number, number];
 
+const ACTIVE = 2;
 const WON = 3;
 const FAILED = 4;
 const DEFAULT_CLEAR: Color = [0.015, 0.035, 0.055, 1];
@@ -66,7 +67,8 @@ export function guidancePrimitives(
         };
   if (!goal) return [];
   const actionable =
-    !room?.objectiveSecured &&
+    room?.phase === ACTIVE &&
+    !room.objectiveSecured &&
     Math.hypot(goal.x - self.xMm, goal.z - self.zMm) <= map.objective.radius;
   return [
     {

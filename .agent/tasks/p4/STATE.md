@@ -53,6 +53,10 @@ Stack 2 renderer/readability is implemented and verified on `p4/renderer-readabi
   and the vault-center color still expected the pedestal instead of the new goal cue.
   The probes now derive from the equal-scale projection and retain their regression
   checks; the corrected full acceptance passed.
+- Review correction gates the enlarged yellow vault-action cue on canonical ACTIVE
+  phase as well as range and unsecured objective state. Pure tests cover ACTIVE,
+  LOBBY, FAILED, and WON; the focused presentation test, TypeScript, and Biome pass
+  in `p4-renderer-agent` containers.
 
 ## Next action
 
