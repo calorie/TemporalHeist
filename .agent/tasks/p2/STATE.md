@@ -2,6 +2,17 @@
 
 ## Status
 
+Mandatory-diversion follow-up is in verification. Limited review found a real
+Patrol-only route through the short choke behind an eastbound guard, so the
+previous `d2f1a59` release evidence below does not prove the approved mandatory
+Echo objective. The concrete route and an all-phase entry-coverage invariant
+both failed before the correction, then passed with all 32 simulation tests.
+Guard 51 now patrols from `(19100,4000)` to `(20500,4000)` while watching west;
+Investigate/Return keep movement-facing semantics. Full verification and clean
+acceptance are the next checks in private `p2-mandatory-*` namespaces.
+
+### Prior final-review wave (superseded for mandatory diversion)
+
 Final-review code revision `d2f1a59fdc2c2e28ea828fa42c6ea04f833bb6a4` passed
 full verification, clean acceptance, separate visual verification, and concurrent
 acceptance in two clean worktrees. All four final-review findings are addressed.

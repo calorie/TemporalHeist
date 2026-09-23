@@ -148,3 +148,36 @@ used the same code SHA and passed resource independence and teardown checks.
 Original `b35349d` and intermediate `1f92349`/`ac847cf` evidence is retained only
 as history and is superseded by the final `p2-final-fix-release-*` artifacts.
 The final evidence-only commit does not change code, map, or test behavior.
+
+## 2026-09-23 — Mandatory diversion after limited review
+
+The earlier walls force entry through the opening but do not make the Echo
+necessary: with the guard at `(19000,4000)` moving east, a player can move from
+`(17700,6000)` north for 30 ticks, east for 20, then north to `(18900,1500)`
+without being seen. The real continuous-input regression reproduced this ACTIVE
+result with no Echo. An independent entry-coverage regression also failed.
+
+The smallest robust correction keeps the guard's cone and Echo behavior but
+makes Patrol retain its configured watch facing `(-1000,0)` while moving between
+waypoint 511/start `(19100,4000)` and unchanged waypoint 512 `(20500,4000)`.
+Investigate/Return still face movement; rejoining Patrol restores westward
+watching before detection and snapshot publication. Existing rendering consumes
+that authoritative facing directly. No invisible gate or separate detection
+shape is added. Walls 107/108, passage, plate 23, door 13, and extraction are
+unchanged from the serialized geometry correction.
+
+Starting at 19000 would create a 150-tick route period that divides the 600-tick
+Echo delay: a safely recorded pose would replay at the same patrol phase.
+Starting at 19100 gives a 140-tick period and 40-tick replay offset without
+changing range 2600, half-width 1400, speed 20, or search duration 180.
+The authored decoy is now near `(17400,3800)`, recorded as the guard moves east
+out of range. Players wait until the Echo draws the guard west to X <=17800
+before entering its former watch area. The exact 600-tick Echo source rule,
+30-tick target update window, and original final door/extraction puzzle remain.
+
+The coverage regression samples all four corners of X `18100..18160`,
+Z `3550..4450` at every patrol tick across both endpoints. Actor radius 250
+constrains entry to that Z interval and maximum motion 60 cannot skip that slab.
+The convex radial-clipped cone contains the whole slab if it contains its four
+corners. Thus no no-Echo route can cross the barrier during Patrol, independently
+of the concrete reviewed path. Existing Echo/search/Return/reset tests also pass.

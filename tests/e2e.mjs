@@ -367,20 +367,12 @@ async function safeGuardEntry(page, player) {
   // Keep the waiting position beyond the guard's maximum range. Aim through
   // the doorway center so input/observation lag cannot clip its lower wall.
   await dash(page, player, 14200, 4000);
-  await waitFor(page, (state) => {
-    const guard = guardOf(state);
-    return guard.state === GuardState.PATROL && guard.xMm >= 19000 && guard.xMm <= 19400 && guard.facingX > 0;
-  }, 'guard facing away from the second doorway');
   await dash(page, player, 15800, 4000);
   await dash(page, player, 15800, 6000);
 }
 
 async function guardDiversion(pageA, pageB) {
   await dash(pageB, 2, 17700, 6000);
-  await waitFor(pageA, (state) => {
-    const guard = guardOf(state);
-    return guard.state === GuardState.PATROL && guard.xMm >= 19000 && guard.xMm <= 19400 && guard.facingX > 0;
-  }, 'safe route to the upper decoy lane');
   await dash(pageA, 1, 15800, 2200);
   await dash(pageA, 1, 17700, 2200);
   // Reject both former side-lane bypasses before recording the decoy. Neither
@@ -404,17 +396,17 @@ async function guardDiversion(pageA, pageB) {
       startTick: start.serverTick, tick: stopped.serverTick,
       pose: stopped.players.find((pose) => pose.playerId === playerId), guard: guardOf(stopped) });
   }));
-  await dash(pageA, 1, 16300, 2200);
+  await dash(pageA, 1, 17400, 2200);
   await waitFor(pageA, (state) => {
     const guard = guardOf(state);
-    return guard.state === GuardState.PATROL && guard.xMm >= 17400 && guard.xMm <= 17600 && guard.facingX > 0;
-  }, 'guard moving away before recording the decoy');
+    return guard.state === GuardState.PATROL && guard.xMm >= 19600 && guard.xMm <= 19800 && guard.waypointId === 512;
+  }, 'guard moving out of range before recording the decoy');
   const sourceStart = await snapshot(pageA);
-  await dash(pageA, 1, 16300, 3800);
+  await dash(pageA, 1, 17400, 3800);
   const lure = await snapshot(pageA);
   evidence.events.push({ event: 'guard-decoy-recorded', sourceStartTick: sourceStart.serverTick,
     tick: lure.serverTick, pose: lure.players.find((pose) => pose.playerId === 1), guard: guardOf(lure) });
-  await dash(pageA, 1, 16300, 2000);
+  await dash(pageA, 1, 17400, 2000);
   await dash(pageA, 1, 17500, 2000);
   const investigating = await waitFor(pageA, (state) => {
     assert.equal(state.room.phase, RoomPhase.ACTIVE);
@@ -434,6 +426,11 @@ async function guardDiversion(pageA, pageB) {
   evidence.events.push({ event: 'guard-echo-investigating', sourceStartTick: sourceStart.serverTick,
     lureTick: lure.serverTick, tick: investigating.serverTick, echo, guard, agreement,
     canonicalDelayTicks: investigating.serverTick - echo.sourceTick });
+  const diverted = await waitFor(pageA, (state) => {
+    assert.equal(state.room.phase, RoomPhase.ACTIVE);
+    return guardOf(state).state === GuardState.INVESTIGATE && guardOf(state).xMm <= 17800;
+  }, 'Echo draws the west-facing guard clear of the choke');
+  evidence.events.push({ event: 'guard-drawn-clear', tick: diverted.serverTick, guard: guardOf(diverted) });
   // SwiftShader screenshots can take longer than the search window. Freeze
   // only presentation after readback, while real MoQ input and authority ticks
   // continue and both players cross. No gameplay state or clock is paused.

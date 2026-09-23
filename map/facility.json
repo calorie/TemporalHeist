@@ -11,16 +11,16 @@
   "guards": [
     {
       "id": 51,
-      "x": 17200,
+      "x": 19100,
       "z": 4000,
-      "facingX": 1000,
+      "facingX": -1000,
       "facingZ": 0,
       "speedPerTick": 20,
       "range": 2600,
       "halfWidth": 1400,
       "searchTicks": 180,
       "waypoints": [
-        {"id": 511, "x": 17200, "z": 4000},
+        {"id": 511, "x": 19100, "z": 4000},
         {"id": 512, "x": 20500, "z": 4000}
       ]
     }

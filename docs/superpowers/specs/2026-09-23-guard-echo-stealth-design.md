@@ -45,7 +45,8 @@ target position so it cannot oscillate or overshoot.
 Each active tick follows this order:
 
 1. advance the guard toward its current patrol, investigation, or return target;
-2. derive its facing from the chosen movement segment;
+2. use the configured watch facing during Patrol; derive Investigate/Return
+   facing from the chosen movement segment, restoring watch facing on rejoin;
 3. test live humans in its deterministic view cone;
 4. fail immediately if a connected live human is visible;
 5. otherwise test eligible first-generation Echo poses;
@@ -77,7 +78,11 @@ and state-entry/search-expiry ticks. Values required by gameplay are published b
 the authority; clients do not reconstruct guard AI from waypoints.
 
 `map/facility.json` gains the patrol waypoints, route order, guarded-passage
-geometry, and any sight blockers needed by the one authored encounter. Generated
+geometry, and any sight blockers needed by the one authored encounter. Guard 51
+patrols east of the choke from `(19100,4000)` to `(20500,4000)`, always watching
+west during Patrol. Its unchanged cone covers every reachable west-entry point
+throughout the route. The 140-tick period gives the 600-tick Echo a different
+patrol phase, allowing a decoy recorded out of range to be seen on replay. Generated
 TypeScript remains derived from the protobuf source. The protobuf, generated-code
 definition, map semantics, and container command contract are synchronization
 boundaries. They are frozen and cross-language verified before parallel component
@@ -136,4 +141,3 @@ P2 contains one authored guard encounter, fixed straight-line waypoints, and thr
 guard states. It does not add general navigation meshes, dynamic obstacle routing,
 combat, capture animations, inventories, multiple Echo generations, guard-to-guard
 coordination, persistence, matchmaking, or production authentication.
-
