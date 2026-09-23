@@ -28,8 +28,8 @@ try {
     }] };
     const samples = {};
     for (const [name, dx, dz] of [['inside', 2200, 1000], ['farCorner', 2500, 1200], ['outsideAngle', 2000, 1200]]) {
-      const pending = renderer.samplePixel(...worldPixel(12000 + dx, 4000 + dz, 1280, 720));
-      renderer.render(facility, presentation);
+      const pending = renderer.samplePixel(...worldPixel(12000 + dx, 4000 + dz, 1280, 720, facility.bounds));
+      renderer.render(facility, presentation, 1);
       samples[name] = await pending;
     }
     return { samples, errors: renderer.errors(), renderer: renderer.info() };

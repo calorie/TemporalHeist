@@ -10,10 +10,10 @@ export async function captureScreenshot(page, path, objectiveSecured) {
     const context = canvas.getContext('2d');
     context.drawImage(bitmap, 0, 0);
     bitmap.close();
-    const floor = [...context.getImageData(640, 650, 1, 1).data];
-    const wall = [...context.getImageData(798, 605, 1, 1).data];
+    const floor = [...context.getImageData(640, 476, 1, 1).data];
+    const wall = [...context.getImageData(798, 458, 1, 1).data];
     const objective = [...context.getImageData(1083, 360, 1, 1).data];
-    // Locate a solid 16x32 body patch in the encounter area. This tolerates
+    // Locate a solid 16x16 body patch in the encounter area. This tolerates
     // movement during capture; the smaller red target marker cannot qualify.
     const area = context.getImageData(780, 100, 380, 500);
     let guard;
@@ -26,9 +26,9 @@ export async function captureScreenshot(page, path, objectiveSecured) {
           const match = area.data[index + 3] === 255 && color.every((value, channel) =>
             Math.abs(area.data[index + channel] - value) <= 1);
           streak[x] = match ? streak[x] + 1 : 0;
-          width = streak[x] >= 32 ? width + 1 : 0;
+          width = streak[x] >= 16 ? width + 1 : 0;
           if (width >= 16) {
-            guard = { pixel: [780 + x - 15, 100 + y - 31], color, width: 16, height: 32 };
+            guard = { pixel: [780 + x - 15, 100 + y - 15], color, width: 16, height: 16 };
             break;
           }
         }
@@ -41,7 +41,7 @@ export async function captureScreenshot(page, path, objectiveSecured) {
   assert(matches(samples.wall, [31, 64, 79, 255]), `screenshot wall mismatch: ${samples.wall}`);
   assert(samples.guard, 'screenshot guard body is missing');
   if (objectiveSecured !== undefined) {
-    const color = objectiveSecured ? [26, 77, 87, 255] : [20, 230, 255, 255];
+    const color = objectiveSecured ? [26, 77, 87, 255] : [136, 242, 255, 255];
     assert(matches(samples.objective, color), `screenshot objective mismatch: ${samples.objective}`);
   }
   return samples;

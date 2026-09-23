@@ -1,12 +1,10 @@
 import type { Facility } from '../map.ts';
 import { objectivePrimitives } from '../objective-view.ts';
 import {
+  aspectFitCamera,
   extractionVisual,
+  guidancePrimitives,
   sceneClearColor,
-  WORLD_CENTER_X,
-  WORLD_CENTER_Z,
-  WORLD_HALF_DEPTH,
-  WORLD_HALF_WIDTH,
 } from '../presentation-view.ts';
 import {
   surveillanceVisuals,
@@ -140,7 +138,7 @@ export class WebGpuRenderer {
     device.queue.writeBuffer(this.#cubeVertices, 0, cube);
     device.queue.writeBuffer(this.#wedgeVertices, 0, wedge);
   }
-  render(map: Facility, p: Presentation) {
+  render(map: Facility, p: Presentation, playerId: number) {
     this.#resize();
     const objects: Instance[] = [
       { x: 12000, y: -120, z: 4000, sx: 12000, sy: 100, sz: 4000, color: [0.035, 0.09, 0.12, 1] },
@@ -176,6 +174,7 @@ export class WebGpuRenderer {
         color: [0.8, 0.55, 0.15, 1],
       });
     objects.push(...objectivePrimitives(map, p));
+    objects.push(...guidancePrimitives(map, p, playerId));
     const cones: Instance[] = [];
     for (const camera of surveillanceVisuals(map, p.snapshot)) {
       cones.push({
@@ -238,7 +237,7 @@ export class WebGpuRenderer {
         sz: 250,
         color: pose.playerId === 1 ? [0.25, 0.85, 1, 0.35] : [1, 0.55, 0.8, 0.35],
       });
-    this.#draw(cones, objects, sceneClearColor(p.snapshot));
+    this.#draw(map, cones, objects, sceneClearColor(p.snapshot));
   }
   info() {
     return {
@@ -305,16 +304,19 @@ export class WebGpuRenderer {
     });
     return data;
   }
-  #draw(cones: Instance[], objects: Instance[], clearColor: [number, number, number, number]) {
+  #draw(
+    map: Facility,
+    cones: Instance[],
+    objects: Instance[],
+    clearColor: [number, number, number, number],
+  ) {
     if (cones.length + objects.length > 256)
       throw new Error('Scene exceeds the persistent WebGPU instance buffer');
     const depth = this.#depth;
     if (!depth) return;
-    const aspect = this.canvas.width / this.canvas.height;
-    const sx = 1 / WORLD_HALF_WIDTH,
-      sz = 1 / WORLD_HALF_DEPTH;
+    const camera = aspectFitCamera(map.bounds, this.canvas.width, this.canvas.height);
     const view = new Float32Array([
-      sx,
+      camera.scaleX,
       0,
       0,
       0,
@@ -323,11 +325,11 @@ export class WebGpuRenderer {
       WORLD_DEPTH_SCALE,
       0,
       0,
-      -sz * aspect,
+      -camera.scaleZ,
       0,
       0,
-      -WORLD_CENTER_X * sx,
-      WORLD_CENTER_Z * sz * aspect,
+      -camera.centerX * camera.scaleX,
+      camera.centerZ * camera.scaleZ,
       WORLD_DEPTH_OFFSET,
       1,
     ]);
