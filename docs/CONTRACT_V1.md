@@ -71,9 +71,9 @@ occupancy, and whether Echo Presence opened the final door in the current attemp
 Older decoders may ignore these additions.
 
 P3 adds `RoomState.objective_secured` as boolean field 12 under protocol major 1.
-An older room message without field 12 decodes as `false`. During this contract
-layer the simulation publishes `false`; the authority mission layer will publish
-the attempt's secured state.
+An older room message without field 12 decodes as `false`. A valid live-human
+vault action secures the objective for the attempt, even if that player later
+disconnects. Restart clears it.
 
 The authority starts an attempt only while both player sessions are connected and
 ready. It records the start and five-minute deadline as server ticks. P3 victory

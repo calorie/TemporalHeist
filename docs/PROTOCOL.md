@@ -179,8 +179,9 @@ P3 adds `RoomState.objective_secured` as boolean field 12 under protocol major 1
 An omitted field decodes as `false`, preserving legacy room messages. The map
 authors objective target ID 61 at `(21000, 4000)` with radius 750 mm. A live
 connected human can address it with the existing `ACTION` and `target_id` input;
-Echo Action cannot secure it. The contract layer publishes `false` until the
-authority mission layer owns the attempt state.
+Echo Action cannot secure it. A valid live-human action sets the authoritative
+room state for the attempt, including after that player disconnects. Victory
+requires it, and restart resets it to `false`.
 
 ## System/lifecycle messages
 

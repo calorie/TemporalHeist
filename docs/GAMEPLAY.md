@@ -299,6 +299,7 @@ The checked-in facility adds vault objective 61 at `(21000, 4000)` with a
 targeted Action to secure the data. Echo Action cannot secure it; the vault
 has no Echo capability. Secured data is a team fact for the current attempt,
 not carried inventory. The room snapshot's `objective_secured` field reports
-it. Older room messages omit that field and decode as unsecured. In this
-contract layer the published value remains false until the authority mission
-layer implements acquisition and reset.
+it. Older room messages omit that field and decode as unsecured. Once secured,
+the objective remains secured if the acquiring player disconnects; it gates
+victory together with the Echo-opened final door and both live players in
+extraction. Restart clears the objective.

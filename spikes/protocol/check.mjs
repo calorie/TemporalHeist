@@ -20,6 +20,7 @@ if (process.argv[2] === 'encode') {
   assert.equal(snapshot.room?.failureHazardId, 0);
   assert.equal(snapshot.room?.failureGuardId, 51);
   assert.equal(snapshot.room?.objectiveSecured, true);
+  assert.equal(RoomState.decode(Uint8Array.from([0x08, 0x02])).objectiveSecured, false);
   assert.deepEqual(snapshot.hazards, [{id: 41, active: true, detectedPlayerId: 2}]);
   assert.equal(snapshot.guards[0]?.id, 51);
   assert.equal(snapshot.guards[0]?.state, GuardState.INVESTIGATE);
