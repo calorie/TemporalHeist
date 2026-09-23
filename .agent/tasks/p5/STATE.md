@@ -2,9 +2,9 @@
 
 ## Status
 
-Temporal Bridge implementation is complete through Stack 3. The release layer adds
-two-client canonical/GPU agreement and reuses one mission screenshot for visible
-bridge evidence. Final two-worktree isolation remains before publication.
+Temporal Bridge implementation and release verification are complete through Stack
+3. The release layer adds two-client canonical/GPU agreement and reuses one mission
+screenshot for visible bridge evidence. All ten acceptance criteria pass.
 
 ## Review stack
 
@@ -43,9 +43,24 @@ bridge evidence. Final two-worktree isolation remains before publication.
 - `player-1-temporal-bridge.png` records the live mission after the Echo opened the
   final door. P1 was at `(21429, 2194)` while its Echo was at `(19441, 1786)`; the
   screenshot retains the ACTIVE extraction HUD and visible Temporal Bridge.
+- `sh containers/verify-two-stack-isolation.sh ... p5-release-agent-a ...
+  p5-release-agent-b /tmp/temporal-heist-p5-release-isolation` — passed against
+  code commit `ba7bd0e7bdba58641a9898f27a679e4c82dff7ec`. Both full acceptance stacks were
+  observed live concurrently with disjoint container IDs, networks
+  (`cbf26c434ca0` / `f4e0bbf9788f`), volumes, rooms, browser profiles, certificates,
+  and artifacts; neither published a host port. Both acceptances exited 0. Removing
+  Stack A with volumes preserved Stack B resource IDs and its in-network health.
+
+## Known constraints and unverified items
+
+- Automated WebGPU evidence uses Chromium's SwiftShader fallback. Hardware adapters
+  remain supported by the same API but are not separately benchmarked.
+- The Temporal Bridge is presentation-only and bounded to 512 records; malformed
+  history over capacity intentionally fails instead of truncating.
+- No P5 acceptance item remains unverified.
 
 ## Next action
 
-Commit Stack 3, create a clean second worktree at that revision, run the required
-two-stack isolation check with unique `p5-release-agent-a/b` namespaces, record the
-resource evidence, clean both stacks, and publish the top stacked PR.
+Publish the top stacked PR and allow CI to repeat component and full acceptance.
+After merge, the next milestone is P5 Release Candidate packaging/operations work;
+the Temporal Identity slice itself is complete.
