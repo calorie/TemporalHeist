@@ -2,11 +2,18 @@
 
 ## Status
 
-Final-review corrections are being verified in the exclusive `p2-final-fixes`
-checkout. The original `b35349d` release evidence below is superseded and retained
-only as history: it did not prove a mandatory geometric crossing, robust lure
-assertions, scene-specific screenshots, or radial cone parity. The serialized
-map correction and exact coordinates are recorded in `DECISIONS.md`.
+Final-review code revision `d2f1a59fdc2c2e28ea828fa42c6ea04f833bb6a4` passed
+full verification, clean acceptance, separate visual verification, and concurrent
+acceptance in two clean worktrees. All four final-review findings are addressed.
+All test namespaces, their writable state, and both disposable worktrees have
+been removed after evidence copy. The owner checkout and untracked evidence
+remain for review; default-branch integration still requires user approval.
+
+The original `b35349d` evidence and intermediate `1f92349`/`ac847cf` runs below
+are superseded historical evidence. Isolation found two harness timing faults
+in the intermediate revisions; both are resolved and all final commands passed
+at `d2f1a59`. The serialized map correction and exact coordinates are recorded
+in `DECISIONS.md`. The authoritative final evidence is the last section below.
 
 ## Completed
 
@@ -244,4 +251,139 @@ contracts, all new regression checks, Vite, and SwiftShader WebGPU with zero
 shader/validation errors. The first acceptance rejected both side bypasses but
 timed out on the new lure; its recorded poses identified a narrow timing margin.
 The corrected recording route starts earlier and reaches Z 3800, as documented
-in `DECISIONS.md`. Final revision release verification is still pending.
+in `DECISIONS.md`.
+
+### Candidate revision `1f92349a4a3978b3f3e609353f3e811d5bde7b23` (superseded)
+
+- `sh container p2-final-fix verify` — passed again at the committed revision,
+  including all checks above. Chromium 153.0.8010.12 used SwiftShader WebGPU;
+  the compositor was ANGLE/Mesa llvmpipe Vulkan 1.4.318, Mesa 25.2.8.
+- `sh container p2-final-fix down --volumes --remove-orphans` followed by
+  `sh container p2-final-fix acceptance` — passed from clean runtime volumes.
+  The south bypass stopped at `(17818,5985)` on tick 9345; the north bypass
+  stopped at `(17846,2200)` on tick 9348, both during Patrol and before the lure.
+  Guard 51 entered Investigate at tick 10025. Both clients' complete guard
+  snapshots matched at tick 10026; A's Echo source tick was 9426 (exactly 600
+  behind). B crossed at tick 10089 after occupying `(18162,4149)` in the
+  passage; A crossed at tick 10110 after occupying `(18281,4233)`. Both crossings
+  remained ACTIVE/Investigate. Both players won at tick 11957 with two live
+  extraction occupants. Surveillance and reset checks also passed.
+- All 14 clean acceptance PNGs passed known floor `[9,23,31,255]`, wall
+  `[31,64,79,255]`, and separate solid guard-body checks. Patrol and investigation
+  cone pixels were `[15,80,80,255]` and `[164,17,14,255]`. Browser and renderer
+  errors were empty for both players.
+- `sh container p2-final-fix-visual visual` — passed for separate browser
+  services/profiles with ephemeral CDP ports 52728 and 52729. Both metadata
+  files reported the initial guard 51 snapshot, SwiftShader, and empty errors.
+  Both saved lobby images, both clean investigation images, the clean win
+  image, and the radial GPU image were inspected: floor/wall/guard rectangles,
+  the central choke, rounded guard cone boundary, investigation cue, and
+  extraction result are visible.
+- Clean acceptance and visual artifacts were copied before both namespaces
+  were removed with `down --volumes --remove-orphans`. Untracked evidence is
+  under `.superpowers/sdd/p2/artifacts/clean-acceptance`, `visual`, and
+  `guard-cone-p2-final-fix`; full logs and the report are alongside them.
+
+The first isolation run reached bypass rejection and the exact Echo lure, then
+stack A's investigation cone probe read floor at a pixel chosen using a stale
+facing. The target was still updating within its 30-tick observation window.
+Stack B was stopped and both stacks were removed with volumes. The final
+harness now waits until `serverTick >= stateEnteredTick + 30` before this visual
+readback; both live crossings continue concurrently. This changes no gameplay
+or renderer logic. The failure JSON and logs are retained in `initial-isolation`.
+Two clean worktrees were advanced to `ac847cf` for the next rerun.
+
+### Candidate revision `ac847cffd1761c5537756515437d659400d166dc` (superseded)
+
+- `sh container p2-final-fix verify` — passed all protocol/codegen, format,
+  Clippy, 8 authority + 30 simulation tests, TS/Biome, client/container
+  contracts, Vite, screenshot/lure regressions, actual guard-cone GPU parity,
+  and raw WebGPU/WGSL checks. Shader, renderer and browser errors were empty.
+- Map consumers are validated against walls 107/108 at X `18100..18500`,
+  Z `0..3300`/`4700..8000`, and the passage X `18100..18500`, Z `3300..4700`.
+  Guard 51/waypoints 511/512, plate 23 `(19500,2500)`, door 13 and extraction
+  are unchanged; deterministic collision and release acceptance cover them.
+- `sh container p2-final-fix acceptance` — passed with fresh runtime state and
+  browser profiles after the prior namespace/volumes were removed. South/north
+  bypasses stopped at X 17792/17816 on tick 9435. At tick 10116 A's Echo used
+  source tick 9516, exactly 600 behind; complete guard snapshots agreed across
+  clients. B crossed at 10185 after occupying `(18392,4233)` in the passage;
+  A crossed at 10200 after occupying `(18164,4278)`. Both crossings remained
+  ACTIVE/Investigate. Both won at 12023; surveillance/reset also passed.
+- All 14 PNGs passed separate floor, wall and guard-body checks; both browser
+  and renderer error arrays were empty. Investigation readback now waits for
+  the authoritative target-update window to close, and its red cone check passed.
+- `sh container p2-final-fix-visual visual` — passed on separate browser
+  services/profiles and ephemeral CDP 52877/52876, with the same initial guard
+  metadata and empty errors. Both final investigation and both visual lobby
+  images were inspected. The copied radial GPU image shows the clipped arc;
+  its inner/far-corner readbacks remain teal/floor respectively.
+- Backend remains Chromium 153.0.8010.12, SwiftShader WebGPU, and Mesa
+  llvmpipe Vulkan compositor. All final artifacts were copied before the main
+  and visual stacks were removed with `down --volumes --remove-orphans`.
+
+Isolation at `ac847cf` passed the probe and both guarded crossings. Stack A
+then reached the closed final door after waiting for a second patrol window;
+it was caught at 12572, more than 600 ticks after the Echo door observation at
+11811. Stack B was stopped, both stacks were removed, and failure evidence was
+retained in `extraction-window-failure`. The `d2f1a59` harness now stages both
+players off plate 23 and takes one westbound Patrol window to extract together.
+Final isolation subsequently passed from clean worktrees at that revision.
+
+### Final verified revision `d2f1a59fdc2c2e28ea828fa42c6ea04f833bb6a4`
+
+- `sh container p2-final-fix verify` — passed protocol/codegen, rustfmt,
+  Clippy, 8 authority + 30 simulation tests, TypeScript/Biome, client/container
+  contracts, screenshot/lure regressions, real guard-cone GPU parity, Vite, and
+  raw WebGPU/WGSL checks. Shader, renderer, and browser errors were empty.
+- The map contract is walls 107/108 at X `18100..18500`, respectively
+  Z `0..3300`/`4700..8000`, with passage Z `3300..4700`. The deterministic
+  regression drives live collision at every integral Z in both side lanes.
+  Guard 51, waypoints 511/512, plate 23 `(19500,2500)`, door 13, and extraction
+  remain unchanged. All consumers build/test against this map; acceptance
+  traverses its opening and completes the original plate/door/extraction puzzle.
+- `sh container p2-final-fix acceptance` — passed from fresh runtime volumes
+  and browser profiles. South/north bypasses stopped at `(17808,5972)` and
+  `(17824,2199)` at tick 9429 during Patrol, before the decoy recording.
+  Investigate began at 10111; both clients agreed at 10113, with Echo source
+  tick 9513 (exactly 600 behind) and target `(16360,3399)`. B occupied passage
+  `(18180,4094)` and crossed at 10188; A occupied `(18411,4205)` and crossed
+  at 10200. Both remained ACTIVE/Investigate. At 11922, plate 23 had zero live
+  and one Echo Presence, guard X 19160 faced west, and both took the same final
+  door window. Both won at 11988 with two live extraction occupants.
+  Surveillance failure, guard failure, and reset checks also passed.
+- All 14 acceptance PNGs passed distinct floor `[9,23,31,255]`, wall
+  `[31,64,79,255]`, and guard-body checks. Patrol/investigation cone samples
+  were `[15,80,80,255]`/`[164,17,14,255]`. GPU parity sampled inner offset
+  `(2200,1000)` as teal and far corner `(2500,1200)` plus outside angle
+  `(2000,1200)` as floor. Both browser and renderer error arrays were empty.
+- `sh container p2-final-fix-visual visual` — passed with separate browser
+  services/profiles and ephemeral CDP 53150/53149. Both metadata files reported
+  the initial guard snapshot and empty errors. Final investigation, won, lobby,
+  and focused GPU images were inspected: geometry, the choke, the rounded cone
+  boundary, investigation cue, and extraction result were present.
+- `sh containers/verify-two-stack-isolation.sh
+  /Users/a/TemporalHeist/.worktrees/p2-final-fix-a p2-final-fix-a
+  /Users/a/TemporalHeist/.worktrees/p2-final-fix-b p2-final-fix-b
+  /tmp/temporal-heist-p2-final-fix-isolation` — passed with both clean worktree
+  heads exactly `d2f1a59`. Both browser stacks were observed live, published no
+  ports, and used disjoint containers, networks, and artifacts volumes. Both
+  acceptances exited 0. A's lure/source ticks were 10242/9642; A/B crossed at
+  10329/10332 and won at 11891. B's lure/source ticks were 24594/23994; A/B
+  crossed at 24669/24663 and won at 26509. Each checked 14 PNGs with empty
+  browser/renderer errors. Removing A with its volumes preserved B's resource
+  IDs and health; both stacks were then torn down and worktrees removed.
+- Backend: Chromium 153.0.8010.12, SwiftShader WebGPU (`rgba8unorm`),
+  ANGLE/Mesa llvmpipe Vulkan 1.4.318, Mesa 25.2.8. This proves container
+  software-GPU behavior; it does not claim a physical-GPU run.
+- Copied final evidence is untracked under `.superpowers/sdd/p2/artifacts/`:
+  `p2-final-fix-release-*`, `clean-acceptance/`, `visual/`,
+  `guard-cone-p2-final-fix/`, `component-gpu/`, `isolation/`, and `cleanup.log`.
+  The report is `.superpowers/sdd/p2/final-fix-report.md`. Four correctly
+  prefixed Compose labels (`th-p2-final-fix`, `th-p2-final-fix-visual`,
+  `th-p2-final-fix-a`, `th-p2-final-fix-b`) were checked for zero remaining
+  containers/networks/volumes, and all four private Buildx directories were
+  removed. Only immutable build images/cache remain shared.
+
+The final evidence commit changes only this state file and `DECISIONS.md`;
+all runnable code remains exactly the revision verified above.

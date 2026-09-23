@@ -121,3 +121,30 @@ distance makes the clip independent of guard facing. The only new instance
 attribute is an optional radial range (zero disables clipping). GPU results never
 enter authoritative state. Matched Rust and real renderer samples check an inner
 point, the old triangular far corner, and a point outside the angular edge.
+
+The isolation run also exposed a stale visual probe: the Echo can turn the guard
+between a snapshot-selected pixel and readback while its 30-tick source window
+remains open. The harness therefore waits until `stateEnteredTick + 30` before
+sampling the investigation cone. That guarantees a retained target by existing
+authority semantics. Live crossings run concurrently with this presentation
+check, so neither gameplay nor the authority clock pauses.
+
+A later isolation run passed both guard crossings but exposed the prior final
+extraction script's second patrol wait. Door 13's Echo window opened at 11811;
+A was still blocked at X 21738 when the guard caught it at 12572, after that
+600-tick window expired. Both players now verify Echo-only Presence on plate 23
+and take one westbound Patrol window (guard X 18800..19200) to approach and
+extract concurrently. Both aim deep inside extraction while waiting for the
+other. Door timing and guard gameplay are unchanged; the harness no longer
+assumes two sequential patrol windows fit inside one Echo window.
+
+Final verification is anchored to code revision
+`d2f1a59fdc2c2e28ea828fa42c6ea04f833bb6a4`: full verification, fresh acceptance,
+separate visual verification, and both concurrently running clean-worktree
+acceptances passed. The final main run rejected both side bypasses at tick 9429,
+observed the exact 600-tick Echo at 10113, crossed both live players during
+Investigate at 10188/10200, and extracted both at 11988. Both isolation branches
+used the same code SHA and passed resource independence and teardown checks.
+Original `b35349d` and intermediate `1f92349`/`ac847cf` evidence is retained only
+as history and is superseded by the final `p2-final-fix-release-*` artifacts.
+The final evidence-only commit does not change code, map, or test behavior.
