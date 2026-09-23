@@ -103,8 +103,11 @@ Add `GUARD = 3` to `FailureReason` and `uint32 failure_guard_id = 11` to `RoomSt
 - [ ] **Step 4: Add one authored map encounter**
 
 Add guard 51 with a 20 mm/tick speed, 2600 mm view range, 1400 mm half-width,
-180 search ticks, initial position `(17200, 4000)`, and cyclic waypoint IDs 511
-at `(17200, 4000)` and 512 at `(20500, 4000)`. Keep waypoint IDs and route order
+180 search ticks, initial position `(19100, 4000)`, and cyclic waypoint IDs 511
+at `(19100, 4000)` and 512 at `(20500, 4000)`. Patrol retains westward watch
+facing `(-1000,0)`; Investigate/Return face movement. This final-review correction
+covers the choke throughout Patrol while keeping a 140-tick route period distinct
+from the 600-tick Echo delay. Keep waypoint IDs and route order
 explicit in JSON. Add a `guardedPassage` rectangle covering the authored crossing
 used by E2E; do not add a navigation mesh.
 

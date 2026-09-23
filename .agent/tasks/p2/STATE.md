@@ -2,14 +2,55 @@
 
 ## Status
 
-Mandatory-diversion follow-up is in verification. Limited review found a real
-Patrol-only route through the short choke behind an eastbound guard, so the
-previous `d2f1a59` release evidence below does not prove the approved mandatory
-Echo objective. The concrete route and an all-phase entry-coverage invariant
-both failed before the correction, then passed with all 32 simulation tests.
-Guard 51 now patrols from `(19100,4000)` to `(20500,4000)` while watching west;
-Investigate/Return keep movement-facing semantics. Full verification and clean
-acceptance are the next checks in private `p2-mandatory-*` namespaces.
+Mandatory-diversion follow-up is complete at code revision
+`6324bfa667243b5e4510508082819aff765f4633`. Full verification and fresh two-client
+acceptance passed. Limited review had found a real Patrol-only route behind
+an eastbound guard; the previous `d2f1a59` release evidence below is superseded
+for the mandatory Echo objective. The exact counterexample and all-phase entry
+coverage both failed before correction. Guard 51 now watches west while patrolling
+from `(19100,4000)` to `(20500,4000)`; Investigate/Return retain movement-facing
+semantics. Both follow-up namespaces and their writable state have been removed.
+
+### Mandatory-diversion verification at `6324bfa`
+
+- `sh container p2-mandatory-fix verify` — exit 0: protocol/codegen, rustfmt,
+  Clippy, 8 authority + 33 simulation tests, TypeScript/Biome, client/container
+  contracts, screenshot/lure regressions, Vite, radial-cone GPU parity, and raw
+  WebGPU/WGSL. The six real-history recording/phase boundary cases passed; so
+  did exact-counterexample rejection, every-phase choke coverage, and existing
+  Echo/search/Return/reset tests. Shader/validation errors were empty.
+- `sh container p2-mandatory-accept acceptance` — exit 0 from fresh services,
+  volumes and browser profiles. North/south bypasses were blocked at tick 9147,
+  at `(17808,2201)` / `(17819,6112)` during Patrol. A recorded near
+  `(17204,3767)`. Both clients agreed on Investigate at tick 9825 with Echo
+  source 9225, exactly 600 behind; state entry was 9820. The guard reached search
+  point `(17204,3485)` by tick 9954, with expiry 10132. A crossed at 10017 via
+  passage pose `(18284,4168)`; B crossed at 10044 via `(18364,4104)`, both still
+  ACTIVE/Investigate. Plate 23 was Echo-only in the final door window at 11670;
+  both players won at 11730. Guard failure, surveillance failure, and reset
+  checks also passed.
+- All 14 saved PNGs passed distinct floor/wall/guard-body checks; browser and
+  renderer error arrays were empty. Final investigation and won images were
+  inspected: both players stage south behind the northwestern cone, the HUD
+  says `CROSS WHEN CLEAR`, and both reach extraction. The rendering fixture
+  asserts the west-facing cone/indicator and new patrol midpoint. SwiftShader
+  parity still reads teal inside and floor at the radial far corner/outside angle.
+- This follow-up ran full verification and clean acceptance, including its
+  browser/GPU/image checks. The earlier separate visual and two-worktree
+  isolation runs belong to `d2f1a59`; they were not rerun for this correction.
+- Copied evidence: `.superpowers/sdd/p2/artifacts/mandatory-diversion/`, including
+  `red.log`, `recording-route.log`, `verify.log`, `acceptance.log`, `summary.json`,
+  `clean-acceptance/`, `gpu/`, `guard-cone/`, `code-revision.txt`, and `cleanup.log`.
+  Candidate failure artifacts remain separately labelled. The full follow-up
+  report is `.superpowers/sdd/p2/mandatory-diversion-report.md`.
+- Both `th-p2-mandatory-fix` and `th-p2-mandatory-accept` were checked for zero
+  remaining containers/networks/volumes after teardown, and both private Buildx
+  directories were removed. No new disposable worktrees were required. Owner
+  checkout and untracked evidence remain for review. No default-branch action.
+
+The final evidence commit changes documentation only; runtime/test code remains
+exactly `6324bfa`. GPU verification used Chromium 153.0.8010.12 and SwiftShader,
+not physical hardware.
 
 ### Prior final-review wave (superseded for mandatory diversion)
 

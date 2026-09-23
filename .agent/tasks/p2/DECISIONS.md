@@ -199,3 +199,12 @@ test covers six departure-position/tolerance combinations using actual committed
 history, the exact 600-tick replay, south staging, and a live crossing during
 Investigate. All six pass before rerunning the full browser route. Neither
 detection tolerances nor the existing guard cone were weakened.
+
+Final evidence is anchored to `6324bfa667243b5e4510508082819aff765f4633`.
+Full verification passed with 8 authority and 33 simulation tests plus all
+client/protocol/browser/GPU checks. Fresh acceptance observed the exact Echo
+at 9825/source 9225, both Investigate crossings at 10017/10044, and both-player
+win at 11730. All 14 PNG checks and browser/renderer error checks passed; final
+images were inspected. Both private follow-up namespaces were completely removed
+after evidence copy. Earlier separate visual/isolation evidence is explicitly
+historical; this follow-up's requested checks were full verify and clean acceptance.

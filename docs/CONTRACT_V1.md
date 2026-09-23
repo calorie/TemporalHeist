@@ -55,7 +55,8 @@ rejoining Patrol restores the watch facing before detection and publication.
 The entire reachable west-entry slab stays in view throughout Patrol, so it
 cannot be crossed by following behind the guard without an Echo diversion.
 The 140-tick route period avoids synchronizing with the exact 600-tick Echo.
-Plate 23, door 13, extraction, and all IDs keep their coordinates. Guard perception uses
+Plate 23, door 13, and extraction keep their coordinates; all IDs remain stable.
+Guard perception uses
 integer angular comparisons clipped by a 2600 mm radial range; the raw WebGPU
 cone clips the same radial boundary without feeding results into gameplay.
 
