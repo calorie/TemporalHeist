@@ -7,6 +7,8 @@ contract/map, is implemented and verified on `p3/contract-map`. Its exact code
 revision is `12ea6e87e6361d8b0b74e1fb09bb658012917536`.
 The P3.2 authority mission layer is implemented and verified on
 `p3/authority-mission`.
+The P3.3 client presentation layer is implemented and verified on
+`p3/client-presentation`.
 
 ## Completed
 
@@ -26,6 +28,10 @@ The P3.2 authority mission layer is implemented and verified on
   in-radius action on objective 61 secures it without creating a replayable
   action. Winning now requires theft, Echo-opened final door, and both humans
   in extraction. Restart clears the theft state.
+- Added snapshot-driven vault targeting and a cyan/dim WebGPU pedestal. The HUD
+  advances theft → Echo final door → team extraction from authoritative room
+  fields, keeps guard guidance separate, and plays one cue on the theft edge.
+- Updated the briefing to explain that only a live player can steal the data.
 
 ## Verification
 
@@ -42,8 +48,13 @@ The P3.2 authority mission layer is implemented and verified on
 - P3.2 focused green: `sh container p3-t2-authority run --rm dev cargo test -p th-sim objective_ -- --nocapture` passed 6 tests. `cargo fmt --all --check` and workspace Clippy with `-D warnings` passed.
 - P3.2 workspace `cargo test --workspace` passed 8 authority and 39 sim tests, plus zero-test protocol and doc targets. `sh container p3-t2-authority verify` passed codegen/protocol, the same Rust checks, TypeScript/Biome, browser contract scripts, Vite build, and WebGPU with zero shader or validation errors. `git diff --check` passed.
 - `p3-t2-authority-red` and `p3-t2-authority` both completed `down --volumes --remove-orphans`; their networks and volumes were removed.
+- P3.3 TDD red: `sh container p3-t3-objective-red run --rm dev node apps/web/test/objective-view.mjs` failed with `ERR_MODULE_NOT_FOUND` for the new pure view. `sh container p3-t3-hud-red run --rm dev node apps/web/test/room-hud.mjs` failed because the active objective still read “Open the final door with Echo Presence.” `sh container p3-t3-audio-red run --rm dev node apps/web/test/audio.mjs` failed because the secured edge returned no cue.
+- P3.3 focused green: `sh container p3-t3-client run --rm dev sh -lc 'node apps/web/test/objective-view.mjs && node apps/web/test/room-hud.mjs && node apps/web/test/presentation-view.mjs && node apps/web/test/audio.mjs'` passed all four scripts.
+- P3.3 full gate: the first `sh container p3-t3-client verify` passed Rust Clippy and 47 Rust tests, then caught a TypeScript target-list inference error. After fixing the shared target type, the second run passed codegen/protocol, Rust format/Clippy and 47 tests, TypeScript, Biome (14 files), all pure/browser contracts, Vite, and raw WebGPU (0 shader/validation errors). A final type-only rename was checked with `sh container p3-t3-final run --rm dev sh -lc 'npm ci >/dev/null && npx tsc -p apps/web/tsconfig.json && npx biome check apps/web/src && node apps/web/test/objective-view.mjs && node apps/web/test/room-hud.mjs && node apps/web/test/presentation-view.mjs && node apps/web/test/audio.mjs'`.
+- `git diff --check` passed. `p3-t3-objective-red`, `p3-t3-hud-red`, `p3-t3-audio-red`, `p3-t3-client`, and `p3-t3-final` were stopped with `down --volumes --remove-orphans`; all associated networks and volumes were removed.
 
 ## Next action
 
-Proceed with client presentation on `p3/client-presentation` above the verified
-authority layer. Client and full-E2E behavior remain with the next stack layers.
+Proceed with full-mission E2E coverage on `p3/full-mission-e2e` above the verified
+client layer. Existing E2E guard-objective text must be aligned with the new
+mission-first HUD sequence in that layer.

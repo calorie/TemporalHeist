@@ -1,4 +1,5 @@
 import type { Facility } from '../map.ts';
+import { objectivePrimitives } from '../objective-view.ts';
 import {
   extractionVisual,
   sceneClearColor,
@@ -174,6 +175,7 @@ export class WebGpuRenderer {
         sz: 180,
         color: [0.8, 0.55, 0.15, 1],
       });
+    objects.push(...objectivePrimitives(map, p));
     const cones: Instance[] = [];
     for (const camera of surveillanceVisuals(map, p.snapshot)) {
       cones.push({

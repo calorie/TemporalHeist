@@ -25,6 +25,7 @@ const snapshot = (phase, overrides = {}) => ({
     readyPlayers: 0,
     extractionPlayers: 0,
     echoOpenedFinalDoor: false,
+    objectiveSecured: false,
     ...overrides,
   },
 });
@@ -53,14 +54,23 @@ assert.equal(lobby.canRestart, false);
 
 const active = roomHud(snapshot(RoomPhase.ACTIVE, { startedTick: 120 }), 1);
 assert.equal(active.timer, '01:00');
-assert.equal(active.objective, 'Open the final door with Echo Presence');
+assert.equal(active.objective, 'Steal the vault data [E]');
 assert.equal(active.echoStatus, 'ECHO IN 00:10');
 assert.equal(active.phaseState, 'active');
 assert.equal(active.canReady, false);
 
 const guarded = roomHud({ ...snapshot(RoomPhase.ACTIVE), guards: [{ id: 51, state: 1 }] }, 1);
-assert.equal(guarded.objective, 'Use your Echo to distract Guard 51');
+assert.equal(guarded.objective, 'Steal the vault data [E]');
 assert.equal(guarded.guardStatus, 'GUARD 51 PATROLLING · HUMANS ARE CAUGHT, ECHOES DISTRACT');
+const secured = roomHud(snapshot(RoomPhase.ACTIVE, { objectiveSecured: true }), 1);
+assert.equal(secured.objective, 'Open the final door with Echo Presence');
+assert.equal(
+  roomHud(
+    { ...snapshot(RoomPhase.ACTIVE, { objectiveSecured: true }), guards: [{ id: 51, state: 1 }] },
+    1,
+  ).objective,
+  'Open the final door with Echo Presence',
+);
 const investigating = roomHud(
   { ...snapshot(RoomPhase.ACTIVE), guards: [{ id: 51, state: 2 }] },
   1,
@@ -88,7 +98,11 @@ const echoLive = roomHud(
 assert.equal(echoLive.echoStatus, 'ECHO REPLAYING · 10 SECONDS BEHIND');
 
 const extraction = roomHud(
-  snapshot(RoomPhase.ACTIVE, { echoOpenedFinalDoor: true, extractionPlayers: 1 }),
+  snapshot(RoomPhase.ACTIVE, {
+    objectiveSecured: true,
+    echoOpenedFinalDoor: true,
+    extractionPlayers: 1,
+  }),
   1,
 );
 assert.equal(extraction.objective, 'Reach extraction together (1/2)');

@@ -11,7 +11,7 @@ export const WORLD_HALF_WIDTH = 13000;
 export const WORLD_CENTER_Z = 4000;
 export const WORLD_HALF_DEPTH = 5200;
 
-export interface ExtractionVisual {
+export interface Primitive {
   x: number;
   y: number;
   z: number;
@@ -24,7 +24,7 @@ export interface ExtractionVisual {
 export function extractionVisual(
   map: Pick<Facility, 'extraction'>,
   snapshot: Pick<Snapshot, 'room'> | undefined,
-): ExtractionVisual {
+): Primitive {
   const area = map.extraction;
   const room = snapshot?.room;
   const color: Color =

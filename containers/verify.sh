@@ -15,6 +15,7 @@ node apps/web/test/timeline.mjs
 node apps/web/test/guard-view.mjs
 node apps/web/test/cube-mesh.mjs
 node apps/web/test/room-hud.mjs
+node apps/web/test/objective-view.mjs
 node apps/web/test/surveillance-view.mjs
 node apps/web/test/audio.mjs
 node apps/web/test/presentation-view.mjs
