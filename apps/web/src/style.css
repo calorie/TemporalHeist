@@ -74,6 +74,30 @@ p {
 #objective {
   color: #fff;
 }
+#identity {
+  color: #7bdbff;
+  font-weight: 700;
+}
+#mission-steps {
+  margin: 6px 0;
+  padding-left: 24px;
+  color: #90a7b1;
+  font-size: 12px;
+}
+#mission-steps [data-state="complete"] {
+  color: #7bffbd;
+  text-decoration: line-through;
+}
+#mission-steps [data-state="current"] {
+  color: #fff;
+  font-weight: 700;
+}
+#interaction {
+  padding: 6px 8px;
+  color: #071019;
+  background: #ffda7b;
+  font-weight: 700;
+}
 #readiness {
   color: #a9c5d1;
 }
