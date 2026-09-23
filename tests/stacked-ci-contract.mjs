@@ -5,7 +5,8 @@ import vm from 'node:vm';
 const workflow = await readFile('.github/workflows/vertical-slice.yml', 'utf8');
 const pullRequest = workflow.match(/^  pull_request:\n((?:^ {4,}.*\n|^\n)*)/m)?.[1];
 const activityTypes = pullRequest?.match(/^    types: \[([^\]]+)\]$/m)?.[1].split(/,\s*/);
-assert.ok(activityTypes?.includes('labeled'), 'adding full-stack must trigger acceptance');
+assert.ok(activityTypes?.includes('labeled'), 'adding component-only must re-evaluate acceptance');
+assert.ok(activityTypes.includes('unlabeled'), 'removing component-only must re-evaluate acceptance');
 assert.ok(activityTypes.includes('edited'), 'retargeting a PR must trigger acceptance');
 for (const activity of ['opened', 'synchronize', 'reopened']) {
   assert.ok(activityTypes.includes(activity), `${activity} must keep triggering verification`);
@@ -29,11 +30,13 @@ const expression = condition
   .replaceAll('github.event.pull_request.labels.*.name', 'labelNames');
 
 for (const [event_name, base_ref, labelNames, expected] of [
-  ['push', '', [], true],
+  ['push', '', ['component-only'], true],
   ['pull_request', 'main', [], true],
-  ['pull_request', 'p3/authority-mission', [], false],
-  ['pull_request', 'p3/authority-mission', ['other'], false],
+  ['pull_request', 'p3/authority-mission', [], true],
+  ['pull_request', 'p3/authority-mission', ['other'], true],
   ['pull_request', 'p3/authority-mission', ['full-stack'], true],
+  ['pull_request', 'p3/authority-mission', ['component-only'], false],
+  ['pull_request', 'main', ['component-only'], false],
 ]) {
   const actual = vm.runInNewContext(expression, {
     github: { event_name, base_ref },
