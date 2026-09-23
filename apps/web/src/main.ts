@@ -8,6 +8,7 @@ import { MoqTransport } from './net/moq/transport.ts';
 import { WebGpuRenderer } from './render/webgpu.ts';
 import { renderIfChanged } from './render-cache.ts';
 import { roomHud } from './room-hud.ts';
+import { temporalView } from './temporal-view.ts';
 import { Timeline } from './timeline.ts';
 
 const params = new URLSearchParams(location.search);
@@ -245,6 +246,7 @@ export interface TemporalHeistTestApi {
   restart(): void;
   timeline(): ReturnType<Timeline['inspect']>;
   rendererInfo(): ReturnType<WebGpuRenderer['info']> | undefined;
+  temporalRendererStats(): ReturnType<WebGpuRenderer['temporalStats']> | undefined;
   rendererPixel(x: number, y: number): Promise<number[]>;
   errors(): string[];
   reconnect(): Promise<void>;
@@ -265,6 +267,7 @@ window.th = {
   restart,
   timeline: () => timeline.inspect(),
   rendererInfo: () => renderer?.info(),
+  temporalRendererStats: () => renderer?.temporalStats(),
   rendererPixel: (x, y) =>
     renderer ? renderer.samplePixel(x, y) : Promise.reject(new Error('Renderer unavailable')),
   errors: () => [...errors, ...(renderer?.errors() ?? [])],
@@ -290,7 +293,7 @@ const frame = () => {
   presentationFrame = undefined;
   if (presentationPaused) return;
   const presentation = timeline.presentation();
-  renderer?.render(map, presentation, playerId);
+  renderer?.render(map, presentation, playerId, temporalView(timeline, presentation.renderTick));
   const snap = presentation.snapshot;
   const hud = roomHud(snap, playerId);
   audio.update(snap);

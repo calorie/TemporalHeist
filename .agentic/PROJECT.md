@@ -46,6 +46,9 @@ worktrees.
   `moq-relay` 0.14.18; verified `moq-lite-05` over browser WebTransport.
 - Raw WebGPU/WGSL in full containerized Chromium. Software validation uses
   SwiftShader WebGPU with Mesa llvmpipe/Vulkan compositor.
+- `sh container <run-id> verify` validates the real production renderer in one
+  Chromium session at both supported viewports; the retired standalone GPU spike
+  is no longer a verification path.
 
 ## Architecture invariants
 
