@@ -9,6 +9,9 @@ The P3.2 authority mission layer is implemented and verified on
 `p3/authority-mission`.
 The P3.3 client presentation layer is implemented and verified on
 `p3/client-presentation`.
+The P3.4 full mission acceptance is implemented and release-verified on
+`p3/full-mission-e2e`. Its final code revision is
+`c8218861144b3d60eb4376425eb8efbc562e2aa5`; later commits record evidence only.
 
 ## Completed
 
@@ -54,8 +57,92 @@ The P3.3 client presentation layer is implemented and verified on
 - `git diff --check` passed. `p3-t3-objective-red`, `p3-t3-hud-red`, `p3-t3-audio-red`, `p3-t3-client`, and `p3-t3-final` were stopped with `down --volumes --remove-orphans`; all associated networks and volumes were removed.
 - P3.3 review fix: `sh container p3-t3-review-red run --rm dev node apps/web/test/audio.mjs` failed as expected because ACTIVE unsecured → FAILED secured emitted only `failure`. After removing phase gating from the secured edge, `sh container p3-t3-review run --rm dev sh -lc 'npm ci >/dev/null && node apps/web/test/audio.mjs && npx tsc -p apps/web/tsconfig.json && npx biome check apps/web/src'` passed the audio test, TypeScript, and Biome (14 files). Both review namespaces were stopped with `down --volumes --remove-orphans`.
 
+## P3.4 release verification
+
+Serial release gates and clean-worktree isolation passed.
+
+- TDD red: `sh container p3-t4-e2e-red acceptance` exited 1 at the expected
+  missing-theft victory gate. At tick 13386 both humans were in extraction,
+  `echoOpenedFinalDoor` was true, and the room stayed ACTIVE with
+  `objectiveSecured` false. The original route timed out waiting for WON.
+- Screenshot TDD red: `sh container p3-t4-screenshot-red run --rm dev sh -lc
+  'npm ci >/dev/null && node tests/screenshot-contract.mjs'` exited 1 because the
+  old PNG validator accepted a missing objective (`Missing expected rejection`).
+- Red logs and failure JSON were copied to the ignored
+  `.superpowers/sdd/2026-09-23-vault-data-heist/artifacts/` directory. Both red
+  namespaces completed `down --volumes --remove-orphans` before release checks.
+- `sh container p3-t4-release verify` passed codegen/protocol compatibility,
+  Rust formatting/Clippy and 47 unit tests (8 authority, 39 sim), TypeScript,
+  Biome (14 files), all browser contracts including objective PNG validation,
+  Vite, and WebGPU with 0 shader errors and no validation errors.
+- The first `sh container p3-t4-release acceptance` secured data at matching
+  client tick 10170 and captured the two dim-terminal screenshots, then exposed
+  a route failure: at tick 10733 guard 51's return cone caught the human on the
+  final plate. Preserved `first-green-failure.{json,log}`. The route now waits
+  outside guard range for its crossing/vault Echo history to clear and the
+  guard to resume patrol before recording plate 23. The corrected run follows.
+- Corrected `sh container p3-t4-release acceptance` passed. Room epoch
+  `p3-t4-release-18d7dd6f24f35a70-1-0`: guard agreement tick 9894 with source 9294
+  (delta 600); out-of-range action rejected from tick 8826; both clients secured
+  target 61 at shared tick 10353 after player 1's authoritative pose
+  `(20892, 3933)` at tick 10350. The completed approach replay cleared at 11076
+  (source 10476). Plate 23 had Echo-only presence at tick 12375 with source 11775
+  (delta 600). Both humans won at tick 12501; restart at 12579 cleared the
+  objective and restored the cyan terminal. Camera 41 then failed attempt 3 at
+  tick 13894; final clean lobby attempt 4 was observed at tick 13974.
+- `sh container p3-t4-release visual` passed both separate Chromium services.
+  Ephemeral loopback CDP ports were 55096/55095. Both clients reported raw
+  `webgpu`, Google SwiftShader fallback adapter, `rgba8unorm`; all renderer and
+  browser error arrays were empty. CDP SystemInfo confirmed ANGLE Vulkan
+  1.4.318 with Mesa llvmpipe 25.2.8 / LLVM 20.1.2, GaneshVulkan compositor.
+- Copied and visually inspected all 14 mission PNGs and 2 visual PNGs at
+  1280×720, device scale 1. Both objective-secured images contain floor, wall,
+  guard, dim terminal `[26,76,87,255]`, and “Open the final door with Echo
+  Presence.” Initial and reset images show the cyan terminal
+  `[20,230,255,255]`; win, guard failure, camera failure, and restart HUDs match
+  authority state. Screenshot count remains 14 for acceptance.
+- Copied canonical acceptance JSON, visual metadata, GPU information, and logs
+  under `.superpowers/sdd/2026-09-23-vault-data-heist/artifacts/` before
+  `sh container p3-t4-release down --volumes --remove-orphans`.
+- The first clean-worktree isolation attempt at `a49d77f` exposed a preexisting
+  decoy arrival flake: A was caught at tick 9434 after its pose overshot the
+  `(3800 ± 180)` target band while recording the lure. B was deliberately
+  stopped after preserving A's failure. The harness exited 1 (A=1, B=1) and
+  cleaned both stacks. Logs and A's failure JSON are retained under
+  `/tmp/temporal-heist-p3-t4-isolation-first/`; both disposable worktrees were
+  removed cleanly. The decoy now stops on the first authoritative depth ≥3620,
+  preserving its original arrival threshold without an oscillating settle.
+  `sh container p3-t4-route acceptance` passed that correction (exit 0): decoy
+  9159, canonical guard agreement 9750/source 9150, shared theft 10221, final
+  Echo door 12252/source 11652 (delta 600), two-player win 12358, restart 12429,
+  surveillance failure 13738, clean lobby 13818. Both error arrays remain
+  empty, and all 14 PNG checks passed. Copied its JSON and PNGs to
+  `artifacts/e2e-p3-t4-route/`; its stack completed `down --volumes
+  --remove-orphans`. The correction is confined to the browser route and leaves
+  the already-passing verify and visual contracts unchanged.
+- Final isolation command passed (exit 0):
+  `sh containers/verify-two-stack-isolation.sh /Users/a/TemporalHeist/.worktrees/p3-isolation-a p3-t4-isolation-a2 /Users/a/TemporalHeist/.worktrees/p3-isolation-b p3-t4-isolation-b2 /tmp/temporal-heist-p3-t4-isolation`.
+  Both clean detached worktrees were at
+  `c8218861144b3d60eb4376425eb8efbc562e2aa5`; both browser services were observed
+  live, both acceptances exited 0, and neither stack published host ports.
+  A: theft 10395, win 12535, final reset 14019. B: theft 24741, win 26883,
+  final reset 28350. Canonical logs and `evidence.json` remain in the evidence
+  directory; the JSON is also copied to ignored `artifacts/isolation-evidence.json`.
+- Isolation resource IDs were disjoint. A containers:
+  `668ea416c0a3`, `7ac00e7a2234`, `a854168e2a8e`, `ad442e078244`;
+  B containers: `11136018697b`, `1405cb10561b`, `83d4edfe5e03`, `e05b851ce0bc`.
+  A/B networks: `edda80e4ce3f` / `5ad15280f4d9`.
+  A/B volumes: `th-p3-t4-isolation-a2_artifacts` /
+  `th-p3-t4-isolation-b2_artifacts`. Removing A with volumes preserved B's
+  container/network/volume IDs and B's in-network web health.
+- The harness removed both final stacks. Both disposable worktrees were clean
+  and removed without force. Docker queries for all `th-p3-t4` containers,
+  networks, and volumes returned empty. All red, failed, and successful evidence
+  was retained. Final `git diff --check` passed. Known constraint: GPU evidence
+  uses SwiftShader software rendering at 1280×720, not hardware performance testing.
+
 ## Next action
 
-Proceed with full-mission E2E coverage on `p3/full-mission-e2e` above the verified
-client layer. Existing E2E guard-objective text must be aligned with the new
-mission-first HUD sequence in that layer.
+Complete independent review of the four stack layers, submit the GitHub stack,
+and monitor containerized CI. No layer may merge without explicit user approval
+immediately before integration.
