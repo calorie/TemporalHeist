@@ -256,9 +256,12 @@ is local presentation state and has no gameplay effect.
 
 The facility has one authored guard, ID 51, patrolling between waypoints 511 at
 `(17200, 4000)` and 512 at `(20500, 4000)` in millimetres. Its view covers a
-2600 mm forward range with a 1400 mm half-width at that range. The guarded
-passage occupies X `18500..19500`, Z `3000..5000`. Its route and passage are
-checked-in map data, with straight-line movement rather than pathfinding.
+2600 mm radial range and the angular slope defined by a 1400 mm half-width
+at 2600 mm forward distance. The renderer clips the cone at that same radius.
+The guarded passage occupies X `18100..18500`, Z `3300..4700`. Wall 107 extends
+north from it to Z 0; wall 108 extends south to Z 8000. Every live route to
+plate 23 and the final door therefore goes through the central opening. The route
+and passage are checked-in map data; guard movement follows straight segments.
 
 During an active attempt, a connected live human in the guard's view immediately
 fails the attempt. The result identifies guard 51. If a human and Echo are visible
@@ -268,10 +271,13 @@ position, searches there for 180 authority ticks, and returns to its patrol. A
 continuous 30-tick Echo observation window can update the last-seen position but
 cannot extend the search timer indefinitely.
 
-Player A can record a route through the guard's view and move clear. Exactly 600
+Player A can record a west-side decoy near `(16300, 3800)` while the guard moves
+east, then retreat north. Both players remain west of the choke. Exactly 600
 authority ticks later, A's first-generation Echo follows that route and draws the
-guard away. Player B crosses while the guard investigates. The players still need
-Echo Presence on door 13 and both live players in extraction to win. Terminal and
+guard west, away from the choke. Both players cross while the guard investigates.
+Plate 23 at `(19500, 2500)`, door 13 and extraction retain their existing geometry.
+The players still need Echo Presence on door 13 and both live players in extraction
+to win. Terminal and
 lobby phases freeze guard movement and timers; restart restores its initial patrol
 state. The HUD, guard body, route, view cone, and target marker explain the window
 to cross, while the Rust authority alone decides detection and results.

@@ -2,12 +2,11 @@
 
 ## Status
 
-The P2 protocol and authored map contract are frozen and container-verified.
-Guard simulation, canonical client presentation, raw WebGPU geometry, HUD, and
-audio are integrated. The final branch passes component verification, clean
-two-client acceptance, two-client visual inspection, and two-stack release
-isolation from the integrated code commit `b35349d`. P2 implementation and
-release verification are complete; independent review and PR integration remain.
+Final-review corrections are being verified in the exclusive `p2-final-fixes`
+checkout. The original `b35349d` release evidence below is superseded and retained
+only as history: it did not prove a mandatory geometric crossing, robust lure
+assertions, scene-specific screenshots, or radial cone parity. The serialized
+map correction and exact coordinates are recorded in `DECISIONS.md`.
 
 ## Completed
 
@@ -133,7 +132,8 @@ error arrays. The guard-agreement regression is registered in standard verify.
 
 The prior cube-mesh defect is fixed by `c928f92` and its strengthened regression
 by `b35349d`. The integrated visual images show filled rectangular floor, wall,
-and guard bodies. Triangular view cones are intentional. Both the acceptance and
+and guard bodies. The guard's formerly triangular far corners were a rendering
+defect, corrected by the final-review radial clip. Both the original acceptance and
 visual screenshots contain opaque, nonblack scene pixels after removing
 `--disable-vulkan-surface` from the browser launches.
 
@@ -141,7 +141,7 @@ The frozen `RoomState` publishes the guard failure reason and guard ID but has n
 guard-detected-player field. The approved design requires reason and guard ID;
 the task brief's detected-player phrase is a non-blocking plan overreach.
 
-Two deferred reviewer minors remain explicit. The E2E lure check accepts a
+The original two deferred reviewer minors were: the E2E lure check accepted a
 180 mm target/Echo offset but also requires exact X equality; this passed in the
 final run (both X values were 21397 mm) yet is stricter than the stated tolerance.
 The generic screenshot check samples one floor pixel `(640, 650)`; all 14 final
@@ -176,7 +176,7 @@ therefore produced black canvas screenshots. Task 5 independently removed that
 flag and proved opaque, visible WebGPU scenes. The final integrated acceptance
 and visual images verified both fixes together.
 
-## Final integrated release verification (`b35349d`)
+## Historical integrated release verification (`b35349d`, superseded)
 
 - `sh container p2-final verify` — passed: generated TypeScript matches the
   protobuf source, Rust↔TypeScript guard protocol/legacy compatibility, rustfmt,
@@ -220,3 +220,28 @@ and visual images verified both fixes together.
   harness cleaned both stacks; both disposable worktrees were removed.
   JSON and acceptance logs remain at `/tmp/temporal-heist-p2-isolation/`.
 - `git diff --check` — passed after the documentation edits.
+
+## Final-review correction verification (`p2-final-fix`)
+
+All four regressions were observed failing before their fixes:
+
+- Live collision crossed the old side lane at Z 250. The corrected map test
+  checks every integral Z in both exterior lanes, plus the central opening and
+  unchanged final puzzle coordinates.
+- The old lure assertion rejected a valid 12-tick/720 mm offset. Elapsed-tick
+  and 40-tick observation-window cases now pass; impossible displacement and
+  incorrect Echo delay are rejected.
+- The old capture check accepted a real Chromium PNG containing only opaque
+  clear color. Clear-only, floor-only, and missing-guard images are now rejected;
+  a synthetic floor/wall/body fixture passes.
+- Real WebGPU returned cone color at offset `(2500,1200)`, where authority
+  rejects radial range. It now returns floor `[9,23,31,255]`, while `(2200,1000)`
+  remains teal `[15,80,80,255]`. Matching Rust assertions also pass.
+
+`sh container p2-final-fix verify` passed: protocol/codegen, rustfmt, Clippy,
+8 authority and 30 simulation tests, TypeScript/Biome, client/container
+contracts, all new regression checks, Vite, and SwiftShader WebGPU with zero
+shader/validation errors. The first acceptance rejected both side bypasses but
+timed out on the new lure; its recorded poses identified a narrow timing margin.
+The corrected recording route starts earlier and reaches Z 3800, as documented
+in `DECISIONS.md`. Final revision release verification is still pending.

@@ -12,6 +12,7 @@ export interface GuardPrimitive {
   sz: number;
   color: Color;
   matrix?: number[];
+  radialRange?: number;
 }
 
 export function guardPrimitives(map: Facility, presentation: Presentation) {
@@ -28,6 +29,7 @@ export function guardPrimitives(map: Facility, presentation: Presentation) {
       sy: 20,
       sz: guard.range,
       color: guard.coneColor,
+      radialRange: guard.range,
       matrix: [
         guard.lateral[0] * guard.halfWidth,
         0,

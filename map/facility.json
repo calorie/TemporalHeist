@@ -4,7 +4,7 @@
   "speedPerTick": 60,
   "spawns": [{"playerId": 1, "x": 1500, "z": 2500}, {"playerId": 2, "x": 1500, "z": 4000}],
   "extraction": {"minX": 22800, "maxX": 23750, "minZ": 3000, "maxZ": 5000},
-  "guardedPassage": {"minX": 18500, "maxX": 19500, "minZ": 3000, "maxZ": 5000},
+  "guardedPassage": {"minX": 18100, "maxX": 18500, "minZ": 3300, "maxZ": 4700},
   "cameras": [
     {"id": 41, "x": 4500, "z": 7500, "directionX": 0, "directionZ": -1000, "range": 2200, "halfWidth": 1200}
   ],
@@ -32,7 +32,9 @@
     {"id": 103, "minX": 15000, "maxX": 15400, "minZ": 0, "maxZ": 3000},
     {"id": 104, "minX": 15000, "maxX": 15400, "minZ": 5000, "maxZ": 8000},
     {"id": 105, "minX": 22000, "maxX": 22400, "minZ": 0, "maxZ": 3000},
-    {"id": 106, "minX": 22000, "maxX": 22400, "minZ": 5000, "maxZ": 8000}
+    {"id": 106, "minX": 22000, "maxX": 22400, "minZ": 5000, "maxZ": 8000},
+    {"id": 107, "minX": 18100, "maxX": 18500, "minZ": 0, "maxZ": 3300},
+    {"id": 108, "minX": 18100, "maxX": 18500, "minZ": 4700, "maxZ": 8000}
   ],
   "doors": [
     {"id": 11, "minX": 7000, "maxX": 7400, "minZ": 3000, "maxZ": 5000},

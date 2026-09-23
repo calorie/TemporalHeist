@@ -1574,6 +1574,37 @@ mod tests {
     }
 
     #[test]
+    fn guarded_passage_has_no_north_or_south_live_bypass() {
+        // Exercise live collision for every millimetre of each side lane,
+        // including rounded wall corners and the facility boundary.
+        let mut w = World::new("e".into());
+        join(&mut w);
+        for z in 250..=7_750 {
+            if (3_300..=4_700).contains(&z) {
+                continue;
+            }
+            let p = w.players.get_mut(&1).unwrap();
+            p.x = 17_700;
+            p.z = z;
+            p.mx = 1_000;
+            p.mz = 0;
+            for _ in 0..40 {
+                w.move_players();
+            }
+            assert!(w.players[&1].x < 18_100, "live bypass at z={z}");
+        }
+        // The central opening, plate 23, door 13 and extraction remain reachable.
+        for (x, z) in [
+            (18_300, 4_000),
+            (19_500, 2_500),
+            (22_200, 4_000),
+            (23_000, 4_000),
+        ] {
+            assert!(!collides(&w.map, &[], x, z));
+        }
+    }
+
+    #[test]
     fn guard_patrol_clamps_to_waypoint_and_cycles() {
         let mut w = World::new("e".into());
         w.map.guards[0].waypoints[1].x = 17_225;
@@ -1722,6 +1753,10 @@ mod tests {
         assert!(visible(origin, facing, (1300, 700), 2600, 1400));
         assert!(!visible(origin, facing, (1300, 701), 2600, 1400));
         assert!(!visible(origin, facing, (-1, 0), 2600, 1400));
+        // These exact world offsets are also sampled by guard-cone-gpu.mjs.
+        assert!(visible(origin, facing, (2200, 1000), 2600, 1400));
+        assert!(!visible(origin, facing, (2500, 1200), 2600, 1400));
+        assert!(!visible(origin, facing, (2000, 1200), 2600, 1400));
     }
 
     #[test]

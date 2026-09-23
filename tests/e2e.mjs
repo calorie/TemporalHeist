@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { captureScreenshot } from './screenshot.mjs';
 import { guardAgreement } from './guard-agreement.mjs';
+import { assertGuardLure } from './guard-lure.mjs';
+import facility from '../map/facility.json' with { type: 'json' };
 
 const artifacts = `/artifacts/e2e-${process.env.TH_AGENT_ID}`;
 await mkdir(artifacts, { recursive: true });
@@ -122,8 +124,8 @@ async function useVisibleControl(page, selector, key) {
 
 async function capture(page, player, label) {
   const file = `player-${player}-${label}.png`;
-  const scenePixel = await captureScreenshot(page, `${artifacts}/${file}`);
-  evidence.screenshots.push({ file, player, label, scenePixel, ui: await uiState(page) });
+  const sceneSamples = await captureScreenshot(page, `${artifacts}/${file}`);
+  evidence.screenshots.push({ file, player, label, sceneSamples, ui: await uiState(page) });
   console.log(JSON.stringify({ event: 'screenshot-captured', player, label }));
 }
 
@@ -276,8 +278,8 @@ async function waitForPhase(page, phase, description, timeout = stateTimeout) {
   return waitFor(page, (state) => state.room?.phase === phase, description, timeout);
 }
 
-async function recordEchoPlate(pageA, plateId, doorId, x, z, whileLive) {
-  const outside = await moveTo(pageA, 1, x - 2000, z);
+async function recordEchoPlate(pageA, plateId, doorId, x, z, whileLive, north = false) {
+  const outside = await moveTo(pageA, 1, north ? x : x - 2000, north ? z - 1500 : z);
   assert.equal(outside.plates.find((plate) => plate.id === plateId)?.active, false);
   const entered = await occupyPlate(pageA, 1, plateId, x, z);
   evidence.events.push({ event: 'live-plate', plateId, tick: entered.serverTick });
@@ -285,7 +287,7 @@ async function recordEchoPlate(pageA, plateId, doorId, x, z, whileLive) {
   await waitFor(pageA, (state) => state.serverTick >= entered.serverTick + 1_200,
     `recording window on plate ${plateId}`, 25_000);
   if (whileLive) await whileLive();
-  await pageA.evaluate((axis) => window.th.move(-axis, 0), movementAxis);
+  await pageA.evaluate(([axis, north]) => window.th.move(north ? 0 : -axis, north ? -axis : 0), [movementAxis, north]);
   const left = await waitFor(pageA,
     (state) => state.plates.find((plate) => plate.id === plateId)?.livePresence === 0,
     `live player release of plate ${plateId}`);
@@ -337,7 +339,7 @@ async function sharedGuardSnapshot(pageA, pageB, investigating) {
 }
 
 async function guardPixel(page, expectedState) {
-  // Sample well inside the triangle, offset from its route/body centerline.
+  // Sample well inside the radial cone, offset from its route/body centerline.
   const guard = guardOf(await snapshot(page));
   assert.equal(guard.state, expectedState);
   const length = Math.hypot(guard.facingX, guard.facingZ);
@@ -366,24 +368,46 @@ async function safeGuardEntry(page, player) {
 }
 
 async function guardDiversion(pageA, pageB) {
-  await dash(pageB, 2, 18000, 6000);
+  await dash(pageB, 2, 17700, 6000);
   await waitFor(pageA, (state) => {
     const guard = guardOf(state);
     return guard.state === GuardState.PATROL && guard.xMm >= 19000 && guard.xMm <= 19400 && guard.facingX > 0;
   }, 'safe route to the upper decoy lane');
   await dash(pageA, 1, 15800, 2200);
-  await dash(pageA, 1, 21500, 2200);
+  await dash(pageA, 1, 17700, 2200);
+  // Reject both former side-lane bypasses before recording the decoy. Neither
+  // live player may reach the far side before the authority starts Investigate.
+  await Promise.all([[pageA, 1, 'north'], [pageB, 2, 'south']].map(async ([page, playerId, lane]) => {
+    const start = await snapshot(page);
+    await page.evaluate(() => window.th.move(1, 0));
+    let stopped;
+    try {
+      stopped = await waitFor(page, (state) => {
+        assert.equal(state.room.phase, RoomPhase.ACTIVE);
+        assert.equal(guardOf(state).state, GuardState.PATROL);
+        const pose = state.players.find((pose) => pose.playerId === playerId);
+        assert(pose.xMm < facility.guardedPassage.minX, `${lane} bypass reached the passage's far side`);
+        return state.serverTick >= start.serverTick + 90;
+      }, `${lane} live bypass blocked by the authored wall`);
+    } finally {
+      await page.evaluate(() => window.th.move(0, 0));
+    }
+    evidence.events.push({ event: 'guard-bypass-rejected', lane, playerId,
+      startTick: start.serverTick, tick: stopped.serverTick,
+      pose: stopped.players.find((pose) => pose.playerId === playerId), guard: guardOf(stopped) });
+  }));
+  await dash(pageA, 1, 16300, 2200);
   await waitFor(pageA, (state) => {
     const guard = guardOf(state);
-    return guard.state === GuardState.PATROL && guard.xMm <= 20400 && guard.xMm >= 20100 && guard.facingX < 0;
+    return guard.state === GuardState.PATROL && guard.xMm >= 17400 && guard.xMm <= 17600 && guard.facingX > 0;
   }, 'guard moving away before recording the decoy');
   const sourceStart = await snapshot(pageA);
-  await dash(pageA, 1, 21500, 3500);
+  await dash(pageA, 1, 16300, 3800);
   const lure = await snapshot(pageA);
   evidence.events.push({ event: 'guard-decoy-recorded', sourceStartTick: sourceStart.serverTick,
     tick: lure.serverTick, pose: lure.players.find((pose) => pose.playerId === 1), guard: guardOf(lure) });
-  await dash(pageA, 1, 21500, 2200);
-  await dash(pageA, 1, 19500, 1500);
+  await dash(pageA, 1, 16300, 2000);
+  await dash(pageA, 1, 17500, 2000);
   const investigating = await waitFor(pageA, (state) => {
     assert.equal(state.room.phase, RoomPhase.ACTIVE);
     const guard = guardOf(state);
@@ -396,12 +420,7 @@ async function guardDiversion(pageA, pageB) {
   assert.equal(investigating.serverTick - echo.sourceTick, 600);
   assert(guard.stateEnteredTick >= sourceStart.serverTick + 600);
   assert(guard.stateEnteredTick <= lure.serverTick + 600 + 60);
-  assert(guard.investigationTarget);
-  // Snapshots arrive every three ticks. A target retained across the 30-tick
-  // observation boundary may precede the current Echo by at most that sample.
-  assert(Math.abs(guard.investigationTarget.xMm - echo.xMm) <= 180);
-  assert(Math.abs(guard.investigationTarget.zMm - echo.zMm) <= 180);
-  assert.equal(guard.investigationTarget.xMm, echo.xMm);
+  assertGuardLure(investigating, guard, echo);
   const agreement = await sharedGuardSnapshot(pageA, pageB, investigating);
   await Promise.all([pageA, pageB].map((page) => waitForText(page, '#guard-status', /INVESTIGATING.*CROSS NOW/, 'visible crossing cue')));
   evidence.events.push({ event: 'guard-echo-investigating', sourceStartTick: sourceStart.serverTick,
@@ -409,7 +428,7 @@ async function guardDiversion(pageA, pageB) {
     canonicalDelayTicks: investigating.serverTick - echo.sourceTick });
   // SwiftShader screenshots can take longer than the search window. Freeze
   // only presentation after readback, while real MoQ input and authority ticks
-  // continue and B crosses. No gameplay state or clock is paused.
+  // continue and both players cross. No gameplay state or clock is paused.
   const visuals = (async () => {
     await guardPixel(pageA, GuardState.INVESTIGATE);
     await Promise.all([pageA, pageB].map((page) => page.evaluate(() => window.th.setPresentationPaused(true))));
@@ -421,23 +440,25 @@ async function guardDiversion(pageA, pageB) {
       await Promise.all([pageA, pageB].map((page) => page.evaluate(() => window.th.setPresentationPaused(false))));
     }
   })();
-  const crossing = (async () => {
-    await dash(pageB, 2, 18000, 4700);
-    const entered = await dash(pageB, 2, 19000, 4700);
-    const crossed = await dash(pageB, 2, 20100, 4700);
+  const crossing = Promise.all([[pageA, 1, 17500], [pageB, 2, 17700]].map(async ([page, playerId, x]) => {
+    await dash(page, playerId, x, 4200);
+    const entered = await dash(page, playerId, 18300, 4200);
+    const crossed = await dash(page, playerId, 19100, 4200);
+    for (const state of [entered, crossed]) {
+      assert.equal(state.room.phase, RoomPhase.ACTIVE);
+      assert.equal(guardOf(state).state, GuardState.INVESTIGATE);
+    }
+    const pose = entered.players.find((pose) => pose.playerId === playerId);
+    const passage = facility.guardedPassage;
+    assert(pose.xMm >= passage.minX && pose.xMm <= passage.maxX &&
+      pose.zMm >= passage.minZ && pose.zMm <= passage.maxZ);
+    evidence.events.push({ event: 'guard-crossed', playerId, tick: crossed.serverTick, passagePose: pose,
+      exitPose: crossed.players.find((pose) => pose.playerId === playerId), guard: guardOf(crossed) });
     // Move clear before waiting for software-rendered evidence to finish.
-    await dash(pageB, 2, 21500, 6000);
-    return { entered, crossed };
-  })();
-  const [, { entered, crossed }] = await Promise.all([visuals, crossing]);
-  for (const state of [entered, crossed]) {
-    assert.equal(state.room.phase, RoomPhase.ACTIVE);
-    assert.equal(guardOf(state).state, GuardState.INVESTIGATE);
-  }
-  const pose = entered.players.find((pose) => pose.playerId === 2);
-  assert(pose.xMm >= 18500 && pose.xMm <= 19500 && pose.zMm >= 3000 && pose.zMm <= 5000);
-  evidence.events.push({ event: 'guard-crossed', tick: crossed.serverTick, passagePose: pose,
-    exitPose: crossed.players.find((pose) => pose.playerId === 2), guard: guardOf(crossed) });
+    await dash(page, playerId, 19500, playerId === 1 ? 1500 : 6000);
+    if (playerId === 2) await dash(page, playerId, 21500, 6000);
+  }));
+  await Promise.all([visuals, crossing]);
   await Promise.all([capture(pageA, 1, 'guard-crossed'), capture(pageB, 2, 'guard-crossed')]);
 }
 
@@ -571,7 +592,7 @@ try {
 
   // Zone 3 acceptance: A leaves its plate; exactly 600 authority ticks later its
   // Echo opens the current door, and B crosses while A remains elsewhere.
-  const finalOpen = await recordEchoPlate(pageA, 23, 13, 19500, 2500);
+  const finalOpen = await recordEchoPlate(pageA, 23, 13, 19500, 2500, undefined, true);
   await dash(pageA, 1, 21500, 2200);
   await waitFor(pageB, (state) => guardOf(state).xMm < 18500 && guardOf(state).facingX < 0,
     'guard away from the extraction approach');
