@@ -93,6 +93,8 @@ container-owned Chromium views. Inspect and copy artifacts from the run's privat
 `artifacts` volume before `down --volumes` removes it.
 
 The P3 release run passed `p3-t4-release verify`, `acceptance`, and `visual`.
+The final route also passed `p3-t4-route acceptance` and two isolated full-stack
+acceptances from clean worktrees at `c821886`.
 Both clients used the SwiftShader WebGPU adapter with a Mesa llvmpipe Vulkan
 compositor; no shader, validation, browser, or renderer errors were reported.
 The exact tick, screenshot, adapter, and isolation evidence is recorded in

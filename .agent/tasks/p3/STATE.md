@@ -9,6 +9,9 @@ The P3.2 authority mission layer is implemented and verified on
 `p3/authority-mission`.
 The P3.3 client presentation layer is implemented and verified on
 `p3/client-presentation`.
+The P3.4 full mission acceptance is implemented and release-verified on
+`p3/full-mission-e2e`. Its final code revision is
+`c8218861144b3d60eb4376425eb8efbc562e2aa5`; later commits record evidence only.
 
 ## Completed
 
@@ -54,10 +57,9 @@ The P3.3 client presentation layer is implemented and verified on
 - `git diff --check` passed. `p3-t3-objective-red`, `p3-t3-hud-red`, `p3-t3-audio-red`, `p3-t3-client`, and `p3-t3-final` were stopped with `down --volumes --remove-orphans`; all associated networks and volumes were removed.
 - P3.3 review fix: `sh container p3-t3-review-red run --rm dev node apps/web/test/audio.mjs` failed as expected because ACTIVE unsecured → FAILED secured emitted only `failure`. After removing phase gating from the secured edge, `sh container p3-t3-review run --rm dev sh -lc 'npm ci >/dev/null && node apps/web/test/audio.mjs && npx tsc -p apps/web/tsconfig.json && npx biome check apps/web/src'` passed the audio test, TypeScript, and Biome (14 files). Both review namespaces were stopped with `down --volumes --remove-orphans`.
 
-## Next action
+## P3.4 release verification
 
-P3.4 is implemented on `p3/full-mission-e2e`; serial release gates passed and
-clean-worktree isolation is next.
+Serial release gates and clean-worktree isolation passed.
 
 - TDD red: `sh container p3-t4-e2e-red acceptance` exited 1 at the expected
   missing-theft victory gate. At tick 13386 both humans were in extraction,
@@ -118,3 +120,29 @@ clean-worktree isolation is next.
   `artifacts/e2e-p3-t4-route/`; its stack completed `down --volumes
   --remove-orphans`. The correction is confined to the browser route and leaves
   the already-passing verify and visual contracts unchanged.
+- Final isolation command passed (exit 0):
+  `sh containers/verify-two-stack-isolation.sh /Users/a/TemporalHeist/.worktrees/p3-isolation-a p3-t4-isolation-a2 /Users/a/TemporalHeist/.worktrees/p3-isolation-b p3-t4-isolation-b2 /tmp/temporal-heist-p3-t4-isolation`.
+  Both clean detached worktrees were at
+  `c8218861144b3d60eb4376425eb8efbc562e2aa5`; both browser services were observed
+  live, both acceptances exited 0, and neither stack published host ports.
+  A: theft 10395, win 12535, final reset 14019. B: theft 24741, win 26883,
+  final reset 28350. Canonical logs and `evidence.json` remain in the evidence
+  directory; the JSON is also copied to ignored `artifacts/isolation-evidence.json`.
+- Isolation resource IDs were disjoint. A containers:
+  `668ea416c0a3`, `7ac00e7a2234`, `a854168e2a8e`, `ad442e078244`;
+  B containers: `11136018697b`, `1405cb10561b`, `83d4edfe5e03`, `e05b851ce0bc`.
+  A/B networks: `edda80e4ce3f` / `5ad15280f4d9`.
+  A/B volumes: `th-p3-t4-isolation-a2_artifacts` /
+  `th-p3-t4-isolation-b2_artifacts`. Removing A with volumes preserved B's
+  container/network/volume IDs and B's in-network web health.
+- The harness removed both final stacks. Both disposable worktrees were clean
+  and removed without force. Docker queries for all `th-p3-t4` containers,
+  networks, and volumes returned empty. All red, failed, and successful evidence
+  was retained. Final `git diff --check` passed. Known constraint: GPU evidence
+  uses SwiftShader software rendering at 1280×720, not hardware performance testing.
+
+## Next action
+
+Complete independent review of the four stack layers, submit the GitHub stack,
+and monitor containerized CI. No layer may merge without explicit user approval
+immediately before integration.
