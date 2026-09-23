@@ -11,9 +11,11 @@ import {
   WORLD_DEPTH_OFFSET,
   WORLD_DEPTH_SCALE,
 } from '../surveillance-view.ts';
+import { MAX_TEMPORAL_SEGMENTS, type TemporalView } from '../temporal-view.ts';
 import type { Presentation } from '../timeline.ts';
 import { guardPrimitives } from './guard-geometry.ts';
 import shader from './shader.wgsl?raw';
+import temporalShader from './temporal.wgsl?raw';
 
 type Instance = {
   x: number;
@@ -43,19 +45,43 @@ const wedge = new Float32Array([
   1, 0, 1, 0, 0, 0, 0, 0, 1, 0, -1, 1, 1, 0, 0, 0, -1, 1, 1, -1, 0, 1, -1, 0, 1, -1, 1, 1, 1, 1, 1,
   -1, 0, 1, 1, 1, 1, 1, 0, 1,
 ]);
+const TEMPORAL_SEGMENT_BYTES = 32;
+const TEMPORAL_PULSE_BYTES = 16;
+const MAX_TEMPORAL_PULSES = 2;
+export interface TemporalRendererStats {
+  segmentCapacity: number;
+  pulseCapacity: number;
+  uploadBytes: number;
+  segmentCount: number;
+  pulseCount: number;
+  drawCount: number;
+}
 export class WebGpuRenderer {
   #device: GPUDevice;
   #context: GPUCanvasContext;
   #format: GPUTextureFormat;
   #pipeline: GPURenderPipeline;
+  #temporalSegmentPipeline: GPURenderPipeline;
+  #temporalPulsePipeline: GPURenderPipeline;
+  #temporalBind: GPUBindGroup;
   #uniform: GPUBuffer;
   #instances: GPUBuffer;
   #cubeVertices: GPUBuffer;
   #wedgeVertices: GPUBuffer;
+  #temporalSegments: GPUBuffer;
+  #temporalPulses: GPUBuffer;
   #depth?: GPUTexture;
   #size = '';
   #errors: string[] = [];
   #pixelProbe?: PixelProbe;
+  #temporalStats: TemporalRendererStats = {
+    segmentCapacity: MAX_TEMPORAL_SEGMENTS,
+    pulseCapacity: MAX_TEMPORAL_PULSES,
+    uploadBytes: 0,
+    segmentCount: 0,
+    pulseCount: 0,
+    drawCount: 0,
+  };
   readonly adapterInfo: GPUAdapterInfo;
   static async create(canvas: HTMLCanvasElement) {
     if (!navigator.gpu)
@@ -123,6 +149,52 @@ export class WebGpuRenderer {
       size: 64,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
+    const temporalModule = device.createShaderModule({ code: temporalShader });
+    const temporalBindLayout = device.createBindGroupLayout({
+      entries: [
+        { binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: 'uniform' } },
+        { binding: 1, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+        { binding: 2, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+      ],
+    });
+    const temporalLayout = device.createPipelineLayout({ bindGroupLayouts: [temporalBindLayout] });
+    const temporalTarget: GPUColorTargetState = {
+      format: this.#format,
+      blend: {
+        color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+        alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+      },
+    };
+    const temporalPipeline = (entryPoint: 'segment' | 'pulse') =>
+      device.createRenderPipeline({
+        layout: temporalLayout,
+        vertex: { module: temporalModule, entryPoint: `${entryPoint}_vs` },
+        fragment: {
+          module: temporalModule,
+          entryPoint: `${entryPoint}_fs`,
+          targets: [temporalTarget],
+        },
+        primitive: { topology: 'triangle-list', cullMode: 'none' },
+        depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less' },
+      });
+    this.#temporalSegmentPipeline = temporalPipeline('segment');
+    this.#temporalPulsePipeline = temporalPipeline('pulse');
+    this.#temporalSegments = device.createBuffer({
+      size: TEMPORAL_SEGMENT_BYTES * MAX_TEMPORAL_SEGMENTS,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    this.#temporalPulses = device.createBuffer({
+      size: TEMPORAL_PULSE_BYTES * MAX_TEMPORAL_PULSES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    this.#temporalBind = device.createBindGroup({
+      layout: temporalBindLayout,
+      entries: [
+        { binding: 0, resource: { buffer: this.#uniform } },
+        { binding: 1, resource: { buffer: this.#temporalSegments } },
+        { binding: 2, resource: { buffer: this.#temporalPulses } },
+      ],
+    });
     this.#instances = device.createBuffer({
       size: 84 * 256,
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
@@ -138,7 +210,7 @@ export class WebGpuRenderer {
     device.queue.writeBuffer(this.#cubeVertices, 0, cube);
     device.queue.writeBuffer(this.#wedgeVertices, 0, wedge);
   }
-  render(map: Facility, p: Presentation, playerId: number) {
+  render(map: Facility, p: Presentation, playerId: number, temporal?: TemporalView) {
     this.#resize();
     const objects: Instance[] = [
       { x: 12000, y: -120, z: 4000, sx: 12000, sy: 100, sz: 4000, color: [0.035, 0.09, 0.12, 1] },
@@ -237,7 +309,7 @@ export class WebGpuRenderer {
         sz: 250,
         color: pose.playerId === 1 ? [0.25, 0.85, 1, 0.35] : [1, 0.55, 0.8, 0.35],
       });
-    this.#draw(map, cones, objects, sceneClearColor(p.snapshot));
+    this.#draw(map, cones, objects, sceneClearColor(p.snapshot), temporal);
   }
   info() {
     return {
@@ -254,6 +326,9 @@ export class WebGpuRenderer {
   }
   errors() {
     return [...this.#errors];
+  }
+  temporalStats(): TemporalRendererStats {
+    return { ...this.#temporalStats };
   }
   samplePixel(x: number, y: number): Promise<number[]> {
     if (this.#pixelProbe)
@@ -309,6 +384,7 @@ export class WebGpuRenderer {
     cones: Instance[],
     objects: Instance[],
     clearColor: [number, number, number, number],
+    temporal?: TemporalView,
   ) {
     if (cones.length + objects.length > 256)
       throw new Error('Scene exceeds the persistent WebGPU instance buffer');
@@ -338,6 +414,50 @@ export class WebGpuRenderer {
     if (cones.length > 0)
       this.#device.queue.writeBuffer(this.#instances, 0, this.#instanceData(cones));
     this.#device.queue.writeBuffer(this.#instances, coneBytes, this.#instanceData(objects));
+    const segmentCount = temporal?.segments.length ?? 0;
+    const pulseCount = temporal?.pulses.length ?? 0;
+    if (segmentCount > MAX_TEMPORAL_SEGMENTS)
+      throw new Error(
+        `Temporal segment GPU capacity exceeded: ${segmentCount} > ${MAX_TEMPORAL_SEGMENTS}`,
+      );
+    if (pulseCount > MAX_TEMPORAL_PULSES)
+      throw new Error(
+        `Temporal pulse GPU capacity exceeded: ${pulseCount} > ${MAX_TEMPORAL_PULSES}`,
+      );
+    if (temporal && segmentCount > 0) {
+      const data = new Float32Array(segmentCount * 8);
+      temporal.segments.forEach((segment, index) => {
+        data.set(
+          [
+            segment.startXmm,
+            segment.startZmm,
+            segment.endXmm,
+            segment.endZmm,
+            temporal.renderTick - segment.startTick,
+            temporal.renderTick - segment.endTick,
+            segment.playerId,
+            0,
+          ],
+          index * 8,
+        );
+      });
+      this.#device.queue.writeBuffer(this.#temporalSegments, 0, data);
+    }
+    if (temporal && pulseCount > 0) {
+      const data = new Float32Array(pulseCount * 4);
+      temporal.pulses.forEach((pulse, index) => {
+        data.set([pulse.xMm, pulse.zMm, pulse.playerId, pulse.ageTicks], index * 4);
+      });
+      this.#device.queue.writeBuffer(this.#temporalPulses, 0, data);
+    }
+    this.#temporalStats = {
+      segmentCapacity: MAX_TEMPORAL_SEGMENTS,
+      pulseCapacity: MAX_TEMPORAL_PULSES,
+      uploadBytes: segmentCount * TEMPORAL_SEGMENT_BYTES + pulseCount * TEMPORAL_PULSE_BYTES,
+      segmentCount,
+      pulseCount,
+      drawCount: Number(segmentCount > 0) + Number(pulseCount > 0),
+    };
     const bind = this.#device.createBindGroup({
       layout: this.#pipeline.getBindGroupLayout(0),
       entries: [{ binding: 0, resource: { buffer: this.#uniform } }],
@@ -375,6 +495,16 @@ export class WebGpuRenderer {
     pass.setVertexBuffer(0, this.#cubeVertices);
     pass.setVertexBuffer(1, this.#instances, coneBytes);
     pass.draw(cube.length / 3, objects.length);
+    if (segmentCount > 0) {
+      pass.setPipeline(this.#temporalSegmentPipeline);
+      pass.setBindGroup(0, this.#temporalBind);
+      pass.draw(6, segmentCount);
+    }
+    if (pulseCount > 0) {
+      pass.setPipeline(this.#temporalPulsePipeline);
+      pass.setBindGroup(0, this.#temporalBind);
+      pass.draw(96 * 6, pulseCount);
+    }
     pass.end();
     const probe = this.#pixelProbe;
     let readback: GPUBuffer | undefined;

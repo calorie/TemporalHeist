@@ -33,3 +33,18 @@ Use a fixed capacity of 512 segments. A 600-tick window sampled at 20 Hz has 200
 intervals per owner when aligned and can have 201 after both endpoints are clipped
 inside sampling intervals, so two players require up to 402 records. Fail explicitly
 instead of truncating if malformed or unexpectedly dense input exceeds capacity.
+
+## 2026-09-23 — Persistent temporal GPU pass
+
+Allocate the 512-record segment buffer and two-record pulse buffer once with the
+renderer. JavaScript uploads only two `vec4` values per segment and one `vec4` per
+pulse; WGSL expands those records into ribbon and ring triangles. Render opaque
+geometry first, then render both temporal pipelines with alpha blending, the same
+depth attachment, depth testing enabled, and depth writes disabled. This keeps
+walls visually in front without letting transparent ribbons occlude each other
+through depth writes.
+
+The production renderer GPU probe replaces the standalone WebGPU spike. It runs
+guard parity and temporal pixels through the real renderer and records adapter,
+backend, both supported viewports, overflow behavior, and validation errors in one
+container Chromium session.

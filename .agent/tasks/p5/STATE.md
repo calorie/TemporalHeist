@@ -2,8 +2,8 @@
 
 ## Status
 
-Temporal Bridge design approved. Stack 1 temporal model implemented and verified
-from main `6ddf8eb`.
+Temporal Bridge design approved. Stack 1 temporal model is the base. Stack 2 now
+integrates the model with the production WebGPU renderer.
 
 ## Review stack
 
@@ -19,8 +19,19 @@ from main `6ddf8eb`.
   Biome, protocol, browser UX at both viewports, WebGPU probes, and production build).
 - TDD red evidence: focused test first failed with missing `temporal-view.ts` before
   implementation; green evidence is the focused and full runs above.
+- Stack 2 TDD red evidence: the production renderer probe first failed because
+  `temporalStats()` and the temporal GPU pass did not exist.
+- Stack 2 focused production renderer probe passes in container Chromium at
+  1280×720 and 800×600. It proves cyan/magenta old and recent gradients, outside
+  rejection, wall occlusion, pulse start/end boundaries, exact persistent buffer
+  statistics, explicit segment/pulse overflow, SwiftShader, and zero renderer errors.
+- Full `sh container p5-renderer-agent verify` — passed (Rust 47 tests, protocol,
+  TypeScript, Biome, production renderer GPU probe, browser UX, production build).
+- Full `sh container p5-renderer-agent acceptance` — passed with the two-client
+  mission, screenshots, raw WebGPU on both clients, and empty renderer/browser
+  error arrays.
 
 ## Next action
 
-Independently review Stack 1 and publish its PR, then build the renderer layer on its
-fixed 512-record contract.
+Independently review Stack 2 and publish the second stacked PR, then extend the full
+mission evidence with canonical bridge endpoints and trail counts in Stack 3.
