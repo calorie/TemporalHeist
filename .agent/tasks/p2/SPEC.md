@@ -58,4 +58,3 @@ player walking through the guard's view, the ten-second Echo decoy creates the
 verified crossing window, both clients agree on every authoritative result, and
 two independent full stacks can complete concurrently without shared mutable
 runtime resources.
-
