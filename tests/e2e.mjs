@@ -599,15 +599,33 @@ try {
   await guardDiversion(pageA, pageB);
 
   // Zone 3 acceptance: A leaves its plate; exactly 600 authority ticks later its
-  // Echo opens the current door, and B crosses while A remains elsewhere.
+  // Echo opens the current door while both live players remain off the plate.
   const finalOpen = await recordEchoPlate(pageA, 23, 13, 19500, 2500, undefined, true);
+  assert.equal(finalOpen.plates.find((plate) => plate.id === 23)?.livePresence, 0);
+  assert(finalOpen.plates.find((plate) => plate.id === 23)?.echoPresence > 0);
   await dash(pageA, 1, 21500, 2200);
-  await waitFor(pageB, (state) => guardOf(state).xMm < 18500 && guardOf(state).facingX < 0,
-    'guard away from the extraction approach');
-  await dash(pageB, 2, 21500, 4000);
-  // The near edge of extraction is still inside the patrol's maximum range.
-  // B waits farther inside while A uses the next safe crossing window.
-  await dash(pageB, 2, 23500, 4000);
+  for (const page of [pageA, pageB]) {
+    assert.equal(
+      await waitForText(page, '#echo-status', /^ECHO REPLAYING · 10 SECONDS BEHIND$/,
+        'human-facing Echo replay status'),
+      'ECHO REPLAYING · 10 SECONDS BEHIND',
+    );
+  }
+  // Use one westbound patrol window for both players. Waiting for a second
+  // cycle can outlast the final door's remaining 600-tick Echo Presence.
+  const extractionWindow = await waitFor(pageA, (state) => {
+    const guard = guardOf(state);
+    return guard.state === GuardState.PATROL && guard.facingX < 0 &&
+      guard.xMm >= 18800 && guard.xMm <= 19200 && state.doors.find((door) => door.id === 13)?.active;
+  }, 'one safe patrol window for both players to extract');
+  evidence.events.push({ event: 'final-door-crossing-window', tick: extractionWindow.serverTick,
+    guard: guardOf(extractionWindow), plate: extractionWindow.plates.find((plate) => plate.id === 23) });
+  await Promise.all([[pageA, 1], [pageB, 2]].map(async ([page, playerId]) => {
+    await dash(page, playerId, 21500, 4000);
+    // Aim beyond guard range if one player arrives first. The authority freezes
+    // movement immediately once both live players qualify for the win.
+    await dash(page, playerId, 23500, 4000);
+  }));
   const finalA = await waitFor(pageA,
     (state) => state.players.find((player) => player.playerId === 2)?.xMm > 22400,
     'client A observing player B beyond the co-op door');
@@ -618,23 +636,6 @@ try {
   assert(finalA.doors.find((door) => door.id === 13)?.active);
   assert(finalB.doors.find((door) => door.id === 13)?.active);
   assert(finalOpen.doors.find((door) => door.id === 13)?.active);
-  for (const page of [pageA, pageB]) {
-    assert.equal(
-      await waitForText(page, '#echo-status', /^ECHO REPLAYING · 10 SECONDS BEHIND$/,
-        'human-facing Echo replay status'),
-      'ECHO REPLAYING · 10 SECONDS BEHIND',
-    );
-  }
-
-  // Both live players must enter extraction after Echo Presence has opened the
-  // final door. The authority, rather than either renderer, decides the result.
-  // Aim well inside extraction so the movement tolerance cannot accept a pose
-  // before x=22800. The terminal-state branch handles authority's immediate
-  // movement freeze once both players qualify.
-  await waitFor(pageA, (state) => guardOf(state).xMm < 18500 && guardOf(state).facingX < 0,
-    'guard away from player A extraction');
-  await dash(pageA, 1, 21500, 4000);
-  await dash(pageA, 1, 23000, 4000);
   const wonA = await waitForPhase(pageA, RoomPhase.WON, 'won result on client A');
   const wonB = await waitForPhase(pageB, RoomPhase.WON, 'won result on client B');
   assert.equal(wonA.room.attempt, 2);
