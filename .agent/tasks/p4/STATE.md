@@ -2,8 +2,8 @@
 
 ## Status
 
-Stack 3 responsive/accessibility browser integration is implemented and verified on
-`p4/browser-ux`.
+P4 Player Experience is complete on `p4/release-acceptance`. All acceptance
+criteria are implemented and verified entirely through containers.
 
 ## Review stack
 
@@ -74,8 +74,39 @@ Stack 3 responsive/accessibility browser integration is implemented and verified
   representative worst-case text, and proves all fields are visible, viewport-bound,
   and vertically non-overlapping at both target sizes. It also observes the real
   focused Enter event (`defaultPrevented: false`) and exactly one native mute click.
+- `sh container p4-release-agent-verify verify` passed on 2026-09-23. It covered
+  Rust format, clippy and 47 tests; protobuf compatibility; TypeScript; Biome;
+  browser/presentation contracts; Vite production build; responsive Chromium at
+  1280x720 and 800x600; and raw WebGPU. Chromium 153 used Mesa Vulkan llvmpipe,
+  while the WebGPU adapter reported Google SwiftShader with no validation errors.
+- `sh container p4-release-agent-acceptance acceptance` passed at `1c3cd60`.
+  Both clients proved their local/partner identity, lobby briefing visibility and
+  ACTIVE collapse, canonical mission-step transitions, range-gated vault prompt,
+  actual browser `D` movement and `E` theft, shared vault/Echo-door/extraction
+  progress, all-complete WON state, corrective guard/camera failure messages,
+  restart cleanup, MoQ reconnect, and raw WebGPU with no browser/renderer errors.
+- The full mission recorded P1 keyboard movement from x=1500 to x=1620 and secured
+  the vault through the visible `E · STEAL VAULT DATA` prompt. Out-of-range UI and
+  authority rejection were both observed before the successful action.
+- The final two-worktree isolation command passed at `1c3cd60`:
+  `sh containers/verify-two-stack-isolation.sh /Users/a/TemporalHeist/.worktrees/p4-release p4-release-agent-iso-a /tmp/temporal-heist-p4-release-equivalent p4-release-agent-iso-b /tmp/temporal-heist-p4-release-isolation`.
+  Both production acceptance runs exited 0 while their browsers were live
+  concurrently. Container, network, volume, room, certificate/test data, and
+  browser profiles were independently namespaced; neither stack published host
+  ports. Removing Stack A with volumes preserved Stack B's exact resource IDs and
+  its web health check passed. Machine-readable evidence and both acceptance logs
+  are in `/tmp/temporal-heist-p4-release-isolation/`.
+
+## Known constraints and unverified items
+
+- P4 intentionally targets desktop Chromium with keyboard at 1280x720 and 800x600.
+  Gamepad, touch/mobile, remapping, localization, voiceover, minimap/pathfinding,
+  and image-diff regression testing remain outside this milestone.
+- GPU evidence is from container software rendering (Mesa llvmpipe and SwiftShader),
+  not a hardware GPU passthrough path.
 
 ## Next action
 
-Commit and publish Stack 3, then extend release acceptance with two-client semantic,
-keyboard, responsive, and isolation evidence in Stack 4.
+Publish Stack 4 for review. After merge, begin P5 Release Candidate work from the
+merged P4 baseline: release packaging, production configuration, observability,
+fresh-machine bootstrap verification, and a final performance/reliability pass.
