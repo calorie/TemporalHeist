@@ -6,6 +6,7 @@ import { interactionDecision } from './interaction-decision.ts';
 import { map } from './map.ts';
 import { MoqTransport } from './net/moq/transport.ts';
 import { WebGpuRenderer } from './render/webgpu.ts';
+import { renderIfChanged } from './render-cache.ts';
 import { roomHud } from './room-hud.ts';
 import { Timeline } from './timeline.ts';
 
@@ -54,6 +55,7 @@ const interaction = element<HTMLElement>('#interaction');
 const readyButton = element<HTMLButtonElement>('#ready');
 const restartButton = element<HTMLButtonElement>('#restart');
 const muteButton = element<HTMLButtonElement>('#mute');
+const hudCache = new Map<string, string>();
 
 function input(kind: InputKind, sequence: number, x = 0, z = 0, targetId = 0): Input {
   return {
@@ -292,29 +294,52 @@ const frame = () => {
   const snap = presentation.snapshot;
   const hud = roomHud(snap, playerId);
   audio.update(snap);
-  hudElement.dataset.phase = hud.phaseState;
-  phase.textContent = hud.phase;
-  objective.textContent = hud.objective;
-  timer.textContent = hud.timer;
-  echoStatus.textContent = hud.echoStatus;
-  guardStatus.textContent = hud.guardStatus;
-  guardStatus.hidden = !hud.guardStatus;
-  readiness.textContent = hud.readiness;
-  result.textContent = hud.result;
-  result.dataset.state = hud.resultState;
-  readyButton.hidden = !hud.canReady;
-  restartButton.hidden = !hud.canRestart;
-  identity.textContent = `${hud.identity.self} · ${hud.identity.partner}${hud.identity.echoes.length ? ` · ${hud.identity.echoes.join(' · ')}` : ''}`;
-  missionSteps.replaceChildren(
-    ...hud.steps.map((step) => {
-      const item = document.createElement('li');
-      item.dataset.state = step.state;
-      item.textContent = step.label;
-      return item;
-    }),
-  );
-  interaction.textContent = hud.interaction;
-  interaction.hidden = !hud.interaction;
+  renderIfChanged(hudCache, 'phase-state', hud.phaseState, () => {
+    hudElement.dataset.phase = hud.phaseState;
+  });
+  for (const [key, target, value] of [
+    ['phase', phase, hud.phase],
+    ['objective', objective, hud.objective],
+    ['timer', timer, hud.timer],
+    ['echo', echoStatus, hud.echoStatus],
+    ['readiness', readiness, hud.readiness],
+  ] as const)
+    renderIfChanged(hudCache, key, value, () => {
+      target.textContent = value;
+    });
+  renderIfChanged(hudCache, 'guard', hud.guardStatus, () => {
+    guardStatus.textContent = hud.guardStatus;
+    guardStatus.hidden = !hud.guardStatus;
+  });
+  renderIfChanged(hudCache, 'result', `${hud.resultState}\0${hud.result}`, () => {
+    result.textContent = hud.result;
+    result.dataset.state = hud.resultState;
+  });
+  renderIfChanged(hudCache, 'ready-button', String(hud.canReady), () => {
+    readyButton.hidden = !hud.canReady;
+  });
+  renderIfChanged(hudCache, 'restart-button', String(hud.canRestart), () => {
+    restartButton.hidden = !hud.canRestart;
+  });
+  const identityText = `${hud.identity.self} · ${hud.identity.partner}${hud.identity.echoes.length ? ` · ${hud.identity.echoes.join(' · ')}` : ''}`;
+  renderIfChanged(hudCache, 'identity', identityText, () => {
+    identity.textContent = identityText;
+  });
+  const stepsKey = JSON.stringify(hud.steps);
+  renderIfChanged(hudCache, 'mission-steps', stepsKey, () => {
+    missionSteps.replaceChildren(
+      ...hud.steps.map((step) => {
+        const item = document.createElement('li');
+        item.dataset.state = step.state;
+        item.textContent = step.label;
+        return item;
+      }),
+    );
+  });
+  renderIfChanged(hudCache, 'interaction', hud.interaction, () => {
+    interaction.textContent = hud.interaction;
+    interaction.hidden = !hud.interaction;
+  });
   details.textContent = snap
     ? `tick ${snap.serverTick} · epoch ${snap.roomEpoch.slice(0, 8)} · ${timeline.length} samples · ${presentation.echoes.length} echoes`
     : `room ${room} · waiting for authority`;

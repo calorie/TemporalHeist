@@ -34,6 +34,11 @@ Stack 1 UX/input contract is implemented and verified on `p4/ux-contract`.
   transitions, canonical vault range boundaries, phase/secured/missing-player gates,
   preserved Action-terminal selection, corrective failure copy, key repeats, and
   interactive focus ownership.
+- Review fixes remove the persistent `[E]` objective hint so only the canonical
+  range-gated prompt advertises interaction, mark all mission steps complete in WON,
+  and cache semantic HUD values so stable animation frames retain existing DOM nodes.
+  Focused container tests, TypeScript, Biome, and the production build pass for these
+  corrections.
 
 ## Next action
 

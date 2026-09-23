@@ -78,7 +78,7 @@ export function roomHud(snapshot: Snapshot | undefined, playerId: number): RoomH
   let objective = 'Ready up with your partner';
   if (active)
     objective = !room.objectiveSecured
-      ? 'Steal the vault data [E]'
+      ? 'Steal the vault data'
       : !room.echoOpenedFinalDoor
         ? 'Open the final door with Echo Presence'
         : `Reach extraction together (${room.extractionPlayers}/2)`;

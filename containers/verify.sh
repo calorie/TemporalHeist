@@ -17,6 +17,7 @@ node apps/web/test/cube-mesh.mjs
 node apps/web/test/room-hud.mjs
 node apps/web/test/player-experience.mjs
 node apps/web/test/input-contract.mjs
+node apps/web/test/render-cache.mjs
 node apps/web/test/objective-view.mjs
 node apps/web/test/surveillance-view.mjs
 node apps/web/test/audio.mjs

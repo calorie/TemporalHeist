@@ -27,6 +27,7 @@ export function playerExperience(
   const partnerId = playerId === 1 ? 2 : 1;
   const objectiveSecured = Boolean(snapshot?.room?.objectiveSecured);
   const doorOpen = Boolean(snapshot?.room?.echoOpenedFinalDoor);
+  const won = snapshot?.room?.phase === 3;
   const extractionPlayers = snapshot?.room?.extractionPlayers ?? 0;
   return {
     identity: {
@@ -41,15 +42,15 @@ export function playerExperience(
     steps: [
       {
         label: 'Steal the vault data',
-        state: objectiveSecured ? 'complete' : 'current',
+        state: objectiveSecured || won ? 'complete' : 'current',
       },
       {
         label: 'Open the final door with Echo Presence',
-        state: doorOpen ? 'complete' : objectiveSecured ? 'current' : 'upcoming',
+        state: doorOpen || won ? 'complete' : objectiveSecured ? 'current' : 'upcoming',
       },
       {
         label: `Reach extraction together${doorOpen ? ` (${extractionPlayers}/2)` : ''}`,
-        state: doorOpen ? 'current' : 'upcoming',
+        state: won ? 'complete' : doorOpen ? 'current' : 'upcoming',
       },
     ],
     interaction: interactionDecision(snapshot, playerId, facility),

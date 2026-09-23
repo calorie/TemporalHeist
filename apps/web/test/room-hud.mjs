@@ -61,7 +61,8 @@ assert.equal(lobby.canRestart, false);
 
 const active = roomHud(snapshot(RoomPhase.ACTIVE, { startedTick: 120 }), 1);
 assert.equal(active.timer, '01:00');
-assert.equal(active.objective, 'Steal the vault data [E]');
+assert.equal(active.objective, 'Steal the vault data');
+assert.doesNotMatch(active.objective, /\[E\]/, 'out-of-range objective must not imply E is available');
 assert.equal(active.echoStatus, 'ECHO IN 00:10');
 assert.equal(active.phaseState, 'active');
 assert.equal(active.canReady, false);
@@ -72,7 +73,7 @@ actionable.players = [{ playerId: 1, xMm: 21000, zMm: 4000, echo: false }];
 assert.equal(roomHud(actionable, 1).interaction, '[E] STEAL VAULT DATA');
 
 const guarded = roomHud({ ...snapshot(RoomPhase.ACTIVE), guards: [{ id: 51, state: 1 }] }, 1);
-assert.equal(guarded.objective, 'Steal the vault data [E]');
+assert.equal(guarded.objective, 'Steal the vault data');
 assert.equal(guarded.guardStatus, 'GUARD 51 PATROLLING · HUMANS ARE CAUGHT, ECHOES DISTRACT');
 const secured = roomHud(snapshot(RoomPhase.ACTIVE, { objectiveSecured: true }), 1);
 assert.equal(secured.objective, 'Open the final door with Echo Presence');
@@ -124,6 +125,7 @@ const won = roomHud(snapshot(RoomPhase.WON, { readyPlayers: 2 }), 1);
 assert.match(won.result, /SUCCESS/);
 assert.equal(won.resultState, 'success');
 assert.equal(won.canRestart, true);
+assert.deepEqual(won.steps.map(({ state }) => state), ['complete', 'complete', 'complete']);
 
 const failed = roomHud(snapshot(RoomPhase.FAILED, { failureReason: 1 }), 1);
 assert.match(failed.result, /TIME EXPIRED/);
