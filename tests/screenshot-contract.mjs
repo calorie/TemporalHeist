@@ -14,7 +14,7 @@ try {
     await assert.rejects(captureScreenshot(page), /screenshot.*(floor|wall|guard)/);
   }
   // A floor and wall without the guard is also insufficient.
-  await page.setContent('<style>body{margin:0;background:rgb(9,23,31)}div{position:absolute;left:792px;top:590px;width:20px;height:30px;background:rgb(31,64,79)}</style><div></div>');
+  await page.setContent('<style>body{margin:0;background:rgb(9,23,31)}div{position:absolute;left:792px;top:443px;width:20px;height:30px;background:rgb(31,64,79)}</style><div></div>');
   await assert.rejects(captureScreenshot(page), /screenshot.*guard/);
   await page.evaluate(() => {
     const guard = document.createElement('div');
@@ -29,10 +29,10 @@ try {
   await page.evaluate(() => {
     const objective = document.createElement('div');
     objective.id = 'objective';
-    objective.style.cssText = 'left:1072px;top:332px;width:23px;height:56px;background:rgb(20,230,255)';
+    objective.style.cssText = 'left:1072px;top:332px;width:23px;height:56px;background:rgb(136,242,255)';
     document.body.append(objective);
   });
-  assert.deepEqual((await captureScreenshot(page, undefined, false)).objective, [20, 230, 255, 255]);
+  assert.deepEqual((await captureScreenshot(page, undefined, false)).objective, [136, 242, 255, 255]);
   await assert.rejects(captureScreenshot(page, undefined, true), /screenshot.*objective/);
   await page.evaluate(() => { document.querySelector('#objective').style.background = 'rgb(26,77,87)'; });
   assert.deepEqual((await captureScreenshot(page, undefined, true)).objective, [26, 77, 87, 255]);

@@ -37,3 +37,12 @@ Focused interactive/editable DOM elements retain all keys. Global shortcuts cons
 movement/action keys only during ACTIVE, Enter only in LOBBY, and R only in terminal
 phases. This lets native button keyboard activation send exactly one command while
 preventing gameplay keys from scrolling the page.
+
+## 2026-09-23 — Aspect-fit camera and world guidance
+
+Fit the authored map bounds plus 1000 mm of padding into the canvas with one equal
+pixels-per-world-unit scale for both axes. This preserves the established horizontal
+positions at 1280x720 while keeping the full map visible at both target viewports.
+Draw presentation-only cues for the local live player and the canonical current goal:
+vault before theft, plate 23 before the final Echo door proof, then extraction. Pass
+the local player ID into the renderer; no authority or map contract changes.

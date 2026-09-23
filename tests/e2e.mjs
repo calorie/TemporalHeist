@@ -375,8 +375,9 @@ async function guardPixel(page, expectedState) {
   const fx = guard.facingX / length, fz = guard.facingZ / length;
   const x = guard.xMm + fx * 1000 - fz * 250;
   const z = guard.zMm + fz * 1000 + fx * 250;
-  const pixel = [((x - 12000) / 13000 + 1) * 640,
-    (1 - ((4000 - z) / 5200) * (1280 / 720)) * 360];
+  const pixelsPerWorldUnit = 1280 / 26000;
+  const pixel = [640 + (x - 12000) * pixelsPerWorldUnit,
+    360 + (z - 4000) * pixelsPerWorldUnit];
   const rgba = await page.evaluate(([x, y]) => window.th.rendererPixel(x, y), pixel);
   if (expectedState === GuardState.PATROL)
     assert(rgba[1] > rgba[0] + 15, `patrol cone must be teal: ${rgba}`);
@@ -762,8 +763,8 @@ try {
   for (const page of [pageA, pageB]) {
     await waitForPresentation(page, 'lobby', 'none');
     const terminal = await page.evaluate(() => window.th.rendererPixel(1083, 360));
-    assert(terminal.every((value, channel) => Math.abs(value - [20, 230, 255, 255][channel]) <= 1),
-      `restarted vault terminal must be cyan: ${terminal}`);
+    assert(terminal.every((value, channel) => Math.abs(value - [136, 242, 255, 255][channel]) <= 1),
+      `restarted vault goal cue must be cyan: ${terminal}`);
   }
   evidence.events.push({ event: 'attempt-reset', requestedBy: 1, tick: resetA.serverTick });
 
@@ -793,7 +794,7 @@ try {
   assert(quietCamera, 'camera 41 missing from authoritative snapshot');
   assert.equal(quietCamera.active, false);
   assert.equal(quietCamera.detectedPlayerId, 0);
-  const idleConePixel = await pageA.evaluate(() => window.th.rendererPixel(246, 605));
+  const idleConePixel = await pageA.evaluate(() => window.th.rendererPixel(246, 458));
   assert(idleConePixel[1] > idleConePixel[0], `idle cone is not teal: ${idleConePixel}`);
   evidence.events.push({
     event: 'echo-present-camera-inactive', hazardId: 41,
@@ -816,7 +817,7 @@ try {
     assert.equal(camera?.detectedPlayerId, 1);
   }
   assert.equal(failedA.room.endedTick, failedB.room.endedTick);
-  const detectedConePixel = await pageA.evaluate(() => window.th.rendererPixel(246, 605));
+  const detectedConePixel = await pageA.evaluate(() => window.th.rendererPixel(246, 458));
   assert(
     detectedConePixel[0] > detectedConePixel[1],
     `detected cone is not red: ${detectedConePixel}`,

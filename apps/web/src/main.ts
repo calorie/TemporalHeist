@@ -290,7 +290,7 @@ const frame = () => {
   presentationFrame = undefined;
   if (presentationPaused) return;
   const presentation = timeline.presentation();
-  renderer?.render(map, presentation);
+  renderer?.render(map, presentation, playerId);
   const snap = presentation.snapshot;
   const hud = roomHud(snap, playerId);
   audio.update(snap);

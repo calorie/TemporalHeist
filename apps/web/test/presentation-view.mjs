@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict';
-import { extractionVisual, sceneClearColor, worldPixel } from '../src/presentation-view.ts';
+import {
+  aspectFitCamera,
+  extractionVisual,
+  guidancePrimitives,
+  sceneClearColor,
+  worldPixel,
+} from '../src/presentation-view.ts';
 import { map } from '../src/map.ts';
 import { guardPrimitives } from '../src/render/guard-geometry.ts';
 
@@ -28,8 +34,58 @@ assert(failed.color[0] > failed.color[1], 'failure must read red');
 assert.deepEqual(sceneClearColor(snapshot(RoomPhase.WON, true)), [0.015, 0.09, 0.045, 1]);
 assert.deepEqual(sceneClearColor(snapshot(RoomPhase.FAILED)), [0.11, 0.018, 0.025, 1]);
 assert.deepEqual(sceneClearColor(undefined), [0.015, 0.035, 0.055, 1]);
-assert.deepEqual(worldPixel(12000, 4000, 1280, 720), [640, 360]);
-assert.deepEqual(worldPixel(23275, 4000, 1280, 720).map(Math.round), [1195, 360]);
+assert.deepEqual(worldPixel(12000, 4000, 1280, 720, map.bounds), [640, 360]);
+assert.deepEqual(worldPixel(23275, 4000, 1280, 720, map.bounds).map(Math.round), [1195, 360]);
+const wideCamera = aspectFitCamera(map.bounds, 1280, 720);
+const compactCamera = aspectFitCamera(map.bounds, 800, 600);
+assert.equal(wideCamera.pixelsPerWorldUnit, 1280 / 26000);
+assert.equal(compactCamera.pixelsPerWorldUnit, 800 / 26000);
+for (const camera of [wideCamera, compactCamera]) {
+  assert.equal(camera.centerX, 12000);
+  assert.equal(camera.centerZ, 4000);
+  assert(
+    Math.abs(camera.scaleX * camera.width - camera.scaleZ * camera.height) < Number.EPSILON,
+    'x and z must use one world scale',
+  );
+}
+assert.deepEqual(worldPixel(0, 0, 800, 600, map.bounds).map(Math.round), [31, 177]);
+assert.deepEqual(worldPixel(24000, 8000, 800, 600, map.bounds).map(Math.round), [769, 423]);
+
+const missionPresentation = (room, playerId = 1) => ({
+  live: [{ playerId, xMm: 1500, zMm: 2500 }],
+  echoes: [],
+  guards: [],
+  renderTick: 0,
+  snapshot: { room },
+});
+const vaultGuidance = guidancePrimitives(map, missionPresentation({ objectiveSecured: false }), 1);
+assert.deepEqual([vaultGuidance[0].x, vaultGuidance[0].z], [1500, 2500], 'self marker follows local player');
+assert.deepEqual([vaultGuidance[1].x, vaultGuidance[1].z], [21000, 4000], 'vault is the first goal');
+const nearVault = (phase) => ({
+  ...missionPresentation({ phase, objectiveSecured: false }),
+  live: [{ playerId: 1, xMm: 21000, zMm: 4000 }],
+});
+const activeVault = guidancePrimitives(map, nearVault(RoomPhase.ACTIVE), 1)[1];
+assert.deepEqual(activeVault.color, [1, 0.9, 0.12, 0.95], 'ACTIVE in-range vault is actionable');
+assert.equal(activeVault.sx, 420);
+for (const phase of [1, RoomPhase.FAILED, RoomPhase.WON]) {
+  const inactiveVault = guidancePrimitives(map, nearVault(phase), 1)[1];
+  assert.deepEqual(inactiveVault.color, [0.55, 0.95, 1, 0.82], 'non-ACTIVE vault stays informational');
+  assert.equal(inactiveVault.sx, 320);
+}
+const echoGuidance = guidancePrimitives(
+  map,
+  missionPresentation({ objectiveSecured: true, echoOpenedFinalDoor: false }),
+  1,
+);
+assert.deepEqual([echoGuidance[1].x, echoGuidance[1].z], [19500, 2500], 'final Echo plate is the second goal');
+const extractionGuidance = guidancePrimitives(
+  map,
+  missionPresentation({ objectiveSecured: true, echoOpenedFinalDoor: true }),
+  1,
+);
+assert.deepEqual([extractionGuidance[1].x, extractionGuidance[1].z], [23275, 4000], 'extraction is the final goal');
+assert.deepEqual(guidancePrimitives(map, missionPresentation({}, 2), 1), [], 'missing local player has no marker');
 
 const guard = {
   id: 51,
