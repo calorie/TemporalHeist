@@ -339,6 +339,14 @@ async function sharedGuardSnapshot(pageA, pageB, investigating) {
 }
 
 async function guardPixel(page, expectedState) {
+  if (expectedState === GuardState.INVESTIGATE) {
+    // Until the source's 30-tick observation window closes, a moving Echo
+    // can rotate the cone between choosing a pixel and GPU readback. Wait on
+    // authority ticks for a retained target; the live crossing runs in parallel.
+    await waitFor(page, (state) => guardOf(state).state === expectedState &&
+      state.serverTick >= guardOf(state).stateEnteredTick + 30,
+    'stable investigation target before cone readback');
+  }
   // Sample well inside the radial cone, offset from its route/body centerline.
   const guard = guardOf(await snapshot(page));
   assert.equal(guard.state, expectedState);
