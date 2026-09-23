@@ -32,28 +32,81 @@ try {
     await page.getByRole('complementary', { name: 'Mission status and controls' }).waitFor();
 
     const mute = page.locator('#mute');
+    await page.evaluate(() => {
+      window.__uxKeys = [];
+      window.__uxMuteClicks = 0;
+      window.addEventListener('keydown', (event) => {
+        window.__uxKeys.push({ key: event.key, defaultPrevented: event.defaultPrevented });
+      });
+      document.querySelector('#mute').addEventListener('click', () => { window.__uxMuteClicks += 1; });
+    });
     await mute.focus();
     await page.keyboard.press('Enter');
     assert.equal(await mute.getAttribute('aria-pressed'), 'true', 'Enter activates mute once');
     assert.equal(await page.locator('#ready').isHidden(), true, 'focused Enter does not ready globally');
 
-    await page.locator('#hud').evaluate((hud) => { hud.dataset.phase = 'active'; });
+    const focusedEnter = await page.evaluate(() => ({
+      keys: window.__uxKeys,
+      clicks: window.__uxMuteClicks,
+    }));
+    assert.deepEqual(focusedEnter.keys, [{ key: 'Enter', defaultPrevented: false }]);
+    assert.equal(focusedEnter.clicks, 1, 'native Enter activation toggles mute exactly once');
+
+    await page.locator('#hud').evaluate((hud) => {
+      hud.dataset.phase = 'active';
+      const values = {
+        identity: 'YOU · P1 · PARTNER · P2 · YOUR ECHO · P1 · PARTNER ECHO · P2',
+        phase: 'ACTIVE · ATTEMPT 99',
+        objective: 'Open the final door with Echo Presence',
+        interaction: '[E] STEAL VAULT DATA',
+        'echo-status': 'ECHO REPLAYING · 10 SECONDS BEHIND',
+        'guard-status': 'GUARD 51 INVESTIGATING — CROSS WHEN CLEAR',
+      };
+      for (const [id, value] of Object.entries(values)) {
+        const element = document.getElementById(id);
+        element.textContent = value;
+        element.hidden = false;
+      }
+      const steps = document.querySelector('#mission-steps');
+      steps.replaceChildren(...[
+        'Steal the vault data',
+        'Open the final door with Echo Presence',
+        'Reach extraction together (1/2)',
+      ].map((label) => Object.assign(document.createElement('li'), { textContent: label })));
+      for (const selector of ['#ready', '#restart']) document.querySelector(selector).hidden = false;
+    });
+    assert.equal(await page.locator('#briefing').getAttribute('hidden'), null,
+      'briefing lifecycle is owned solely by the HUD data phase');
     assert.equal(await page.locator('#briefing').isHidden(), true, 'briefing collapses during ACTIVE');
     const layout = await page.evaluate(() => {
-      const hud = document.querySelector('#hud').getBoundingClientRect();
-      const objective = document.querySelector('#objective').getBoundingClientRect();
-      const steps = document.querySelector('#mission-steps').getBoundingClientRect();
-      const mute = document.querySelector('#mute').getBoundingClientRect();
+      const selectors = [
+        '#hud', '#mute', '#identity', '#phase', '#objective', '#mission-steps', '#interaction',
+        '#echo-status', '#guard-status', '#controls',
+      ];
+      const boxes = Object.fromEntries(selectors.map((selector) => [
+        selector, document.querySelector(selector).getBoundingClientRect(),
+      ]));
       return {
-        hud, objective, steps, mute,
+        boxes,
         overflowY: getComputedStyle(document.querySelector('#hud')).overflowY,
         transition: getComputedStyle(document.querySelector('#hud')).transitionDuration,
       };
     });
-    for (const box of [layout.hud, layout.objective, layout.steps, layout.mute]) {
+    for (const [selector, box] of Object.entries(layout.boxes)) {
+      assert(box.width > 0 && box.height > 0, `${selector} is visible at ${viewport.width}x${viewport.height}`);
       assert(box.top >= 0 && box.left >= 0, `element starts in ${viewport.width}x${viewport.height}`);
       assert(box.right <= viewport.width && box.bottom <= viewport.height,
         `element fits ${viewport.width}x${viewport.height}`);
+    }
+    const vertical = [
+      '#identity', '#phase', '#objective', '#mission-steps', '#interaction', '#echo-status',
+      '#guard-status', '#controls',
+    ].map((selector) => [selector, layout.boxes[selector]]);
+    for (let index = 1; index < vertical.length; index += 1) {
+      const [previousSelector, previous] = vertical[index - 1];
+      const [selector, current] = vertical[index];
+      assert(previous.bottom <= current.top,
+        `${previousSelector} does not overlap ${selector} at ${viewport.width}x${viewport.height}`);
     }
     assert.equal(layout.overflowY, 'auto', 'short lobby and terminal HUDs remain scrollable');
     assert.equal(layout.transition, '0s', 'reduced motion disables HUD transitions');

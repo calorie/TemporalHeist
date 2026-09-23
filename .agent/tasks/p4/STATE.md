@@ -68,6 +68,12 @@ Stack 3 responsive/accessibility browser integration is implemented and verified
 - WebGPU evidence remained clean in Chromium 153: Mesa Vulkan llvmpipe hosted ANGLE
   and the WebGPU fallback adapter reported SwiftShader with zero shader or validation
   errors.
+- Review follow-up removed the redundant JavaScript `hidden` mutation so
+  `data-phase` CSS is the single briefing lifecycle mechanism. The Chromium check now
+  asserts that contract directly, fills every critical ACTIVE HUD field with
+  representative worst-case text, and proves all fields are visible, viewport-bound,
+  and vertically non-overlapping at both target sizes. It also observes the real
+  focused Enter event (`defaultPrevented: false`) and exactly one native mute click.
 
 ## Next action
 
