@@ -81,3 +81,7 @@ worktrees.
   default is shorter than the Echo delay. Gameplay correctness never depends on
   relay retention alone.
 - Infrastructure files and this document remain English for the contract check.
+- CI runs component verification on every PR. Full browser acceptance runs on
+  pushes to `main`, PRs targeting `main`, and stacked PRs labeled `full-stack`.
+  Apply that label to the top PR once its dependent layers are ready; stacked
+  middle PRs skip full acceptance.
