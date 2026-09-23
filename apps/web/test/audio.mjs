@@ -90,6 +90,13 @@ assert.deepEqual(audioTransitions(won, won), [], 'success cue fires once');
 const failed = audioFrame(snapshot(RoomPhase.FAILED, 703));
 assert.deepEqual(audioTransitions(afterEcho, failed), ['failure']);
 assert.deepEqual(audioTransitions(failed, failed), [], 'failure cue fires once');
+const failedSecured = audioFrame(snapshot(RoomPhase.FAILED, 703, { objectiveSecured: true }));
+assert.deepEqual(
+  audioTransitions(afterEcho, failedSecured),
+  ['objective-secured', 'failure'],
+  'theft cue survives an authority snapshot that also ends the attempt',
+);
+assert.deepEqual(audioTransitions(failedSecured, failedSecured), [], 'failed theft cue fires once');
 
 const patrolling = audioFrame({ ...snapshot(RoomPhase.ACTIVE, 710), guards: [{ id: 51, state: 1 }] });
 const investigating = audioFrame({ ...snapshot(RoomPhase.ACTIVE, 711), guards: [{ id: 51, state: 2 }] });

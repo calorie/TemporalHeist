@@ -47,8 +47,7 @@ export function audioTransitions(
   )
     cues.push('echo');
   if (next.phase === ACTIVE && !previous.doorOpen && next.doorOpen) cues.push('door');
-  if (next.phase === ACTIVE && !previous.objectiveSecured && next.objectiveSecured)
-    cues.push('objective-secured');
+  if (!previous.objectiveSecured && next.objectiveSecured) cues.push('objective-secured');
   if (
     previous.phase === ACTIVE &&
     next.phase === ACTIVE &&
