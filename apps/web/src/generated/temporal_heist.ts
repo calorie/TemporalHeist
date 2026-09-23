@@ -285,6 +285,7 @@ export interface RoomState {
   failureReason: FailureReason;
   failureHazardId: number;
   failureGuardId: number;
+  objectiveSecured: boolean;
 }
 
 export interface Hazard {
@@ -1397,6 +1398,7 @@ function createBaseRoomState(): RoomState {
     failureReason: 0,
     failureHazardId: 0,
     failureGuardId: 0,
+    objectiveSecured: false,
   };
 }
 
@@ -1434,6 +1436,9 @@ export const RoomState: MessageFns<RoomState> = {
     }
     if (message.failureGuardId !== 0) {
       writer.uint32(88).uint32(message.failureGuardId);
+    }
+    if (message.objectiveSecured !== false) {
+      writer.uint32(96).bool(message.objectiveSecured);
     }
     return writer;
   },
@@ -1539,6 +1544,14 @@ export const RoomState: MessageFns<RoomState> = {
             message.failureGuardId = reader.uint32();
             continue;
           }
+          case 12: {
+            if (tag !== 96) {
+              break;
+            }
+
+            message.objectiveSecured = reader.bool();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -1600,6 +1613,11 @@ export const RoomState: MessageFns<RoomState> = {
         : isSet(object.failure_guard_id)
         ? globalThis.Number(object.failure_guard_id)
         : 0,
+      objectiveSecured: isSet(object.objectiveSecured)
+        ? globalThis.Boolean(object.objectiveSecured)
+        : isSet(object.objective_secured)
+        ? globalThis.Boolean(object.objective_secured)
+        : false,
     };
   },
 
@@ -1638,6 +1656,9 @@ export const RoomState: MessageFns<RoomState> = {
     if (message.failureGuardId !== 0) {
       obj.failureGuardId = Math.round(message.failureGuardId);
     }
+    if (message.objectiveSecured !== false) {
+      obj.objectiveSecured = message.objectiveSecured;
+    }
     return obj;
   },
 
@@ -1657,6 +1678,7 @@ export const RoomState: MessageFns<RoomState> = {
     message.failureReason = object.failureReason ?? 0;
     message.failureHazardId = object.failureHazardId ?? 0;
     message.failureGuardId = object.failureGuardId ?? 0;
+    message.objectiveSecured = object.objectiveSecured ?? false;
     return message;
   },
 };

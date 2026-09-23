@@ -2,6 +2,7 @@ name: vertical-slice
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
   push:
     branches: [main]
 
@@ -27,6 +28,7 @@ jobs:
         run: sh container ci-verify down --volumes --remove-orphans
 
   acceptance:
+    if: github.event_name == 'push' || !contains(github.event.pull_request.labels.*.name, 'component-only')
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:

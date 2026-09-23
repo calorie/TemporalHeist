@@ -89,6 +89,7 @@ message RoomState {
   FailureReason failure_reason = 9;
   uint32 failure_hazard_id = 10;
   uint32 failure_guard_id = 11;
+  bool objective_secured = 12;
 }
 message Hazard {
   uint32 id = 1;

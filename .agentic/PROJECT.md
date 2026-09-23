@@ -81,3 +81,7 @@ worktrees.
   default is shorter than the Echo delay. Gameplay correctness never depends on
   relay retention alone.
 - Infrastructure files and this document remain English for the contract check.
+- CI runs component verification on every PR and full browser acceptance on
+  pushes to `main` and PRs by default. Use the `component-only` label only on
+  intermediate stacked PRs whose focused and component checks are sufficient.
+  The top or release PR has no `component-only` label and runs full acceptance.

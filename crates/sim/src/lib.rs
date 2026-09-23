@@ -24,6 +24,7 @@ struct Map {
     doors: Vec<Rect>,
     plates: Vec<Plate>,
     terminals: Vec<Terminal>,
+    objective: VaultObjective,
     extraction: Area,
     cameras: Vec<Camera>,
     guards: Vec<GuardConfig>,
@@ -96,6 +97,13 @@ struct Terminal {
     x: i32,
     z: i32,
     capability: Capability,
+}
+#[derive(Deserialize)]
+struct VaultObjective {
+    id: u32,
+    x: i32,
+    z: i32,
+    radius: i32,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -227,6 +235,7 @@ impl World {
         let map: Map = serde_json::from_str(include_str!("../../../map/facility.json"))
             .expect("valid facility map");
         validate_guards(&map).expect("valid facility guard routes");
+        validate_objective(&map).expect("valid facility objective");
         let guards = map
             .guards
             .iter()
@@ -352,6 +361,7 @@ impl World {
                 failure_reason: self.failure_reason as i32,
                 failure_hazard_id: self.failure_hazard_id,
                 failure_guard_id: self.failure_guard_id,
+                objective_secured: false,
             }),
             hazards: self.hazards.clone(),
             guards: self
@@ -942,6 +952,41 @@ fn validate_guards(map: &Map) -> Result<(), String> {
         }
     }
     Ok(())
+}
+fn validate_objective(map: &Map) -> Result<(), String> {
+    let objective = &map.objective;
+    if objective.radius <= 0 {
+        return Err(format!(
+            "objective {}: radius must be positive",
+            objective.id
+        ));
+    }
+    if !(map.bounds.min_x..=map.bounds.max_x).contains(&objective.x)
+        || !(map.bounds.min_z..=map.bounds.max_z).contains(&objective.z)
+    {
+        return Err(format!("objective {}: outside map bounds", objective.id));
+    }
+    let mut target_ids = BTreeSet::new();
+    for terminal in &map.terminals {
+        if !target_ids.insert(terminal.id) {
+            return Err(format!("terminal {}: duplicate target ID", terminal.id));
+        }
+    }
+    if !target_ids.insert(objective.id) {
+        return Err(format!("objective {}: duplicate target ID", objective.id));
+    }
+    Ok(())
+}
+#[cfg(test)]
+#[test]
+fn objective_map_contract() {
+    let world = World::new("objective-contract".into());
+    assert_eq!(world.map.objective.id, 61);
+    assert_eq!(
+        (world.map.objective.x, world.map.objective.z),
+        (21_000, 4_000)
+    );
+    assert_eq!(world.map.objective.radius, 750);
 }
 fn move_toward(x: &mut i32, z: &mut i32, tx: i32, tz: i32, step: i32) -> bool {
     let dx = i64::from(tx) - i64::from(*x);
@@ -1872,6 +1917,21 @@ mod tests {
         map.guards[0].waypoints[1].id = 512;
         map.guards[0].waypoints.clear();
         assert!(validate_guards(&map).unwrap_err().contains("guard 51"));
+    }
+
+    #[test]
+    fn objective_validation_rejects_duplicate_terminal_id_and_invalid_geometry() {
+        let mut map: Map =
+            serde_json::from_str(include_str!("../../../map/facility.json")).unwrap();
+        assert!(validate_objective(&map).is_ok());
+        map.objective.id = 31;
+        assert!(validate_objective(&map).is_err());
+        map.objective.id = 61;
+        map.objective.radius = 0;
+        assert!(validate_objective(&map).is_err());
+        map.objective.radius = 750;
+        map.objective.x = map.bounds.max_x + 1;
+        assert!(validate_objective(&map).is_err());
     }
 
     #[test]

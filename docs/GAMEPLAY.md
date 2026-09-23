@@ -286,8 +286,20 @@ authority ticks later, A's first-generation Echo follows that route and draws th
 guard west, away from the choke. Both players wait until it has been drawn clear
 of the opening, then cross while it investigates.
 Plate 23 at `(19500, 2500)`, door 13 and extraction retain their existing geometry.
-The players still need Echo Presence on door 13 and both live players in extraction
-to win. Terminal and
+P3 victory requires a live human to secure objective 61, Echo Presence on
+door 13, and both live players in extraction. Terminal and
 lobby phases freeze guard movement and timers; restart restores its initial patrol
 state. The HUD, guard body, route, view cone, and target marker explain the window
 to cross, while the Rust authority alone decides detection and results.
+
+## P3 vault objective contract
+
+The checked-in facility adds vault objective 61 at `(21000, 4000)` with a
+750 mm interaction radius. A connected live human must use the existing
+targeted Action to secure the data. Echo Action cannot secure it; the vault
+has no Echo capability. Secured data is a team fact for the current attempt,
+not carried inventory. The room snapshot's `objective_secured` field reports
+it. Older room messages omit that field and decode as unsecured. Once secured,
+the objective remains secured if the acquiring player disconnects; it gates
+victory together with the Echo-opened final door and both live players in
+extraction. Restart clears the objective.

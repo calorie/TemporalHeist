@@ -9,6 +9,13 @@ fn main() {
     assert_eq!(value.move_x, -1000);
     assert_eq!(value.kind, InputKind::Ready as i32);
     std::fs::write("/artifacts/rust-input.bin", value.encode_to_vec()).unwrap();
+    let legacy_room = RoomState::decode(
+        std::fs::read("/artifacts/ts-legacy-room.bin")
+            .unwrap()
+            .as_slice(),
+    )
+    .unwrap();
+    assert!(!legacy_room.objective_secured);
     let snapshot = Snapshot {
         protocol_major: 1,
         room_epoch: "spike-epoch".into(),
@@ -31,6 +38,7 @@ fn main() {
             failure_reason: FailureReason::Guard as i32,
             failure_hazard_id: 0,
             failure_guard_id: 51,
+            objective_secured: true,
         }),
         hazards: vec![Hazard {
             id: 41,
@@ -67,5 +75,5 @@ fn main() {
         ..Default::default()
     };
     std::fs::write("/artifacts/rust-snapshot.bin", snapshot.encode_to_vec()).unwrap();
-    println!("Rust decoded TypeScript Ready input and encoded P2 guard state");
+    println!("Rust decoded TypeScript Ready input and encoded P3 objective state");
 }

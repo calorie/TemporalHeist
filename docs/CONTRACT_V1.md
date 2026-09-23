@@ -56,6 +56,10 @@ The entire reachable west-entry slab stays in view throughout Patrol, so it
 cannot be crossed by following behind the guard without an Echo diversion.
 The 140-tick route period avoids synchronizing with the exact 600-tick Echo.
 Plate 23, door 13, and extraction keep their coordinates; all IDs remain stable.
+P3 adds vault objective ID 61 at `(21000, 4000)` with a 750 mm interaction
+radius. Its ID is unique among action terminals, and its position is inside the
+map bounds. Only a connected live human can secure it with a targeted Action;
+Echo Action has no effect. The authority will own this attempt-scoped state.
 Guard perception uses
 integer angular comparisons clipped by a 2600 mm radial range; the raw WebGPU
 cone clips the same radial boundary without feeding results into gameplay.
@@ -66,13 +70,18 @@ FAILED plus attempt identity, authority-tick timing, readiness, extraction
 occupancy, and whether Echo Presence opened the final door in the current attempt.
 Older decoders may ignore these additions.
 
+P3 adds `RoomState.objective_secured` as boolean field 12 under protocol major 1.
+An older room message without field 12 decodes as `false`. A valid live-human
+vault action secures the objective for the attempt, even if that player later
+disconnects. Restart clears it.
+
 The authority starts an attempt only while both player sessions are connected and
-ready. It records the start and five-minute deadline as server ticks. A win
-requires both live players inside extraction after Echo Presence has opened door
-13 during the same attempt. Deadline expiry produces failure. A restart accepted
-in a terminal phase returns the room to lobby, respawns connected players, clears
-readiness, history, scheduled actions, and mechanism state, and increments the
-attempt number.
+ready. It records the start and five-minute deadline as server ticks. P3 victory
+requires the objective secured, Echo Presence to have opened door 13 during the
+same attempt, and both live players inside extraction. Deadline expiry produces
+failure. A restart accepted in a terminal phase returns the room to lobby,
+respawns connected players, clears readiness, history, scheduled actions, and
+mechanism state, and increments the attempt number.
 
 P1.2 adds static surveillance cameras to the map source. Each camera has a stable
 ID, origin, normalized integer direction (length 1000), range, and half-width at
