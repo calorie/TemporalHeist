@@ -102,3 +102,19 @@ clean-worktree isolation is next.
 - Copied canonical acceptance JSON, visual metadata, GPU information, and logs
   under `.superpowers/sdd/2026-09-23-vault-data-heist/artifacts/` before
   `sh container p3-t4-release down --volumes --remove-orphans`.
+- The first clean-worktree isolation attempt at `a49d77f` exposed a preexisting
+  decoy arrival flake: A was caught at tick 9434 after its pose overshot the
+  `(3800 ± 180)` target band while recording the lure. B was deliberately
+  stopped after preserving A's failure. The harness exited 1 (A=1, B=1) and
+  cleaned both stacks. Logs and A's failure JSON are retained under
+  `/tmp/temporal-heist-p3-t4-isolation-first/`; both disposable worktrees were
+  removed cleanly. The decoy now stops on the first authoritative depth ≥3620,
+  preserving its original arrival threshold without an oscillating settle.
+  `sh container p3-t4-route acceptance` passed that correction (exit 0): decoy
+  9159, canonical guard agreement 9750/source 9150, shared theft 10221, final
+  Echo door 12252/source 11652 (delta 600), two-player win 12358, restart 12429,
+  surveillance failure 13738, clean lobby 13818. Both error arrays remain
+  empty, and all 14 PNG checks passed. Copied its JSON and PNGs to
+  `artifacts/e2e-p3-t4-route/`; its stack completed `down --volumes
+  --remove-orphans`. The correction is confined to the browser route and leaves
+  the already-passing verify and visual contracts unchanged.

@@ -423,8 +423,14 @@ async function guardDiversion(pageA, pageB) {
     return guard.state === GuardState.PATROL && guard.xMm >= 20000 && guard.xMm <= 20200 && guard.waypointId === 512;
   }, 'guard moving out of range before recording the decoy');
   const sourceStart = await snapshot(pageA);
-  await dash(pageA, 1, 17200, 3800);
-  const lure = await snapshot(pageA);
+  // Stop on the first crossing of the decoy depth. A delayed observation must
+  // not make the human oscillate around a narrow target while the guard returns.
+  await pageA.evaluate(() => window.th.move(0, 1));
+  const lure = await waitFor(pageA, (state) => {
+    assert.equal(state.room.phase, RoomPhase.ACTIVE);
+    return state.players.find((pose) => pose.playerId === 1).zMm >= 3620;
+  }, 'live player reaches the decoy depth');
+  await pageA.evaluate(() => window.th.move(0, 0));
   evidence.events.push({ event: 'guard-decoy-recorded', sourceStartTick: sourceStart.serverTick,
     tick: lure.serverTick, pose: lure.players.find((pose) => pose.playerId === 1), guard: guardOf(lure) });
   await dash(pageA, 1, 17200, 2000);

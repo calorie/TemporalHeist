@@ -68,3 +68,11 @@ caught the human on the final plate's north edge. After theft, stage at
 the guard returns to PATROL. This lets the vault excursion finish replaying
 before starting the final plate recording; it preserves the normal authority
 and Echo semantics and uses canonical state rather than a wall-clock delay.
+
+The first two-stack run exposed a preexisting decoy-arrival timing assumption:
+player A's observed depth skipped the `(3800 ± 180)` arrival band, so `moveTo`
+kept correcting until the patrol returned and detected the human. The decoy
+only needs a recorded forward excursion. Stop at the first authoritative pose
+at or past depth 3620 (the original arrival band's near edge), then retreat.
+This monotonic condition preserves the original route and guard phase while
+avoiding an unnecessary oscillating settle operation in its short safe window.
