@@ -8,7 +8,7 @@ import { MoqTransport } from './net/moq/transport.ts';
 import { WebGpuRenderer } from './render/webgpu.ts';
 import { renderIfChanged } from './render-cache.ts';
 import { roomHud } from './room-hud.ts';
-import { temporalView } from './temporal-view.ts';
+import { type TemporalView, temporalView } from './temporal-view.ts';
 import { Timeline } from './timeline.ts';
 
 const params = new URLSearchParams(location.search);
@@ -34,6 +34,7 @@ let actionSequence = 0;
 let reconnecting = false;
 let transportGeneration = 0;
 let reconnectTimer: number | undefined;
+let lastTemporalView: TemporalView | undefined;
 function element<T extends Element>(selector: string): T {
   const found = document.querySelector<T>(selector);
   if (!found) throw new Error(`Missing ${selector}`);
@@ -247,10 +248,28 @@ export interface TemporalHeistTestApi {
   timeline(): ReturnType<Timeline['inspect']>;
   rendererInfo(): ReturnType<WebGpuRenderer['info']> | undefined;
   temporalRendererStats(): ReturnType<WebGpuRenderer['temporalStats']> | undefined;
+  temporalPresentation(): TemporalPresentationEvidence | undefined;
   rendererPixel(x: number, y: number): Promise<number[]>;
   errors(): string[];
   reconnect(): Promise<void>;
   setPresentationPaused(paused: boolean): void;
+}
+interface TemporalPresentationEvidence {
+  epoch: string;
+  renderTick: number;
+  owners: {
+    playerId: number;
+    segmentCount: number;
+    startTick: number;
+    endTick: number;
+    startXmm: number;
+    startZmm: number;
+    endXmm: number;
+    endZmm: number;
+  }[];
+  segmentCount: number;
+  pulseCount: number;
+  renderer: ReturnType<WebGpuRenderer['temporalStats']>;
 }
 declare global {
   interface Window {
@@ -268,6 +287,34 @@ window.th = {
   timeline: () => timeline.inspect(),
   rendererInfo: () => renderer?.info(),
   temporalRendererStats: () => renderer?.temporalStats(),
+  temporalPresentation: () => {
+    if (!renderer || !lastTemporalView) return undefined;
+    const owners = lastTemporalView.owners.map((playerId) => {
+      const segments =
+        lastTemporalView?.segments.filter((segment) => segment.playerId === playerId) ?? [];
+      const first = segments[0];
+      const last = segments.at(-1);
+      if (!first || !last) throw new Error(`Temporal owner ${playerId} has no segments`);
+      return {
+        playerId,
+        segmentCount: segments.length,
+        startTick: first.startTick,
+        endTick: last.endTick,
+        startXmm: first.startXmm,
+        startZmm: first.startZmm,
+        endXmm: last.endXmm,
+        endZmm: last.endZmm,
+      };
+    });
+    return {
+      epoch: lastTemporalView.epoch,
+      renderTick: lastTemporalView.renderTick,
+      owners,
+      segmentCount: lastTemporalView.segments.length,
+      pulseCount: lastTemporalView.pulses.length,
+      renderer: renderer.temporalStats(),
+    };
+  },
   rendererPixel: (x, y) =>
     renderer ? renderer.samplePixel(x, y) : Promise.reject(new Error('Renderer unavailable')),
   errors: () => [...errors, ...(renderer?.errors() ?? [])],
@@ -293,7 +340,9 @@ const frame = () => {
   presentationFrame = undefined;
   if (presentationPaused) return;
   const presentation = timeline.presentation();
-  renderer?.render(map, presentation, playerId, temporalView(timeline, presentation.renderTick));
+  const temporal = temporalView(timeline, presentation.renderTick);
+  renderer?.render(map, presentation, playerId, temporal);
+  lastTemporalView = temporal;
   const snap = presentation.snapshot;
   const hud = roomHud(snap, playerId);
   audio.update(snap);

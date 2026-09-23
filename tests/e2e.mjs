@@ -374,6 +374,41 @@ async function sharedObjectiveSnapshot(pageA, pageB) {
   throw new Error('No shared canonical tick observed with the vault data secured');
 }
 
+async function sharedTemporalPresentation(pageA, pageB, minimumTick) {
+  const samples = [new Map(), new Map()];
+  const deadline = Date.now() + stateTimeout;
+  while (Date.now() < deadline) {
+    const latest = await Promise.all(
+      [pageA, pageB].map((page) => page.evaluate(() => window.th.temporalPresentation())),
+    );
+    for (const [index, presentation] of latest.entries())
+      if (presentation?.renderTick >= minimumTick && presentation.owners.length > 0)
+        samples[index].set(presentation.renderTick, presentation);
+    for (const [tick, clientA] of samples[0]) {
+      const clientB = samples[1].get(tick);
+      if (!clientB) continue;
+      assert.deepEqual(clientA, clientB);
+      assert.deepEqual(clientA.owners.map(({ playerId }) => playerId), [1, 2]);
+      assert.equal(clientA.segmentCount,
+        clientA.owners.reduce((count, owner) => count + owner.segmentCount, 0));
+      for (const owner of clientA.owners) {
+        assert.equal(owner.startTick, tick - 600);
+        assert.equal(owner.endTick, tick);
+        assert.equal(owner.endTick - owner.startTick, 600);
+      }
+      assert.equal(clientA.renderer.segmentCount, clientA.segmentCount);
+      assert.equal(clientA.renderer.pulseCount, clientA.pulseCount);
+      assert.equal(clientA.renderer.uploadBytes,
+        clientA.segmentCount * 32 + clientA.pulseCount * 16);
+      assert.equal(clientA.renderer.drawCount,
+        Number(clientA.segmentCount > 0) + Number(clientA.pulseCount > 0));
+      return clientA;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`No shared Temporal Bridge presentation observed at or after tick ${minimumTick}`);
+}
+
 async function guardPixel(page, expectedState) {
   if (expectedState === GuardState.INVESTIGATE) {
     // Until the source's 30-tick observation window closes, a moving Echo
@@ -737,6 +772,20 @@ try {
     assertMissionSteps(await uiState(page), ['complete', 'complete', 'current']);
   }
   await dash(pageA, 1, 21500, 2200);
+  const temporalBridge = await sharedTemporalPresentation(pageA, pageB, finalOpen.serverTick);
+  const bridgeLivePlayer = (await snapshot(pageA)).players.find((player) => player.playerId === 1);
+  const bridgeEcho = (await snapshot(pageA)).echoes.find((echo) => echo.playerId === 1);
+  assert(bridgeLivePlayer && bridgeEcho);
+  assert(Math.hypot(bridgeLivePlayer.xMm - bridgeEcho.xMm, bridgeLivePlayer.zMm - bridgeEcho.zMm) > 750,
+    'Temporal Bridge evidence requires the live player to be visibly separate from its Echo');
+  evidence.events.push({
+    event: 'temporal-bridge-agreement',
+    clientAgreement: true,
+    livePlayer: bridgeLivePlayer,
+    echo: bridgeEcho,
+    ...temporalBridge,
+  });
+  await capture(pageA, 1, 'temporal-bridge', true);
   for (const page of [pageA, pageB]) {
     assert.equal(
       await waitForText(page, '#echo-status', /^ECHO REPLAYING · 10 SECONDS BEHIND$/,
@@ -793,7 +842,7 @@ try {
     extractionPlayers: wonA.room.extractionPlayers,
   });
 
-  await Promise.all([capture(pageA, 1, 'attempt-2-won'), capture(pageB, 2, 'attempt-2-won')]);
+  await capture(pageB, 2, 'attempt-2-won');
 
   // One player may restart a terminal attempt. Restart clears transient attempt
   // state and readiness, so the next attempt cannot begin until both ready again.
@@ -939,7 +988,7 @@ try {
   assert(browserErrors.every((errors) => errors.length === 0));
   await Promise.all([capture(pageA, 1, 'attempt-4-clean-lobby', false), capture(pageB, 2, 'attempt-4-clean-lobby', false)]);
   await writeFile(`${artifacts}/evidence.json`, `${JSON.stringify(evidence, null, 2)}\n`);
-  console.log(JSON.stringify({ event: 'p4-player-experience-passed', ...evidence }));
+  console.log(JSON.stringify({ event: 'p5-temporal-bridge-passed', ...evidence }));
 } catch (error) {
   evidence.failure = String(error);
   evidence.lastSnapshots = await Promise.all(contexts.map((context) => snapshot(context.pages().at(-1))));

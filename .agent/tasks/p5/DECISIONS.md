@@ -48,3 +48,17 @@ The production renderer GPU probe replaces the standalone WebGPU spike. It runs
 guard parity and temporal pixels through the real renderer and records adapter,
 backend, both supported viewports, overflow behavior, and validation errors in one
 container Chromium session.
+
+## 2026-09-23 — Release evidence boundary
+
+Expose a read-only presentation summary through the existing browser test API. The
+summary is captured from the exact Temporal View already submitted to WebGPU and
+includes owner endpoints/counts plus the renderer statistics from that frame. It
+does not select, modify, or feed gameplay state. Full mission acceptance matches
+the two clients by canonical render tick and proves identical bridge data and GPU
+uploads without adding a protocol field or another route.
+
+Reuse one screenshot slot from the successful mission for the Temporal Bridge scene.
+Keep the live player separated from its Echo and store canonical metadata beside the
+screenshot in `evidence.json`; pixel-level palette, occlusion, and pulse boundaries
+remain the responsibility of the production renderer GPU probe.
