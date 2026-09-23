@@ -171,8 +171,10 @@ Echo delay: a safely recorded pose would replay at the same patrol phase.
 Starting at 19100 gives a 140-tick period and 40-tick replay offset without
 changing range 2600, half-width 1400, speed 20, or search duration 180.
 The authored decoy is now near `(17400,3800)`, recorded as the guard moves east
-out of range. Players wait until the Echo draws the guard west to X <=17800
-before entering its former watch area. The exact 600-tick Echo source rule,
+out of range. Both players stage near X 17800 and wait until the Echo draws the
+guard to its search point before entering its former watch area. The HUD says
+"CROSS WHEN CLEAR": entering Investigate alone does not instantly clear sight.
+The exact 600-tick Echo source rule,
 30-tick target update window, and original final door/extraction puzzle remain.
 
 The coverage regression samples all four corners of X `18100..18160`,

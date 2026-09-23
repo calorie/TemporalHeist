@@ -65,7 +65,7 @@ const investigating = roomHud(
   { ...snapshot(RoomPhase.ACTIVE), guards: [{ id: 51, state: 2 }] },
   1,
 );
-assert.equal(investigating.guardStatus, 'GUARD 51 INVESTIGATING — CROSS NOW');
+assert.equal(investigating.guardStatus, 'GUARD 51 INVESTIGATING — CROSS WHEN CLEAR');
 assert.equal(
   roomHud({ ...snapshot(RoomPhase.ACTIVE), guards: [{ id: 51, state: 3 }] }, 1).guardStatus,
   'GUARD 51 RETURNING',

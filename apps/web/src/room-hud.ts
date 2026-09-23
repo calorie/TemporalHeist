@@ -98,7 +98,7 @@ export function roomHud(snapshot: Snapshot | undefined, playerId: number): RoomH
         ? guard.state === 1
           ? `GUARD ${guard.id} PATROLLING · HUMANS ARE CAUGHT, ECHOES DISTRACT`
           : guard.state === 2
-            ? `GUARD ${guard.id} INVESTIGATING — CROSS NOW`
+            ? `GUARD ${guard.id} INVESTIGATING — CROSS WHEN CLEAR`
             : `GUARD ${guard.id} RETURNING`
         : '',
     readiness: `Players ready: ${room.readyPlayers}/2${ownSession?.ready ? ' · YOU ARE READY' : ''}`,

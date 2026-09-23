@@ -372,7 +372,7 @@ async function safeGuardEntry(page, player) {
 }
 
 async function guardDiversion(pageA, pageB) {
-  await dash(pageB, 2, 17700, 6000);
+  await dash(pageB, 2, 17800, 6000);
   await dash(pageA, 1, 15800, 2200);
   await dash(pageA, 1, 17700, 2200);
   // Reject both former side-lane bypasses before recording the decoy. Neither
@@ -407,7 +407,7 @@ async function guardDiversion(pageA, pageB) {
   evidence.events.push({ event: 'guard-decoy-recorded', sourceStartTick: sourceStart.serverTick,
     tick: lure.serverTick, pose: lure.players.find((pose) => pose.playerId === 1), guard: guardOf(lure) });
   await dash(pageA, 1, 17400, 2000);
-  await dash(pageA, 1, 17500, 2000);
+  await dash(pageA, 1, 17800, 2000);
   const investigating = await waitFor(pageA, (state) => {
     assert.equal(state.room.phase, RoomPhase.ACTIVE);
     const guard = guardOf(state);
@@ -422,13 +422,13 @@ async function guardDiversion(pageA, pageB) {
   assert(guard.stateEnteredTick <= lure.serverTick + 600 + 60);
   assertGuardLure(investigating, guard, echo);
   const agreement = await sharedGuardSnapshot(pageA, pageB, investigating);
-  await Promise.all([pageA, pageB].map((page) => waitForText(page, '#guard-status', /INVESTIGATING.*CROSS NOW/, 'visible crossing cue')));
+  await Promise.all([pageA, pageB].map((page) => waitForText(page, '#guard-status', /INVESTIGATING.*CROSS WHEN CLEAR/, 'visible crossing cue')));
   evidence.events.push({ event: 'guard-echo-investigating', sourceStartTick: sourceStart.serverTick,
     lureTick: lure.serverTick, tick: investigating.serverTick, echo, guard, agreement,
     canonicalDelayTicks: investigating.serverTick - echo.sourceTick });
   const diverted = await waitFor(pageA, (state) => {
     assert.equal(state.room.phase, RoomPhase.ACTIVE);
-    return guardOf(state).state === GuardState.INVESTIGATE && guardOf(state).xMm <= 17800;
+    return guardOf(state).state === GuardState.INVESTIGATE && guardOf(state).searchExpiresTick > 0;
   }, 'Echo draws the west-facing guard clear of the choke');
   evidence.events.push({ event: 'guard-drawn-clear', tick: diverted.serverTick, guard: guardOf(diverted) });
   // SwiftShader screenshots can take longer than the search window. Freeze
@@ -439,13 +439,13 @@ async function guardDiversion(pageA, pageB) {
     await Promise.all([pageA, pageB].map((page) => page.evaluate(() => window.th.setPresentationPaused(true))));
     try {
       for (const page of [pageA, pageB])
-        assert.match((await uiState(page)).guardStatus, /INVESTIGATING.*CROSS NOW/);
+        assert.match((await uiState(page)).guardStatus, /INVESTIGATING.*CROSS WHEN CLEAR/);
       await Promise.all([capture(pageA, 1, 'guard-investigation'), capture(pageB, 2, 'guard-investigation')]);
     } finally {
       await Promise.all([pageA, pageB].map((page) => page.evaluate(() => window.th.setPresentationPaused(false))));
     }
   })();
-  const crossing = Promise.all([[pageA, 1, 17500], [pageB, 2, 17700]].map(async ([page, playerId, x]) => {
+  const crossing = Promise.all([[pageA, 1, 17800], [pageB, 2, 17800]].map(async ([page, playerId, x]) => {
     await dash(page, playerId, x, 4200);
     const entered = await dash(page, playerId, 18300, 4200);
     const crossed = await dash(page, playerId, 19100, 4200);
@@ -608,7 +608,7 @@ try {
       'ECHO REPLAYING · 10 SECONDS BEHIND',
     );
   }
-  // Use one westbound patrol window for both players. Waiting for a second
+  // Use one west-watching patrol window for both players. Waiting for a second
   // cycle can outlast the final door's remaining 600-tick Echo Presence.
   const extractionWindow = await waitFor(pageA, (state) => {
     const guard = guardOf(state);

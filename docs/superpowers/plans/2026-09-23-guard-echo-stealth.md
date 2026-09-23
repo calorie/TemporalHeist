@@ -324,7 +324,7 @@ git commit -m "feat(web): derive guard timeline presentation"
 - [ ] **Step 1: Add failing HUD, audio, and geometry assertions**
 
 Assert active HUD copy `Use your Echo to distract Guard 51`, investigation copy
-`GUARD 51 INVESTIGATING — CROSS NOW`, failure copy containing the canonical guard
+`GUARD 51 INVESTIGATING — CROSS WHEN CLEAR`, failure copy containing the canonical guard
 ID, one audio transition for entering Investigate, and geometry/colors for all
 three states. Keep unknown or absent guard state silent and non-crashing.
 
