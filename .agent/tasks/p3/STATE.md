@@ -56,6 +56,49 @@ The P3.3 client presentation layer is implemented and verified on
 
 ## Next action
 
-Proceed with full-mission E2E coverage on `p3/full-mission-e2e` above the verified
-client layer. Existing E2E guard-objective text must be aligned with the new
-mission-first HUD sequence in that layer.
+P3.4 is implemented on `p3/full-mission-e2e`; serial release gates passed and
+clean-worktree isolation is next.
+
+- TDD red: `sh container p3-t4-e2e-red acceptance` exited 1 at the expected
+  missing-theft victory gate. At tick 13386 both humans were in extraction,
+  `echoOpenedFinalDoor` was true, and the room stayed ACTIVE with
+  `objectiveSecured` false. The original route timed out waiting for WON.
+- Screenshot TDD red: `sh container p3-t4-screenshot-red run --rm dev sh -lc
+  'npm ci >/dev/null && node tests/screenshot-contract.mjs'` exited 1 because the
+  old PNG validator accepted a missing objective (`Missing expected rejection`).
+- Red logs and failure JSON were copied to the ignored
+  `.superpowers/sdd/2026-09-23-vault-data-heist/artifacts/` directory. Both red
+  namespaces completed `down --volumes --remove-orphans` before release checks.
+- `sh container p3-t4-release verify` passed codegen/protocol compatibility,
+  Rust formatting/Clippy and 47 unit tests (8 authority, 39 sim), TypeScript,
+  Biome (14 files), all browser contracts including objective PNG validation,
+  Vite, and WebGPU with 0 shader errors and no validation errors.
+- The first `sh container p3-t4-release acceptance` secured data at matching
+  client tick 10170 and captured the two dim-terminal screenshots, then exposed
+  a route failure: at tick 10733 guard 51's return cone caught the human on the
+  final plate. Preserved `first-green-failure.{json,log}`. The route now waits
+  outside guard range for its crossing/vault Echo history to clear and the
+  guard to resume patrol before recording plate 23. The corrected run follows.
+- Corrected `sh container p3-t4-release acceptance` passed. Room epoch
+  `p3-t4-release-18d7dd6f24f35a70-1-0`: guard agreement tick 9894 with source 9294
+  (delta 600); out-of-range action rejected from tick 8826; both clients secured
+  target 61 at shared tick 10353 after player 1's authoritative pose
+  `(20892, 3933)` at tick 10350. The completed approach replay cleared at 11076
+  (source 10476). Plate 23 had Echo-only presence at tick 12375 with source 11775
+  (delta 600). Both humans won at tick 12501; restart at 12579 cleared the
+  objective and restored the cyan terminal. Camera 41 then failed attempt 3 at
+  tick 13894; final clean lobby attempt 4 was observed at tick 13974.
+- `sh container p3-t4-release visual` passed both separate Chromium services.
+  Ephemeral loopback CDP ports were 55096/55095. Both clients reported raw
+  `webgpu`, Google SwiftShader fallback adapter, `rgba8unorm`; all renderer and
+  browser error arrays were empty. CDP SystemInfo confirmed ANGLE Vulkan
+  1.4.318 with Mesa llvmpipe 25.2.8 / LLVM 20.1.2, GaneshVulkan compositor.
+- Copied and visually inspected all 14 mission PNGs and 2 visual PNGs at
+  1280×720, device scale 1. Both objective-secured images contain floor, wall,
+  guard, dim terminal `[26,76,87,255]`, and “Open the final door with Echo
+  Presence.” Initial and reset images show the cyan terminal
+  `[20,230,255,255]`; win, guard failure, camera failure, and restart HUDs match
+  authority state. Screenshot count remains 14 for acceptance.
+- Copied canonical acceptance JSON, visual metadata, GPU information, and logs
+  under `.superpowers/sdd/2026-09-23-vault-data-heist/artifacts/` before
+  `sh container p3-t4-release down --volumes --remove-orphans`.

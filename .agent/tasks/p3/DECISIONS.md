@@ -43,3 +43,28 @@ Exclude the vault objective once `snapshot.room.objectiveSecured` is true. With 
 candidate, send target 0; the authority still validates every action. Render and
 HUD state read the authoritative snapshot, so local presentation cannot claim a
 successful theft.
+
+## 2026-09-23 — Full mission acceptance
+
+Keep one existing two-player route and add one live action at objective 61 after
+the guarded crossing. Approach from the safe north lane during a west-facing
+patrol window and return there before slow software-rendered screenshots. Match
+both clients by authority tick and room epoch before recording theft success.
+Replace the two redundant guard-crossed screenshots with two secured-terminal
+screenshots, preserving the total screenshot count. Check the actual PNG's
+terminal color and the post-theft HUD; the post-win restart also checks the cyan
+terminal and cleared authority state. Deterministic lower-layer tests retain
+Echo-action rejection coverage without adding a browser injection API.
+
+Use `p3-t4-` namespaces for this layer's red, release, and isolation runs. The
+release gates run serially; only the dedicated two-stack isolation harness runs
+acceptances concurrently, using clean disposable worktrees at one committed
+code revision.
+
+The first full route reached shared theft at tick 10170 but failed at tick 10733:
+a replayed crossing drew the guard off its route, and the guard's return cone
+caught the human on the final plate's north edge. After theft, stage at
+`(19500, 1000)` until at least 600 authority ticks after arriving there and until
+the guard returns to PATROL. This lets the vault excursion finish replaying
+before starting the final plate recording; it preserves the normal authority
+and Echo semantics and uses canonical state rather than a wall-clock delay.

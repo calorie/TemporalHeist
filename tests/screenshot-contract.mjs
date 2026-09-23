@@ -25,7 +25,19 @@ try {
   assert.deepEqual(samples.floor, [9, 23, 31, 255]);
   assert.deepEqual(samples.wall, [31, 64, 79, 255]);
   assert.deepEqual(samples.guard.color, [242, 184, 41]);
-  console.log('screenshot regressions reject opaque clear color, flat floor, and missing guard');
+  await assert.rejects(captureScreenshot(page, undefined, false), /screenshot.*objective/);
+  await page.evaluate(() => {
+    const objective = document.createElement('div');
+    objective.id = 'objective';
+    objective.style.cssText = 'left:1072px;top:332px;width:23px;height:56px;background:rgb(20,230,255)';
+    document.body.append(objective);
+  });
+  assert.deepEqual((await captureScreenshot(page, undefined, false)).objective, [20, 230, 255, 255]);
+  await assert.rejects(captureScreenshot(page, undefined, true), /screenshot.*objective/);
+  await page.evaluate(() => { document.querySelector('#objective').style.background = 'rgb(26,77,87)'; });
+  assert.deepEqual((await captureScreenshot(page, undefined, true)).objective, [26, 77, 87, 255]);
+  await assert.rejects(captureScreenshot(page, undefined, false), /screenshot.*objective/);
+  console.log('screenshot regressions reject clear color, flat floor, missing guard, and incorrect objective state');
 } finally {
   await browser.close();
 }
