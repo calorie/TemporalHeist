@@ -76,7 +76,7 @@ assert.deepEqual(guardPrimitives(map, { ...presentation(1), guards: [] }), {
 });
 assert(
   2 + map.walls.length + map.doors.length + map.plates.length + map.terminals.length +
-    map.cameras.length * 2 + 2 + 2 + investigate.cones.length + investigate.objects.length < 256,
+    map.cameras.length * 2 + 2 + 2 + 1 + investigate.cones.length + investigate.objects.length < 256,
   'authored scene and two players/two Echoes fit the persistent instance buffer',
 );
 

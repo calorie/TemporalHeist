@@ -3,6 +3,7 @@ import { AudioCues } from './audio.ts';
 import { type Input, InputKind, type Snapshot } from './generated/temporal_heist.ts';
 import { map } from './map.ts';
 import { MoqTransport } from './net/moq/transport.ts';
+import { nearestActionTarget } from './objective-view.ts';
 import { WebGpuRenderer } from './render/webgpu.ts';
 import { roomHud } from './room-hud.ts';
 import { Timeline } from './timeline.ts';
@@ -167,7 +168,7 @@ function sendMotion() {
 }
 function action(targetId?: number) {
   if (!joined) return;
-  const target = targetId ?? nearestTarget();
+  const target = targetId ?? nearestActionTarget(map, timeline.presentation(), playerId) ?? 0;
   transport?.sendAction(input(InputKind.ACTION, ++actionSequence, 0, 0, target));
 }
 function roomCommand(kind: InputKind) {
@@ -180,17 +181,6 @@ function ready() {
 function restart() {
   roomCommand(InputKind.RESTART);
 }
-function nearestTarget() {
-  const pose = timeline.latest?.players.find((item) => item.playerId === playerId);
-  if (!pose) return 31;
-  return map.terminals.reduce((best, item) =>
-    Math.hypot(item.x - pose.xMm, item.z - pose.zMm) <
-    Math.hypot(best.x - pose.xMm, best.z - pose.zMm)
-      ? item
-      : best,
-  ).id;
-}
-
 const keys = new Set<string>();
 addEventListener('keydown', (event) => {
   void audio.unlock().catch(() => {});

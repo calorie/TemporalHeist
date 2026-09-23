@@ -24,6 +24,7 @@ const snapshot = (phase, serverTick, overrides = {}) => ({
     readyPlayers: 2,
     extractionPlayers: 0,
     echoOpenedFinalDoor: false,
+    objectiveSecured: false,
     failureReason: 0,
     failureHazardId: 0,
     ...overrides,
@@ -39,6 +40,17 @@ assert.deepEqual(
 );
 
 const afterEcho = audioFrame(snapshot(RoomPhase.ACTIVE, 701));
+const secured = audioFrame(snapshot(RoomPhase.ACTIVE, 702, { objectiveSecured: true }));
+assert.deepEqual(audioTransitions(afterEcho, secured), ['objective-secured']);
+assert.deepEqual(audioTransitions(secured, secured), [], 'secured cue fires once');
+assert.deepEqual(
+  audioTransitions(
+    audioFrame(snapshot(RoomPhase.ACTIVE, 900, { attempt: 2 })),
+    audioFrame(snapshot(RoomPhase.ACTIVE, 901, { attempt: 2, objectiveSecured: true })),
+  ),
+  ['objective-secured'],
+  'new unsecured attempt can play the secured cue',
+);
 assert.deepEqual(
   audioTransitions(audioFrame(snapshot(RoomPhase.ACTIVE, 700)), afterEcho),
   [],
@@ -78,6 +90,13 @@ assert.deepEqual(audioTransitions(won, won), [], 'success cue fires once');
 const failed = audioFrame(snapshot(RoomPhase.FAILED, 703));
 assert.deepEqual(audioTransitions(afterEcho, failed), ['failure']);
 assert.deepEqual(audioTransitions(failed, failed), [], 'failure cue fires once');
+const failedSecured = audioFrame(snapshot(RoomPhase.FAILED, 703, { objectiveSecured: true }));
+assert.deepEqual(
+  audioTransitions(afterEcho, failedSecured),
+  ['objective-secured', 'failure'],
+  'theft cue survives an authority snapshot that also ends the attempt',
+);
+assert.deepEqual(audioTransitions(failedSecured, failedSecured), [], 'failed theft cue fires once');
 
 const patrolling = audioFrame({ ...snapshot(RoomPhase.ACTIVE, 710), guards: [{ id: 51, state: 1 }] });
 const investigating = audioFrame({ ...snapshot(RoomPhase.ACTIVE, 711), guards: [{ id: 51, state: 2 }] });

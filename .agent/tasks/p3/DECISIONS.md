@@ -34,3 +34,12 @@ for the authored radius. Keep the theft flag in `World`, publish it in every
 snapshot, and clear it on restart. Objective actions never enter the action log
 or Echo scheduler, so replay cannot create a theft. Victory gates on theft,
 Echo-opened final door, and two humans in extraction.
+
+## 2026-09-23 — Client targeting boundary
+
+Auto-target only selectable items within the authority's interaction ranges:
+1,000 mm for existing terminals and the authored 750 mm for the vault objective.
+Exclude the vault objective once `snapshot.room.objectiveSecured` is true. With no
+candidate, send target 0; the authority still validates every action. Render and
+HUD state read the authoritative snapshot, so local presentation cannot claim a
+successful theft.

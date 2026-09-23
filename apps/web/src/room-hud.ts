@@ -67,11 +67,12 @@ export function roomHud(snapshot: Snapshot | undefined, playerId: number): RoomH
   const echoTicks = room.startedTick + 600 - snapshot.serverTick;
   const guard = snapshot.guards?.find((item) => item.state >= 1 && item.state <= 3);
   let objective = 'Ready up with your partner';
-  if (active && !room.echoOpenedFinalDoor) objective = 'Open the final door with Echo Presence';
-  if (active && guard && !room.echoOpenedFinalDoor)
-    objective = `Use your Echo to distract Guard ${guard.id}`;
-  if (active && room.echoOpenedFinalDoor)
-    objective = `Reach extraction together (${room.extractionPlayers}/2)`;
+  if (active)
+    objective = !room.objectiveSecured
+      ? 'Steal the vault data [E]'
+      : !room.echoOpenedFinalDoor
+        ? 'Open the final door with Echo Presence'
+        : `Reach extraction together (${room.extractionPlayers}/2)`;
   if (room.phase === WON) objective = 'Heist complete';
   if (room.phase === FAILED) objective = 'Attempt failed';
 
