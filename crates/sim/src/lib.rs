@@ -1614,6 +1614,50 @@ mod tests {
     }
 
     #[test]
+    fn recorded_decoy_opens_a_safe_crossing_after_exact_echo_delay() {
+        fn drive(w: &mut World, mx: i32, mz: i32, ticks: u64) {
+            for _ in 0..ticks {
+                let mut motion = player_input(1, "a", InputKind::Motion, w.tick + 1);
+                (motion.move_x, motion.move_z) = (mx, mz);
+                w.step(&[motion]);
+                assert_eq!(w.room_phase, RoomPhase::Active, "caught at tick {}", w.tick);
+            }
+        }
+        // Cover both ends of the browser's recording-position tolerance and
+        // its whole departure window, with real committed source history.
+        for decoy_x in [17_200, 17_380] {
+            for guard_x in [20_000, 20_100, 20_200] {
+                let mut w = World::new("e".into());
+                start_attempt(&mut w);
+                let p = w.players.get_mut(&1).unwrap();
+                (p.x, p.z) = (decoy_x, 2_200);
+                w.guards[0].x = guard_x;
+                w.guards[0].waypoint_index = 1;
+                drive(&mut w, 0, 1_000, 27);
+                drive(&mut w, 0, -1_000, 30);
+                drive(&mut w, -1_000, 0, ((decoy_x - 15_820) / 60) as u64);
+                drive(&mut w, 0, 1_000, 66);
+                drive(&mut w, 1_000, 0, 33);
+                while w.guards[0].state == GuardState::Patrol && w.tick < 660 {
+                    drive(&mut w, 0, 0, 1);
+                }
+                assert_eq!(w.guards[0].state, GuardState::Investigate);
+                assert!(w.guards[0].state_entered_tick >= ECHO_DELAY_TICKS);
+                let echo = w.echoes().into_iter().find(|p| p.player_id == 1).unwrap();
+                assert_eq!(w.tick - echo.source_tick, 600);
+                while w.guards[0].search_expires_tick == 0 && w.tick < 900 {
+                    drive(&mut w, 0, 0, 1);
+                }
+                assert!(w.guards[0].search_expires_tick > 0);
+                drive(&mut w, 0, -1_000, 30);
+                drive(&mut w, 1_000, 0, 22);
+                assert_eq!((w.players[&1].x, w.players[&1].z), (19_120, 4_180));
+                assert_eq!(w.guards[0].state, GuardState::Investigate);
+            }
+        }
+    }
+
+    #[test]
     fn patrol_watches_every_reachable_choke_entry_at_every_route_tick() {
         let mut w = World::new("e".into());
         let mut visited = BTreeSet::new();

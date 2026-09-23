@@ -170,8 +170,8 @@ Starting at 19000 would create a 150-tick route period that divides the 600-tick
 Echo delay: a safely recorded pose would replay at the same patrol phase.
 Starting at 19100 gives a 140-tick period and 40-tick replay offset without
 changing range 2600, half-width 1400, speed 20, or search duration 180.
-The authored decoy is now near `(17400,3800)`, recorded as the guard moves east
-out of range. A retreats north, returns around the safe west edge at X 15800,
+The authored decoy is now near `(17200,3800)`, recorded as the guard moves east
+through X `20000..20200`, out of range. A retreats north, returns around the safe west edge at X 15800,
 then joins B near `(17800,6000)`, south of the recorded lure. Both wait until the Echo draws the
 guard to its search point before entering its former watch area. The HUD says
 "CROSS WHEN CLEAR": entering Investigate alone does not instantly clear sight.
@@ -191,3 +191,11 @@ at `(19215,3772)` was looking toward the retained target `(17440,3185)`.
 The investigation's rotated cone correctly covered that waiting point. Both
 players now wait south of the northwest diversion and cross during its search;
 the simulation, cone, and map required no additional change.
+
+The next browser run found too little range margin while recording: live A at
+`(17507,2855)` was visible to Patrol at `(19840,4000)`. Recording therefore moves
+200 mm west and begins later in the outbound patrol. A new positive simulation
+test covers six departure-position/tolerance combinations using actual committed
+history, the exact 600-tick replay, south staging, and a live crossing during
+Investigate. All six pass before rerunning the full browser route. Neither
+detection tolerances nor the existing guard cone were weakened.

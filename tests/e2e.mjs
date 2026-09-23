@@ -396,17 +396,17 @@ async function guardDiversion(pageA, pageB) {
       startTick: start.serverTick, tick: stopped.serverTick,
       pose: stopped.players.find((pose) => pose.playerId === playerId), guard: guardOf(stopped) });
   }));
-  await dash(pageA, 1, 17400, 2200);
+  await dash(pageA, 1, 17200, 2200);
   await waitFor(pageA, (state) => {
     const guard = guardOf(state);
-    return guard.state === GuardState.PATROL && guard.xMm >= 19600 && guard.xMm <= 19800 && guard.waypointId === 512;
+    return guard.state === GuardState.PATROL && guard.xMm >= 20000 && guard.xMm <= 20200 && guard.waypointId === 512;
   }, 'guard moving out of range before recording the decoy');
   const sourceStart = await snapshot(pageA);
-  await dash(pageA, 1, 17400, 3800);
+  await dash(pageA, 1, 17200, 3800);
   const lure = await snapshot(pageA);
   evidence.events.push({ event: 'guard-decoy-recorded', sourceStartTick: sourceStart.serverTick,
     tick: lure.serverTick, pose: lure.players.find((pose) => pose.playerId === 1), guard: guardOf(lure) });
-  await dash(pageA, 1, 17400, 2000);
+  await dash(pageA, 1, 17200, 2000);
   // The replay turns the investigating cone northwest. Reposition around the
   // out-of-range west edge so both live players wait behind it to the south.
   await dash(pageA, 1, 15800, 2000);

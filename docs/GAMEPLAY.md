@@ -278,8 +278,10 @@ position, searches there for 180 authority ticks, and returns to its patrol. A
 continuous 30-tick Echo observation window can update the last-seen position but
 cannot extend the search timer indefinitely.
 
-Player A can record a west-side decoy near `(17400, 3800)` while the guard moves
-east out of range, then retreat north. Both players remain west of the choke. Exactly 600
+Player A can record a west-side decoy near `(17200, 3800)` while the guard moves
+east through X `20000..20200`, out of range. A then retreats north and returns
+around the west edge at X 15800 to join B near `(17800,6000)`, south of the lure.
+Both players remain west of the choke. Exactly 600
 authority ticks later, A's first-generation Echo follows that route and draws the
 guard west, away from the choke. Both players wait until it has been drawn clear
 of the opening, then cross while it investigates.
