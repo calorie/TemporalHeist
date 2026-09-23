@@ -223,6 +223,7 @@ pub struct World {
     ended_tick: u64,
     deadline_tick: u64,
     echo_opened_final_door: bool,
+    objective_secured: bool,
     failure_reason: FailureReason,
     failure_hazard_id: u32,
     hazards: Vec<Hazard>,
@@ -282,6 +283,7 @@ impl World {
             ended_tick: 0,
             deadline_tick: 0,
             echo_opened_final_door: false,
+            objective_secured: false,
             failure_reason: FailureReason::Unspecified,
             failure_hazard_id: 0,
             hazards,
@@ -361,7 +363,7 @@ impl World {
                 failure_reason: self.failure_reason as i32,
                 failure_hazard_id: self.failure_hazard_id,
                 failure_guard_id: self.failure_guard_id,
-                objective_secured: false,
+                objective_secured: self.objective_secured,
             }),
             hazards: self.hazards.clone(),
             guards: self
@@ -528,7 +530,7 @@ impl World {
         {
             self.echo_opened_final_door = true;
         }
-        if self.echo_opened_final_door && self.extraction_players() == 2 {
+        if self.objective_secured && self.echo_opened_final_door && self.extraction_players() == 2 {
             self.room_phase = RoomPhase::Won;
             self.ended_tick = self.tick;
         } else if self.tick >= self.deadline_tick {
@@ -557,6 +559,7 @@ impl World {
         self.ended_tick = 0;
         self.deadline_tick = 0;
         self.echo_opened_final_door = false;
+        self.objective_secured = false;
         self.failure_reason = FailureReason::Unspecified;
         self.failure_hazard_id = 0;
         self.failure_guard_id = 0;
@@ -588,6 +591,12 @@ impl World {
         }
     }
     fn accept_action(&mut self, player_id: u32, target_id: u32) {
+        if target_id == self.map.objective.id {
+            if self.live_player_in_objective_range(player_id) {
+                self.objective_secured = true;
+            }
+            return;
+        }
         let Some(p) = self.players.get(&player_id) else {
             return;
         };
@@ -611,6 +620,19 @@ impl World {
                     acceptance_tick: self.tick,
                 });
         }
+    }
+    fn live_player_in_objective_range(&self, player_id: u32) -> bool {
+        self.players.get(&player_id).is_some_and(|player| {
+            let objective = &self.map.objective;
+            player.connected
+                && inside(
+                    player.x,
+                    player.z,
+                    objective.x,
+                    objective.z,
+                    objective.radius,
+                )
+        })
     }
     fn push_action(
         &mut self,
@@ -1123,6 +1145,142 @@ mod tests {
         s.players.iter().find(|p| p.player_id == 1).unwrap()
     }
 
+    fn objective_action(seq: u64) -> Input {
+        let mut action = input(InputKind::Action, seq);
+        action.target_id = 61;
+        action
+    }
+
+    #[test]
+    fn objective_live_action_in_range_secures_once_without_replay_action() {
+        let mut w = World::new("e".into());
+        start_attempt(&mut w);
+        let player = w.players.get_mut(&1).unwrap();
+        player.x = 21_000;
+        player.z = 4_000;
+
+        let secured = w.step(&[objective_action(1), objective_action(2)]);
+        assert!(secured.room.as_ref().unwrap().objective_secured);
+        assert!(secured.actions.is_empty());
+        assert!(w.step(&[]).room.as_ref().unwrap().objective_secured);
+    }
+
+    #[test]
+    fn objective_invalid_or_nonlive_actions_do_not_secure() {
+        for case in [
+            "outside radius",
+            "other target",
+            "unknown target",
+            "disconnected",
+            "lobby",
+            "failed",
+            "won",
+            "echo pulse",
+        ] {
+            let mut w = World::new("e".into());
+            if case == "lobby" {
+                join_both(&mut w);
+            } else {
+                start_attempt(&mut w);
+            }
+            let player = w.players.get_mut(&1).unwrap();
+            player.x = if case == "outside radius" {
+                20_249
+            } else {
+                21_000
+            };
+            player.z = 4_000;
+            if case == "disconnected" {
+                w.step(&[input(InputKind::Leave, 1)]);
+            }
+            if case == "failed" {
+                w.room_phase = RoomPhase::Failed;
+            }
+            if case == "won" {
+                w.room_phase = RoomPhase::Won;
+            }
+            let mut action = objective_action(1);
+            if case == "other target" {
+                action.target_id = 31;
+            } else if case == "unknown target" {
+                action.target_id = 999;
+            }
+            if case == "echo pulse" {
+                w.scheduled.entry(w.tick + 1).or_default().push(Scheduled {
+                    player_id: 1,
+                    target_id: 61,
+                    acceptance_tick: w.tick,
+                });
+                w.step(&[]);
+            } else {
+                w.step(&[action]);
+            }
+            assert!(
+                !w.snapshot().room.as_ref().unwrap().objective_secured,
+                "case: {case}"
+            );
+            assert!(w.actions.iter().all(|action| action.target_id != 61));
+        }
+    }
+
+    #[test]
+    fn objective_win_requires_theft_echo_door_and_both_humans_in_extraction() {
+        for (secured, echo_door, extraction_players, expected) in [
+            (false, true, 2, RoomPhase::Active),
+            (true, false, 2, RoomPhase::Active),
+            (true, true, 1, RoomPhase::Active),
+            (true, true, 2, RoomPhase::Won),
+        ] {
+            let mut w = World::new("e".into());
+            start_attempt(&mut w);
+            if secured {
+                let player = w.players.get_mut(&1).unwrap();
+                player.x = 21_000;
+                player.z = 4_000;
+                w.step(&[objective_action(1)]);
+            }
+            w.echo_opened_final_door = echo_door;
+            w.players.get_mut(&1).unwrap().x = 23_000;
+            w.players.get_mut(&1).unwrap().z = 3_500;
+            if extraction_players == 2 {
+                w.players.get_mut(&2).unwrap().x = 23_000;
+                w.players.get_mut(&2).unwrap().z = 4_500;
+            }
+            let snapshot = w.step(&[]);
+            assert_eq!(snapshot.room.as_ref().unwrap().phase, expected as i32);
+        }
+    }
+
+    #[test]
+    fn objective_won_state_freezes_and_restart_clears_theft() {
+        let mut w = World::new("e".into());
+        start_attempt(&mut w);
+        let player = w.players.get_mut(&1).unwrap();
+        player.x = 21_000;
+        player.z = 4_000;
+        w.step(&[objective_action(1)]);
+        w.echo_opened_final_door = true;
+        for player in w.players.values_mut() {
+            player.x = 23_000;
+            player.z = 4_000;
+        }
+        let won = w.step(&[]);
+        assert_eq!(won.room.as_ref().unwrap().phase, RoomPhase::Won as i32);
+        assert!(won.room.as_ref().unwrap().objective_secured);
+
+        let mut motion = input(InputKind::Motion, 1);
+        motion.move_x = 1000;
+        let frozen = w.step(&[motion, objective_action(2)]);
+        assert_eq!(frozen.room.as_ref().unwrap().phase, RoomPhase::Won as i32);
+        assert!(frozen.room.as_ref().unwrap().objective_secured);
+        assert_eq!(pose(&frozen).x_mm, 23_000);
+        assert!(frozen.actions.is_empty());
+
+        let reset = w.step(&[input(InputKind::Restart, 1)]);
+        assert_eq!(reset.room.as_ref().unwrap().phase, RoomPhase::Lobby as i32);
+        assert!(!reset.room.as_ref().unwrap().objective_secured);
+    }
+
     #[test]
     fn closed_door_blocks_human() {
         let mut w = World::new("e".into());
@@ -1536,6 +1694,13 @@ mod tests {
         }
         assert!(w.snapshot().room.as_ref().unwrap().echo_opened_final_door);
 
+        {
+            let p = w.players.get_mut(&1).unwrap();
+            p.x = 21_000;
+            p.z = 4_000;
+        }
+        w.step(&[objective_action(1)]);
+
         for p in w.players.values_mut() {
             p.x = 23_000;
             p.z = if p.session == "a" { 3_500 } else { 4_500 };
@@ -1550,6 +1715,12 @@ mod tests {
     fn terminal_restart_resets_attempt_state_and_requires_readiness_again() {
         let mut w = World::new("e".into());
         start_attempt(&mut w);
+        {
+            let p = w.players.get_mut(&1).unwrap();
+            p.x = 21_000;
+            p.z = 4_000;
+        }
+        w.step(&[objective_action(1)]);
         w.echo_opened_final_door = true;
         for p in w.players.values_mut() {
             p.x = 23_000;

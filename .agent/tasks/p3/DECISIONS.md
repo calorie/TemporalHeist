@@ -25,3 +25,12 @@ Use `RoomState.objective_secured` boolean field 12; absent data decodes to
 750 mm interaction radius. It is distinct from Echo-Action terminals and its
 target ID must remain unique among them. The contract layer publishes `false`
 until the authority layer implements the attempt state.
+
+## 2026-09-23 — Authority theft transition
+
+Handle objective actions in the existing active-action path after session and
+sequence validation. Reuse the simulation's inclusive squared-distance helper
+for the authored radius. Keep the theft flag in `World`, publish it in every
+snapshot, and clear it on restart. Objective actions never enter the action log
+or Echo scheduler, so replay cannot create a theft. Victory gates on theft,
+Echo-opened final door, and two humans in extraction.
