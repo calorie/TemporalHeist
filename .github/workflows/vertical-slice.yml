@@ -2,7 +2,7 @@ name: vertical-slice
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened, edited, labeled]
   push:
     branches: [main]
 
