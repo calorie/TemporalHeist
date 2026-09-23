@@ -49,5 +49,6 @@
   "terminals": [
     {"id": 31, "x": 2500, "z": 6000, "capability": "Action"},
     {"id": 32, "x": 3500, "z": 6000, "capability": "None"}
-  ]
+  ],
+  "objective": {"id": 61, "x": 21000, "z": 4000, "radius": 750}
 }

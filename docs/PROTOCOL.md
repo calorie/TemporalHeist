@@ -175,6 +175,13 @@ states use a safe browser presentation fallback. These fields are additive under
 protocol major 1; cross-language tests cover Rust-to-TypeScript guard states,
 optional target presence, guard failure, and the absent-field case.
 
+P3 adds `RoomState.objective_secured` as boolean field 12 under protocol major 1.
+An omitted field decodes as `false`, preserving legacy room messages. The map
+authors objective target ID 61 at `(21000, 4000)` with radius 750 mm. A live
+connected human can address it with the existing `ACTION` and `target_id` input;
+Echo Action cannot secure it. The contract layer publishes `false` until the
+authority mission layer owns the attempt state.
+
 ## System/lifecycle messages
 
 Useful semantics include:

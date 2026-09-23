@@ -56,6 +56,10 @@ The entire reachable west-entry slab stays in view throughout Patrol, so it
 cannot be crossed by following behind the guard without an Echo diversion.
 The 140-tick route period avoids synchronizing with the exact 600-tick Echo.
 Plate 23, door 13, and extraction keep their coordinates; all IDs remain stable.
+P3 adds vault objective ID 61 at `(21000, 4000)` with a 750 mm interaction
+radius. Its ID is unique among action terminals, and its position is inside the
+map bounds. Only a connected live human can secure it with a targeted Action;
+Echo Action has no effect. The authority will own this attempt-scoped state.
 Guard perception uses
 integer angular comparisons clipped by a 2600 mm radial range; the raw WebGPU
 cone clips the same radial boundary without feeding results into gameplay.
@@ -65,6 +69,11 @@ P1 extends protocol major 1 additively with READY and RESTART input kinds,
 FAILED plus attempt identity, authority-tick timing, readiness, extraction
 occupancy, and whether Echo Presence opened the final door in the current attempt.
 Older decoders may ignore these additions.
+
+P3 adds `RoomState.objective_secured` as boolean field 12 under protocol major 1.
+An older room message without field 12 decodes as `false`. During this contract
+layer the simulation publishes `false`; the authority mission layer will publish
+the attempt's secured state.
 
 The authority starts an attempt only while both player sessions are connected and
 ready. It records the start and five-minute deadline as server ticks. A win

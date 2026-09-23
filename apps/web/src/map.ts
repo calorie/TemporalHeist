@@ -35,6 +35,7 @@ export interface Facility {
   doors: Box[];
   plates: (Point & { doorId: number; radius: number; capability: string })[];
   terminals: (Point & { capability: string })[];
+  objective: Point & { radius: number };
   cameras: Camera[];
   guards: GuardConfig[];
 }

@@ -291,3 +291,14 @@ to win. Terminal and
 lobby phases freeze guard movement and timers; restart restores its initial patrol
 state. The HUD, guard body, route, view cone, and target marker explain the window
 to cross, while the Rust authority alone decides detection and results.
+
+## P3 vault objective contract
+
+The checked-in facility adds vault objective 61 at `(21000, 4000)` with a
+750 mm interaction radius. A connected live human must use the existing
+targeted Action to secure the data. Echo Action cannot secure it; the vault
+has no Echo capability. Secured data is a team fact for the current attempt,
+not carried inventory. The room snapshot's `objective_secured` field reports
+it. Older room messages omit that field and decode as unsecured. In this
+contract layer the published value remains false until the authority mission
+layer implements acquisition and reset.
