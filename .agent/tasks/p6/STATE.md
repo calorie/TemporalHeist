@@ -49,6 +49,18 @@ noVNC play surfaces are ready for review. Runtime reliability remains unstarted.
   `container: line 90: relay: command not found` because the wrapper file was edited
   while that shell was still reading it. A stable-file rerun passed and the condition
   is not present in the implementation.
+- Independent review found that visual capture permanently paused the play surface,
+  display readiness did not traverse WebSocket/RFB, and release tags could collide
+  while dirty inputs still claimed HEAD provenance. Focused RED tests reproduced all
+  three findings. The implementation now keeps rendering live, checks all three
+  display processes plus an RFB 3.8 handshake, rejects dirty release contexts, and
+  qualifies local image references by run ID.
+- Review-fix verification passed the focused container contracts and full `verify`
+  suite. `visual` completed A/B RFB 3.8 handshakes, found both Temporal Heist targets,
+  and reported SwiftShader WebGPU on ephemeral loopback ports `61630` and `61629`.
+  Killing websockify made the bounded display checker fail as required. A dirty-tree
+  `release-build` was rejected before any image build. Clean release build/inspect/
+  smoke remains the final post-commit verification.
 
 ## Next action
 

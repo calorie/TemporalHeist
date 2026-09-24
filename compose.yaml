@@ -30,7 +30,7 @@ services:
       - ./spikes/transport/relay.toml:/config/relay.toml:ro
     init: true
   authority:
-    image: temporal-heist-authority:${TH_RELEASE_VERSION:-dev}
+    image: temporal-heist-authority:${TH_RELEASE_IMAGE_TAG:-dev}
     build:
       context: .
       dockerfile: containers/Runtime.Dockerfile
@@ -52,7 +52,7 @@ services:
     cap_drop:
       - ALL
   web:
-    image: temporal-heist-web:${TH_RELEASE_VERSION:-dev}
+    image: temporal-heist-web:${TH_RELEASE_IMAGE_TAG:-dev}
     build:
       context: .
       dockerfile: containers/Runtime.Dockerfile

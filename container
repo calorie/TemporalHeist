@@ -17,13 +17,25 @@ release_metadata() {
   TH_RELEASE_REVISION=${TH_RELEASE_REVISION:-$(git rev-parse HEAD)}
   short_revision=$(printf '%s' "$TH_RELEASE_REVISION" | cut -c1-12)
   TH_RELEASE_VERSION=${TH_RELEASE_VERSION:-0.6.0-rc.1-$short_revision}
+  TH_RELEASE_IMAGE_TAG=${TH_RELEASE_IMAGE_TAG:-$agent_id-$TH_RELEASE_VERSION}
+  case "$TH_RELEASE_IMAGE_TAG" in
+    ''|*[!A-Za-z0-9_.-]*) echo 'TH_RELEASE_IMAGE_TAG must contain only A-Z, a-z, 0-9, dot, underscore, and hyphen' >&2; exit 2 ;;
+  esac
   if [ -n "${SOURCE_DATE_EPOCH:-}" ] && [ -z "${TH_RELEASE_CREATED:-}" ]; then
     echo 'TH_RELEASE_CREATED (RFC3339) is required when SOURCE_DATE_EPOCH is overridden' >&2
     exit 2
   fi
   SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(git show -s --format=%ct "$TH_RELEASE_REVISION")}
   TH_RELEASE_CREATED=${TH_RELEASE_CREATED:-$(git show -s --format=%cI "$TH_RELEASE_REVISION")}
-  export TH_RELEASE_SOURCE TH_RELEASE_REVISION TH_RELEASE_VERSION TH_RELEASE_CREATED SOURCE_DATE_EPOCH
+  export TH_RELEASE_SOURCE TH_RELEASE_REVISION TH_RELEASE_VERSION TH_RELEASE_IMAGE_TAG TH_RELEASE_CREATED SOURCE_DATE_EPOCH
+}
+require_clean_release_context() {
+  dirty=$(git status --porcelain --untracked-files=all -- . ':(exclude).release')
+  if [ -n "$dirty" ]; then
+    echo 'release build context must be clean' >&2
+    printf '%s\n' "$dirty" >&2
+    exit 2
+  fi
 }
 BUILDX_CONFIG=${BUILDX_CONFIG:-/tmp/th-buildx-$agent_id}
 export BUILDX_CONFIG
@@ -66,6 +78,7 @@ case "$command" in
           sleep 1
         done
       '
+      compose exec -T "$service" node containers/visual-display-check.mjs
     done
     compose exec -T visual-browser-a node containers/visual-browser-check.mjs
     compose exec -T visual-browser-b node containers/visual-browser-check.mjs
@@ -76,19 +89,21 @@ case "$command" in
     echo "Cleanup: sh container $agent_id down --volumes --remove-orphans"
     ;;
   release-build)
+    require_clean_release_context
     release_metadata
     compose build authority web
     ;;
   release-inspect)
+    require_clean_release_context
     release_metadata
     manifest=${TH_RELEASE_MANIFEST:-.release/$agent_id/manifest.json}
     mkdir -p "$(dirname "$manifest")"
-    authority_image="temporal-heist-authority:$TH_RELEASE_VERSION"
-    web_image="temporal-heist-web:$TH_RELEASE_VERSION"
+    authority_image="temporal-heist-authority:$TH_RELEASE_IMAGE_TAG"
+    web_image="temporal-heist-web:$TH_RELEASE_IMAGE_TAG"
     sh containers/assert-release-images.sh
     {
-      printf '{"schemaVersion":1,"sourceSha":"%s","version":"%s","created":"%s","images":[' \
-        "$TH_RELEASE_REVISION" "$TH_RELEASE_VERSION" "$TH_RELEASE_CREATED"
+      printf '{"schemaVersion":1,"sourceSha":"%s","version":"%s","imageTag":"%s","created":"%s","images":[' \
+        "$TH_RELEASE_REVISION" "$TH_RELEASE_VERSION" "$TH_RELEASE_IMAGE_TAG" "$TH_RELEASE_CREATED"
       docker image inspect "$authority_image" --format '{"role":"authority","reference":"'"$authority_image"'","id":{{json .Id}},"repoDigests":{{json .RepoDigests}},"size":{{json .Size}},"labels":{{json .Config.Labels}}}'
       printf ','
       docker image inspect "$web_image" --format '{"role":"web","reference":"'"$web_image"'","id":{{json .Id}},"repoDigests":{{json .RepoDigests}},"size":{{json .Size}},"labels":{{json .Config.Labels}}}'
@@ -97,6 +112,7 @@ case "$command" in
     printf '%s\n' "$manifest"
     ;;
   release-smoke)
+    require_clean_release_context
     release_metadata
     compose pull --policy missing relay
     compose build authority web

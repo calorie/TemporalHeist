@@ -24,6 +24,7 @@ node apps/web/test/surveillance-view.mjs
 node apps/web/test/audio.mjs
 node apps/web/test/presentation-view.mjs
 node tests/visual-browser-contract.mjs
+node tests/visual-display-contract.mjs
 node tests/guard-agreement-contract.mjs
 node tests/guard-lure-contract.mjs
 node tests/screenshot-contract.mjs

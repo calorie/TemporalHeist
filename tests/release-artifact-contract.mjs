@@ -15,9 +15,12 @@ assert.match(wrapper, /SOURCE_DATE_EPOCH/);
 assert.match(wrapper, /TH_RELEASE_REVISION/);
 assert.match(wrapper, /TH_RELEASE_VERSION/);
 assert.match(wrapper, /TH_RELEASE_CREATED/);
+assert.match(wrapper, /TH_RELEASE_IMAGE_TAG=.*agent_id/);
+assert.match(wrapper, /git status --porcelain/);
+assert.match(wrapper, /release build context must be clean/);
 
-assert.match(compose, /image: temporal-heist-authority:\$\{TH_RELEASE_VERSION/);
-assert.match(compose, /image: temporal-heist-web:\$\{TH_RELEASE_VERSION/);
+assert.match(compose, /image: temporal-heist-authority:\$\{TH_RELEASE_IMAGE_TAG/);
+assert.match(compose, /image: temporal-heist-web:\$\{TH_RELEASE_IMAGE_TAG/);
 assert.match(compose, /read_only: true/g);
 assert.match(compose, /tmpfs:/g);
 assert.match(compose, /cap_drop:/g);

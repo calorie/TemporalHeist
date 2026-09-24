@@ -29,3 +29,12 @@ Human play uses two container-owned headed Chromium processes exposed by noVNC o
 ephemeral loopback ports. The host browser is only a remote display client. The
 shipped authority and web images use fixed unprivileged identities, read-only roots,
 all capabilities dropped, no-new-privileges, and explicit tmpfs paths.
+
+The visual browser stays live after automated capture so the printed noVNC surface
+remains playable. `visual` treats Xvfb, x11vnc, websockify, and a successful RFB 3.8
+handshake through the noVNC WebSocket as one readiness contract.
+
+Release commands reject tracked or untracked changes in the build context. Runtime
+image references use `<run-id>-<version>` while the OCI version label keeps the
+friendly release version. This binds recorded HEAD provenance to clean inputs and
+prevents worktrees at the same commit from racing on a shared local tag.

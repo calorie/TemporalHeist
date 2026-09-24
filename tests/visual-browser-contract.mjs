@@ -19,13 +19,14 @@ assert.doesNotMatch(compose, /container_name:/);
 assert.match(wrapper, /visual\)/);
 assert.match(wrapper, /compose exec -T visual-browser-a node containers\/visual-browser-check\.mjs/);
 assert.match(wrapper, /compose exec -T visual-browser-b node containers\/visual-browser-check\.mjs/);
+assert.match(wrapper, /visual-display-check\.mjs/g);
 assert.match(wrapper, /compose port visual-browser-a 6080/);
 assert.match(wrapper, /compose port visual-browser-b 6080/);
 assert.match(wrapper, /Player A noVNC/);
 assert.match(wrapper, /Player B noVNC/);
 assert.match(wrapper, /--profile test --profile visual down/);
 assert.match(wrapper, /Cleanup: sh container \$agent_id down/);
-assert.match(browser, /setPresentationPaused\(true\)/);
+assert.doesNotMatch(browser, /setPresentationPaused\(true\)/);
 
 // Exercise the capture boundary: visual artifacts must carry canonical guard
 // state and its visible explanation, so a screenshot can be diagnosed later.

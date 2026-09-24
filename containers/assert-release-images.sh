@@ -2,6 +2,7 @@
 set -eu
 
 version=${TH_RELEASE_VERSION:?release metadata is required}
+image_tag=${TH_RELEASE_IMAGE_TAG:?release image tag is required}
 revision=${TH_RELEASE_REVISION:?release metadata is required}
 created=${TH_RELEASE_CREATED:?release metadata is required}
 source=${TH_RELEASE_SOURCE:?release metadata is required}
@@ -9,7 +10,7 @@ source=${TH_RELEASE_SOURCE:?release metadata is required}
 assert_image() {
   role=$1
   expected_user=$2
-  image="temporal-heist-$role:$version"
+  image="temporal-heist-$role:$image_tag"
 
   test "$(docker image inspect "$image" --format '{{.Config.User}}')" = "$expected_user"
   test "$(docker image inspect "$image" --format '{{index .Config.Labels "org.opencontainers.image.source"}}')" = "$source"

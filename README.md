@@ -110,9 +110,12 @@ private `artifacts` volume. Use a different lowercase run ID for each checkout o
 concurrent stack.
 
 `visual` starts separate container-owned headed Chromium A/B services with independent
-profiles and prints two ephemeral loopback noVNC URLs. Open those URLs in any host
-browser to view and control the container display. The host browser is only a remote
-display client; Chromium, WebGPU, profiles, and game networking remain in containers.
+profiles and prints two ephemeral loopback noVNC URLs after checking the complete
+WebSocket/RFB display chain. Open those URLs in any host browser to view and control
+the live container display. The host browser is only a remote display client;
+Chromium, WebGPU, profiles, and game networking remain in containers. Release image
+references include the run ID and release version; release commands reject a dirty
+build context so their OCI source revision and manifest describe the inputs used.
 
 To prove release isolation with two distinct checkouts, run the production acceptance
 flow concurrently through the host-side Docker orchestrator:

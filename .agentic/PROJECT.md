@@ -39,14 +39,17 @@ project down with volumes, and checks that the other project and its in-network
 health remain intact. It writes JSON evidence and acceptance logs outside both
 worktrees.
 
-`release-build` creates `temporal-heist-authority:<version>` and
-`temporal-heist-web:<version>` from locked sources with OCI provenance labels.
+`release-build` requires a clean build context and creates
+`temporal-heist-authority:<run-id>-<version>` and
+`temporal-heist-web:<run-id>-<version>` from locked sources with OCI provenance
+labels. The friendly version remains in the OCI version label.
 `release-inspect` writes `.release/<run-id>/manifest.json` with their immutable
-config IDs, optional repository digests, sizes, labels, and source SHA. Set
+config IDs, optional repository digests, sizes, labels, source SHA, and image tag. Set
 `TH_RELEASE_VERSION`, `TH_RELEASE_CREATED`, and `SOURCE_DATE_EPOCH` explicitly for
 a named release; otherwise metadata is derived reproducibly from the Git commit.
-`visual` exposes each container-owned headed Chromium through a distinct ephemeral
-loopback noVNC URL. A host browser is only the remote display client.
+`visual` exposes each live container-owned headed Chromium through a distinct
+ephemeral loopback noVNC URL. It verifies Xvfb, x11vnc, websockify, and an RFB
+handshake through the noVNC WebSocket before printing URLs.
 
 ## Dependency / toolchain
 
