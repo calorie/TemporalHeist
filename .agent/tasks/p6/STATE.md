@@ -2,7 +2,8 @@
 
 ## Status
 
-Artifact-contract and runtime-reliability layers are implemented and container-verified.
+Artifact-contract, runtime-reliability, and release-evidence source layers are implemented
+and container-verified.
 Authority health/readiness, structured lifecycle logs, bounded shutdown, reconnecting
 MoQ sessions, browser write-failure recovery, Compose health ordering, deterministic
 resource bounds, and real two-browser restart recovery are complete.
@@ -97,8 +98,21 @@ resource bounds, and real two-browser restart recovery are complete.
   precondition. It now force-recreates and health-waits the runtime. Agent-qualified
   BuildKit Cargo caches reduced a source-only authority rebuild from more than four
   minutes to 31 seconds; unchanged builds are cache hits.
+- Release-evidence contract RED rejected the missing clean-checkout evidence, soak,
+  isolation, scheduled CI, and unconditional upload entry points. GREEN adds a
+  schema-v1 index over image provenance, Compose resources, lifecycle logs, browser
+  epochs/errors/screenshots, WebGPU adapter/backend, and fixed-tick maxima.
+- The exact 216,000-tick two-player soak passed in 36.54 seconds with 1,438 submitted
+  actions, 6,000 active samples, 48 retained actions, 221 history samples, an 838-byte
+  maximum snapshot, and a 185,875-byte maximum history payload.
+- Stack 3 full `sh container p6-evidence-agent verify` passed container-only fmt/clippy,
+  12 authority tests, 39 simulation tests, protocol compatibility, TypeScript/Biome,
+  source contracts, SwiftShader WebGPU, the production build, and Chromium browser UX.
+- CI keeps component checks on every PR, limits normal full acceptance to top/main,
+  and reserves RC evidence plus simultaneous isolation for release, manual, and weekly
+  runs. Pinned upload-artifact v7.0.1 runs with `if: always()` before cleanup.
 
 ## Next action
 
-Commit and review runtime reliability, then implement clean-checkout soak, CI evidence
-upload, and scheduled two-stack isolation in the release-evidence layer.
+Commit Stack 3, run clean-checkout `release-evidence`, then run automated two-worktree
+isolation and independently review the resulting commit.

@@ -33,5 +33,7 @@ node tests/isolation-harness-contract.mjs
 node tests/stacked-ci-contract.mjs
 node tests/release-artifact-contract.mjs
 node tests/runtime-reliability-contract.mjs
+node tests/release-evidence-contract.mjs
+node tests/release-evidence-rerun-contract.mjs
 npx vite build apps/web
 node tests/browser-ux.mjs

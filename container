@@ -204,6 +204,118 @@ case "$command" in
     docker logs "$browser_id"
     docker rm "$browser_id" >/dev/null
     ;;
+  release-soak)
+    require_clean_release_context
+    release_metadata
+    evidence_dir=.release/$agent_id
+    mkdir -p "$evidence_dir"
+    compose build dev
+    compose run --rm dev npm ci
+    compose run --rm dev cargo test -p th-authority \
+      tests::six_hour_virtual_soak_keeps_resources_and_payloads_bounded -- --exact --nocapture \
+      >"$evidence_dir/soak.log" 2>&1
+    compose run --rm dev node tests/renderer-gpu.mjs \
+      >"$evidence_dir/webgpu.log" 2>&1
+    cat "$evidence_dir/soak.log"
+    cat "$evidence_dir/webgpu.log"
+    ;;
+  release-evidence-permissions-probe)
+    probe_dir=.release/.permissions-probe-$agent_id
+    rm -rf "$probe_dir"
+    mkdir -p "$probe_dir"
+    compose build dev
+    compose run --rm dev sh -c '
+      mkdir -p "/workspace/.release/.permissions-probe-$TH_AGENT_ID/stale"
+      touch "/workspace/.release/.permissions-probe-$TH_AGENT_ID/stale/root-owned"
+      find "/workspace/.release/.permissions-probe-$TH_AGENT_ID" -mindepth 1 -delete
+    '
+    printf '{"result":"host-write-passed"}\n' >"$probe_dir/manifest.json"
+    printf 'host redirect passed\n' >"$probe_dir/probe.log"
+    test -s "$probe_dir/manifest.json"
+    test -s "$probe_dir/probe.log"
+    rm -rf "$probe_dir"
+    printf '%s\n' 'Release evidence host-write permissions probe passed'
+    ;;
+  release-evidence)
+    release_metadata
+    evidence_dir=.release/$agent_id
+    mkdir -p "$evidence_dir"
+    evidence_complete=0
+    capture_release_metadata() {
+      compose config --format json >"$evidence_dir/compose-config.json" 2>/dev/null || true
+      compose ps --all --format json >"$evidence_dir/compose-resources.json" 2>/dev/null || true
+      compose logs --no-color --no-log-prefix authority >"$evidence_dir/authority-lifecycle.jsonl" 2>/dev/null || true
+    }
+    best_effort_release_export() {
+      mkdir -p "$evidence_dir/artifacts"
+      compose --profile test run --rm --no-deps \
+        -v "$(pwd)/$evidence_dir/artifacts:/evidence" browser \
+        sh -c 'cp -R /artifacts/. /evidence/ 2>/dev/null || true' >/dev/null 2>&1 || true
+    }
+    strict_release_export() {
+      mkdir -p "$evidence_dir/artifacts"
+      compose --profile test run --rm --no-deps --entrypoint sh \
+        -v "$(pwd)/$evidence_dir/artifacts:/evidence" browser \
+        -c 'find /evidence -mindepth 1 -delete && cp -R /artifacts/. /evidence/'
+    }
+    finish_release_evidence() {
+      if [ "$evidence_complete" -eq 0 ]; then
+        capture_release_metadata
+        compose run --rm dev rm -f "/workspace/$evidence_dir/index.json" >/dev/null 2>&1 || true
+        best_effort_release_export
+      fi
+    }
+    trap finish_release_evidence EXIT HUP INT TERM
+    compose build dev
+    compose run --rm -e TH_EVIDENCE_DIR="/workspace/$evidence_dir" dev sh -c '
+      find "$TH_EVIDENCE_DIR" -mindepth 1 -delete
+      find /artifacts -mindepth 1 -delete
+    '
+    require_clean_release_context
+    sh "$0" "$agent_id" release-build
+    TH_RELEASE_MANIFEST="$evidence_dir/manifest.json" sh "$0" "$agent_id" release-inspect
+    sh "$0" "$agent_id" release-smoke
+    sh "$0" "$agent_id" release-soak
+    sh "$0" "$agent_id" acceptance
+    sh "$0" "$agent_id" runtime-reliability >"$evidence_dir/runtime-reliability.log" 2>&1
+    sh "$0" "$agent_id" runtime-browser-recovery >"$evidence_dir/runtime-browser-recovery.log" 2>&1
+    capture_release_metadata
+    strict_release_export
+    TH_EVIDENCE_DIR="/workspace/$evidence_dir" compose run --rm dev node containers/evidence-index.mjs
+    evidence_complete=1
+    trap - EXIT HUP INT TERM
+    printf '%s\n' "$evidence_dir/index.json"
+    ;;
+  two-stack-isolation)
+    require_clean_release_context
+    evidence_dir=${2:-.release/$agent_id/isolation}
+    worktree_root=${TMPDIR:-/tmp}/temporal-heist-$agent_id-isolation
+    worktree_a=$worktree_root/a
+    worktree_b=$worktree_root/b
+    cleanup_worktrees() {
+      if [ -e "$worktree_a/.git" ]; then
+        (cd "$worktree_a" && sh container "$agent_id-a" down --volumes --remove-orphans) >/dev/null 2>&1 || true
+      fi
+      if [ -e "$worktree_b/.git" ]; then
+        (cd "$worktree_b" && sh container "$agent_id-b" down --volumes --remove-orphans) >/dev/null 2>&1 || true
+      fi
+      git worktree remove --force "$worktree_a" >/dev/null 2>&1 || true
+      git worktree remove --force "$worktree_b" >/dev/null 2>&1 || true
+    }
+    trap cleanup_worktrees EXIT HUP INT TERM
+    mkdir -p "$worktree_root"
+    git worktree add --detach "$worktree_a" HEAD
+    git worktree add --detach "$worktree_b" HEAD
+    sh containers/verify-two-stack-isolation.sh \
+      "$worktree_a" "$agent_id-a" "$worktree_b" "$agent_id-b" "$evidence_dir"
+    ;;
+  export-evidence)
+    evidence_dir=.release/$agent_id/artifacts
+    mkdir -p "$evidence_dir"
+    compose --profile test run --rm --no-deps \
+      -v "$(pwd)/$evidence_dir:/evidence" browser \
+      sh -c 'cp -R /artifacts/. /evidence/ 2>/dev/null || true'
+    ;;
   down)
     shift
     compose --profile test --profile visual down "$@"

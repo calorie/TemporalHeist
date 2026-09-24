@@ -445,6 +445,10 @@ mod tests {
             max_history_bytes <= MAX_HISTORY_BYTES,
             "history maximum was {max_history_bytes}"
         );
+        println!(
+            "SOAK_EVIDENCE {{\"ticks\":216000,\"players\":2,\"submittedActions\":{submitted_actions},\"activeSamples\":{active_samples},\"maxActions\":{max_actions},\"maxPendingInputs\":{},\"maxHistorySamples\":{max_history_samples},\"maxSnapshotBytes\":{max_snapshot_bytes},\"maxHistoryBytes\":{max_history_bytes}}}",
+            authority.pending.len()
+        );
     }
 
     #[test]

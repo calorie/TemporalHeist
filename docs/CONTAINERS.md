@@ -244,23 +244,40 @@ Parallel isolation is verified when:
 
 Document the exact verification command and evidence in `.agent/tasks/vertical-slice/STATE.md`.
 
-The production isolation harness accepts two existing, distinct Git worktrees and
-two unique run IDs:
+The release wrapper creates two detached clean worktrees at the current revision:
 
 ~~~sh
-sh containers/verify-two-stack-isolation.sh \
-  /path/to/worktree-a isolation-a \
-  /path/to/worktree-b isolation-b \
-  /tmp/temporal-heist-isolation-evidence
+sh container <run-id> two-stack-isolation
 ~~~
 
-It starts `acceptance` in both worktrees concurrently and observes both Compose
-`browser` services live at the same time. Before waiting for the game scene, it
-asserts that labeled containers, networks, and writable volumes are disjoint and
-that neither project publishes a host port. After both runs pass, it removes stack
-A with volumes, proves stack B retained the same container/network/volume IDs, and
-runs an HTTP health request from stack B's web container. It cleans both stacks on
-every exit while preserving `evidence.json`, `acceptance-a.log`, and
-`acceptance-b.log` in the caller-selected directory. The default browser-observation
-timeout is 20 minutes so cold image and dependency builds can overlap safely;
-`TH_ISOLATION_OBSERVE_TIMEOUT_SECONDS` may override it.
+Each worktree starts a complete `visual` stack: relay, authority, web, Chromium A,
+and Chromium B. The Chromium services own separate browser-profile volumes and
+publish noVNC only on distinct ephemeral loopback ports. The harness checks disjoint
+container, network, writable-volume, profile, room, artifact, and port identities.
+It exports both players' PNG screenshots and JSON renderer metadata from each stack
+before removing either artifact volume. It then removes stack A with volumes and
+proves stack B retained the same resource IDs, web health, and both RFB displays.
+
+Evidence is schema version 1 at
+`.release/<run-id>/isolation/manifest.json`. Its `artifactsA` and `artifactsB`
+arrays name the four screenshot/metadata pairs stored below the same directory.
+Visual build logs, source SHA, projects, resource IDs, loopback ports, teardown
+result, and post-teardown display result are part of the manifest. Both child
+projects are explicitly taken down with volumes before their temporary worktrees
+are removed on normal or abnormal wrapper exit.
+
+The complete RC evidence command is:
+
+~~~sh
+sh container <run-id> release-evidence
+~~~
+
+Every attempt first clears that run's private artifact volume and ignored host
+evidence directory contents. The host runner creates and retains ownership of the
+directory itself; a root container must never delete and recreate that bind-mount
+root. Verify this Linux CI invariant with
+`sh container <run-id> release-evidence-permissions-probe`. A successful attempt strictly exports the volume, builds the
+schema-v1 index from the exported tree, and writes
+`.release/<run-id>/index.json` only after every required export passes. A failed attempt may export partial
+diagnostics on a best-effort basis, but must not retain a prior `passed` index.
+CI uploads these ignored directories before deleting Compose volumes.

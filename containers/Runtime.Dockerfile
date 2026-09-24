@@ -8,9 +8,10 @@ COPY crates ./crates
 COPY map ./map
 COPY proto ./proto
 ARG TH_BUILD_CACHE_ID=default
+ARG TH_CARGO_BUILD_JOBS=2
 RUN --mount=type=cache,id=th-cargo-registry-${TH_BUILD_CACHE_ID},target=/usr/local/cargo/registry \
     --mount=type=cache,id=th-cargo-target-${TH_BUILD_CACHE_ID},target=/workspace/target \
-    cargo build --release --locked -p th-authority \
+    CARGO_BUILD_JOBS="$TH_CARGO_BUILD_JOBS" cargo build --release --locked -p th-authority \
     && cp /workspace/target/release/th-authority /tmp/th-authority
 
 FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS authority
