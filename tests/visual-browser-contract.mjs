@@ -9,7 +9,7 @@ const browser = await readFile('containers/visual-browser.mjs', 'utf8');
 assert.match(compose, /^  visual-browser-a: &visual-browser\n/m);
 assert.match(compose, /^  visual-browser-b:\n/m);
 assert.match(compose, /profiles: \["visual"\]/);
-assert.equal(compose.match(/127\.0\.0\.1::9222/g)?.length, 1);
+assert.equal(compose.match(/127\.0\.0\.1::6080/g)?.length, 1);
 assert.match(compose, /visual-profile-a:\/browser-profile/);
 assert.match(compose, /visual-profile-b:\/browser-profile/);
 assert.match(compose, /TH_PLAYER_ID: "1"/);
@@ -19,11 +19,14 @@ assert.doesNotMatch(compose, /container_name:/);
 assert.match(wrapper, /visual\)/);
 assert.match(wrapper, /compose exec -T visual-browser-a node containers\/visual-browser-check\.mjs/);
 assert.match(wrapper, /compose exec -T visual-browser-b node containers\/visual-browser-check\.mjs/);
-assert.match(wrapper, /compose port visual-browser-a 9222/);
-assert.match(wrapper, /compose port visual-browser-b 9222/);
+assert.match(wrapper, /visual-display-check\.mjs/g);
+assert.match(wrapper, /compose port visual-browser-a 6080/);
+assert.match(wrapper, /compose port visual-browser-b 6080/);
+assert.match(wrapper, /Player A noVNC/);
+assert.match(wrapper, /Player B noVNC/);
 assert.match(wrapper, /--profile test --profile visual down/);
 assert.match(wrapper, /Cleanup: sh container \$agent_id down/);
-assert.match(browser, /setPresentationPaused\(true\)/);
+assert.doesNotMatch(browser, /setPresentationPaused\(true\)/);
 
 // Exercise the capture boundary: visual artifacts must carry canonical guard
 // state and its visible explanation, so a screenshot can be diagnosed later.

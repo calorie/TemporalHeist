@@ -210,21 +210,18 @@ private to its run ID.
 Manual visual inspection uses `sh container <run-id> visual`. It starts the private
 relay, authority, web service, and separate container-owned Chromium A/B services.
 Each browser has its own `visual-profile-a` or `visual-profile-b` volume and an
-ephemeral CDP host port. The command prints both URLs. In desktop Chromium, open
-`chrome://inspect`, choose **Configure**, add either printed `127.0.0.1:<port>`, and
-inspect that player's game target.
+ephemeral loopback noVNC host port. The command verifies display processes and an
+RFB WebSocket handshake before printing both URLs. Open either URL in a host browser
+to view and control that player's container desktop.
 
-The remote-debugging client is the only host-side UI. Game execution, both Chromium
+The noVNC client is the only host-side UI. Game execution, both Chromium
 processes, their persistent profiles, and WebGPU remain inside the run-ID Compose
 project. Labeled screenshots and renderer/error metadata are stored in the run's
-artifact volume. This surface provides DevTools inspection rather than a shared
-desktop; use automated screenshots for unattended evidence. Remove the stack and
+artifact volume. The game stays live and interactive after automated capture. Remove the stack and
 both profiles with the standard `down --volumes --remove-orphans` command.
 
-After screenshots and metadata are written, visual clients stop scheduling render
-frames to reduce software-GPU CPU use while waiting for inspection. The printed
-cleanup command remains required because CDP ports and container processes stay
-alive until it is run.
+The printed cleanup command remains required because noVNC ports and container
+processes stay alive until it is run.
 
 ## CI
 
