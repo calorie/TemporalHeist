@@ -12,7 +12,8 @@ sh container <run-id> acceptance
 sh container <run-id> visual
 sh container <run-id> release-build
 sh container <run-id> release-inspect
-sh containers/verify-two-stack-isolation.sh <worktree-a> <run-a> <worktree-b> <run-b> [evidence-dir]
+sh container <run-id> release-evidence
+sh container <run-id> two-stack-isolation
 sh container <run-id> up -d relay authority web
 sh container <run-id> --profile test run --rm browser
 sh container <run-id> down --volumes --remove-orphans
@@ -32,12 +33,13 @@ official `moqdev/moq-relay:0.14.18` image. `verify` alone uses the combined dev 
 because its cross-language checks need both toolchains. Always remove a visual stack
 after inspection with `sh container <run-id> down --volumes --remove-orphans`.
 
-`verify-two-stack-isolation.sh` is the release-level two-worktree check. It runs the
-existing containerized acceptance entry point twice in parallel, observes both
-browser services, verifies disjoint Compose resources and no host ports, tears one
-project down with volumes, and checks that the other project and its in-network
-health remain intact. It writes JSON evidence and acceptance logs outside both
-worktrees.
+`two-stack-isolation` creates two clean detached worktrees at the current revision.
+It starts two complete visual stacks in parallel, each with relay, authority, web,
+Chromium A/B, private profiles, artifacts, network, volumes, and two ephemeral
+loopback noVNC ports. It verifies every mutable resource and published port is
+disjoint, removes stack A with its volumes, then rechecks stack B's resource IDs,
+web health, and both RFB displays. The versioned manifest and logs are written under
+`.release/<run-id>/isolation`.
 
 `release-build` requires a clean build context and creates
 `temporal-heist-authority:<run-id>-<version>` and
@@ -50,6 +52,14 @@ a named release; otherwise metadata is derived reproducibly from the Git commit.
 `visual` exposes each live container-owned headed Chromium through a distinct
 ephemeral loopback noVNC URL. It verifies Xvfb, x11vnc, websockify, and an RFB
 handshake through the noVNC WebSocket before printing URLs.
+
+`release-evidence` is the clean-checkout RC gate. It runs release image inspection
+and smoke, the 216,000-tick deterministic two-player soak, raw WebGPU verification,
+full mission acceptance, relay/authority recovery, and browser epoch recovery. It
+writes `.release/<run-id>/index.json` plus image provenance, Compose metadata,
+structured lifecycle logs, WebGPU adapter/backend details, screenshots, and traces.
+CI uses the same entry point for release, manual, and weekly scheduled runs and
+uploads evidence before removing the isolated stack.
 
 ## Dependency / toolchain
 

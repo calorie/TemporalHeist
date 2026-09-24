@@ -1,6 +1,11 @@
 name: vertical-slice
 
 on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 1'
+  release:
+    types: [published]
   pull_request:
     types: [opened, synchronize, reopened, edited, labeled, unlabeled]
   push:
@@ -28,7 +33,7 @@ jobs:
         run: sh container ci-verify down --volumes --remove-orphans
 
   acceptance:
-    if: github.event_name == 'push' || !contains(github.event.pull_request.labels.*.name, 'component-only')
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'component-only'))
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
@@ -37,6 +42,61 @@ jobs:
           persist-credentials: false
       - name: Two-browser MoQ/WebGPU acceptance
         run: sh container ci-acceptance acceptance
+      - name: Export browser evidence
+        if: always()
+        run: sh container ci-acceptance export-evidence
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: acceptance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .release/ci-acceptance
+          if-no-files-found: ignore
       - name: Remove isolated stack
         if: always()
         run: sh container ci-acceptance down --volumes --remove-orphans
+
+  release-evidence:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || github.event_name == 'release'
+    needs: component-verification
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Clean-checkout smoke, soak, recovery, and release evidence
+        run: sh container ci-release release-evidence
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .release/ci-release
+          if-no-files-found: warn
+      - name: Remove isolated stack
+        if: always()
+        run: sh container ci-release down --volumes --remove-orphans
+
+  two-stack-isolation:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || github.event_name == 'release'
+    needs: release-evidence
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Two simultaneous full-stack isolation
+        run: sh container ci-isolation two-stack-isolation
+      - name: Upload isolation evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: two-stack-isolation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .release/ci-isolation
+          if-no-files-found: warn
+      - name: Remove isolated stack
+        if: always()
+        run: sh container ci-isolation down --volumes --remove-orphans

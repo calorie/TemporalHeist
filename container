@@ -204,6 +204,72 @@ case "$command" in
     docker logs "$browser_id"
     docker rm "$browser_id" >/dev/null
     ;;
+  release-soak)
+    require_clean_release_context
+    release_metadata
+    evidence_dir=.release/$agent_id
+    mkdir -p "$evidence_dir"
+    compose build dev
+    compose run --rm dev npm ci
+    compose run --rm dev cargo test -p th-authority \
+      tests::six_hour_virtual_soak_keeps_resources_and_payloads_bounded -- --exact --nocapture \
+      >"$evidence_dir/soak.log" 2>&1
+    compose run --rm dev node tests/renderer-gpu.mjs \
+      >"$evidence_dir/webgpu.log" 2>&1
+    cat "$evidence_dir/soak.log"
+    cat "$evidence_dir/webgpu.log"
+    ;;
+  release-evidence)
+    require_clean_release_context
+    release_metadata
+    evidence_dir=.release/$agent_id
+    mkdir -p "$evidence_dir"
+    finalize_release_evidence() {
+      compose config --format json >"$evidence_dir/compose-config.json" 2>/dev/null || true
+      compose ps --all --format json >"$evidence_dir/compose-resources.json" 2>/dev/null || true
+      compose logs --no-color --no-log-prefix authority >"$evidence_dir/authority-lifecycle.jsonl" 2>/dev/null || true
+      mkdir -p "$evidence_dir/artifacts"
+      compose --profile test run --rm --no-deps \
+        -v "$(pwd)/$evidence_dir/artifacts:/evidence" browser \
+        sh -c 'cp -R /artifacts/. /evidence/ 2>/dev/null || true' >/dev/null 2>&1 || true
+    }
+    trap finalize_release_evidence EXIT HUP INT TERM
+    sh "$0" "$agent_id" release-build
+    TH_RELEASE_MANIFEST="$evidence_dir/manifest.json" sh "$0" "$agent_id" release-inspect
+    sh "$0" "$agent_id" release-smoke
+    sh "$0" "$agent_id" release-soak
+    sh "$0" "$agent_id" acceptance
+    sh "$0" "$agent_id" runtime-reliability >"$evidence_dir/runtime-reliability.log" 2>&1
+    sh "$0" "$agent_id" runtime-browser-recovery >"$evidence_dir/runtime-browser-recovery.log" 2>&1
+    finalize_release_evidence
+    TH_EVIDENCE_DIR="/workspace/$evidence_dir" compose run --rm dev node containers/evidence-index.mjs
+    trap - EXIT HUP INT TERM
+    printf '%s\n' "$evidence_dir/index.json"
+    ;;
+  two-stack-isolation)
+    require_clean_release_context
+    evidence_dir=${2:-.release/$agent_id/isolation}
+    worktree_root=${TMPDIR:-/tmp}/temporal-heist-$agent_id-isolation
+    worktree_a=$worktree_root/a
+    worktree_b=$worktree_root/b
+    cleanup_worktrees() {
+      git worktree remove --force "$worktree_a" >/dev/null 2>&1 || true
+      git worktree remove --force "$worktree_b" >/dev/null 2>&1 || true
+    }
+    trap cleanup_worktrees EXIT HUP INT TERM
+    mkdir -p "$worktree_root"
+    git worktree add --detach "$worktree_a" HEAD
+    git worktree add --detach "$worktree_b" HEAD
+    sh containers/verify-two-stack-isolation.sh \
+      "$worktree_a" "$agent_id-a" "$worktree_b" "$agent_id-b" "$evidence_dir"
+    ;;
+  export-evidence)
+    evidence_dir=.release/$agent_id/artifacts
+    mkdir -p "$evidence_dir"
+    compose --profile test run --rm --no-deps \
+      -v "$(pwd)/$evidence_dir:/evidence" browser \
+      sh -c 'cp -R /artifacts/. /evidence/ 2>/dev/null || true'
+    ;;
   down)
     shift
     compose --profile test --profile visual down "$@"

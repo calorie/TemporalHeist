@@ -85,6 +85,8 @@ sh container local acceptance
 sh container local visual
 sh container local release-build
 sh container local release-inspect
+sh container local release-evidence
+sh container local two-stack-isolation
 sh container local down --volumes --remove-orphans
 ~~~
 
@@ -117,18 +119,15 @@ Chromium, WebGPU, profiles, and game networking remain in containers. Release im
 references include the run ID and release version; release commands reject a dirty
 build context so their OCI source revision and manifest describe the inputs used.
 
-To prove release isolation with two distinct checkouts, run the production acceptance
-flow concurrently through the host-side Docker orchestrator:
+To prove release isolation with two clean checkouts and two Chromium displays per
+stack, run:
 
 ~~~sh
-sh containers/verify-two-stack-isolation.sh \
-  /path/to/worktree-a release-a \
-  /path/to/worktree-b release-b \
-  /tmp/temporal-heist-release-isolation
+sh container release-isolation two-stack-isolation
 ~~~
 
-The harness waits for both containerized browser services to be live, rejects
-published host ports, records disjoint Compose resources, and waits for both
-acceptance runs. It then removes stack A with its volumes and verifies stack B's
-resource IDs and in-network web health before cleaning up. `evidence.json` and both
-acceptance logs remain in the selected evidence directory.
+The harness records disjoint containers, networks, volumes, browser profiles,
+artifacts, and ephemeral loopback noVNC ports. It removes stack A with its volumes
+and verifies stack B's resource IDs, in-network health, and both RFB displays remain
+intact. `manifest.json` and both visual-stack logs remain under
+`.release/release-isolation/isolation`.

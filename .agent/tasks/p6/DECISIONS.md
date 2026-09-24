@@ -68,3 +68,23 @@ worktree caches independent and avoids rebuilding every dependency after source 
 
 Acceptance force-recreates and health-waits relay, authority, and web so each run is
 independent of mutable state left by visual, recovery, or earlier acceptance runs.
+
+## 2026-09-24 — Release evidence and CI cost
+
+Evidence schema v1 indexes source and immutable image metadata, Compose resources,
+JSON lifecycle logs, soak maxima, browser epochs/ticks/errors/screenshots, and the raw
+WebGPU adapter/backend. The wrapper exports partial evidence on every exit before CI
+removes volumes, so failed release runs remain diagnosable.
+
+Normal pull requests always run component verification. Only top-level PRs and main
+pushes run the full mission. Release builds, the 216,000-tick soak, restart recovery,
+and two-stack isolation run for published releases, manual dispatch, and the weekly
+schedule to avoid repeated CPU-heavy work on intermediate stacked PRs.
+Release authority builds use at most two Cargo jobs per independent stack, so the
+simultaneous isolation gate has a predictable four-job compiler ceiling.
+
+Isolation creates two detached worktrees at the same clean revision. Each starts
+relay, authority, web, and distinct Chromium A/B noVNC services. Network, volume,
+profile, artifact, and ephemeral loopback port identities must be disjoint. Removing
+stack A with volumes must preserve stack B's resource identities, health, and both
+RFB display chains.
