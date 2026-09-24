@@ -118,7 +118,7 @@ async fn run_session(
             published = output_rx.recv() => {
                 let Some(published) = published else { return Ok(()) };
                 let tick = published.snapshot.server_tick;
-                world_group.write_frame(moq_net::Timestamp::now(), encode_snapshot(&published.snapshot))
+                world_group.write_frame(moq_net::Timestamp::now(), encode_snapshot(&published.snapshot)?)
                     .context("publish world frame")?;
                 let start = *group_start_tick.get_or_insert(tick);
                 if tick.saturating_sub(start) >= GROUP_INTERVAL_TICKS {
@@ -128,7 +128,7 @@ async fn run_session(
                 }
                 if let Some(chunk) = published.history {
                     let mut group = history.append_group().context("open history group")?;
-                    group.write_frame(moq_net::Timestamp::now(), encode_history(&chunk))
+                    group.write_frame(moq_net::Timestamp::now(), encode_history(&chunk)?)
                         .context("publish history frame")?;
                     group.finish().context("finish history group")?;
                     tracing::debug!(server_tick = tick, samples = chunk.samples.len(), "published authority history");

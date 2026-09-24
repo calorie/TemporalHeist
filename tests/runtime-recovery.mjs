@@ -67,8 +67,12 @@ try {
     const timeline = await page.evaluate(() => window.th.timeline());
     assert.equal(timeline.epoch, after.roomEpoch);
     assert(timeline.firstTick <= timeline.latestTick);
+    await page.waitForFunction((epoch) => window.th.temporalPresentation()?.epoch === epoch,
+      after.roomEpoch, { timeout: 30_000 });
     const temporal = await page.evaluate(() => window.th.temporalPresentation());
-    if (temporal) assert.equal(temporal.epoch, after.roomEpoch);
+    assert.equal(temporal.epoch, after.roomEpoch);
+    assert.equal(temporal.segmentCount, 0, 'old Temporal Bridge segments survived epoch reset');
+    assert.equal(temporal.pulseCount, 0, 'old Temporal Bridge pulses survived epoch reset');
     assert.equal(await page.evaluate(() => window.__recoveryIdentity), `client-${index + 1}`);
     assert.equal(await page.evaluate(() => performance.getEntriesByType('navigation').length), 1);
     await page.evaluate(() => window.th.ready());

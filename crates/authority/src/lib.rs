@@ -135,11 +135,19 @@ pub fn decode_input_for_player(bytes: &[u8], expected_player_id: u32) -> anyhow:
     Ok(input)
 }
 
-pub fn encode_snapshot(snapshot: &Snapshot) -> Vec<u8> {
-    snapshot.encode_to_vec()
+fn bounded_payload(payload: Vec<u8>, limit: usize, kind: &str) -> anyhow::Result<Vec<u8>> {
+    anyhow::ensure!(
+        payload.len() <= limit,
+        "{kind} payload of {} bytes exceeds {limit}",
+        payload.len()
+    );
+    Ok(payload)
 }
-pub fn encode_history(history: &TimelineChunk) -> Vec<u8> {
-    history.encode_to_vec()
+pub fn encode_snapshot(snapshot: &Snapshot) -> anyhow::Result<Vec<u8>> {
+    bounded_payload(snapshot.encode_to_vec(), MAX_SNAPSHOT_BYTES, "snapshot")
+}
+pub fn encode_history(history: &TimelineChunk) -> anyhow::Result<Vec<u8>> {
+    bounded_payload(history.encode_to_vec(), MAX_HISTORY_BYTES, "history")
 }
 
 fn try_publish(output: &mpsc::Sender<PublishedTick>, published: PublishedTick) -> bool {
@@ -250,7 +258,7 @@ mod tests {
         };
         assert_eq!(decode_input(&input.encode_to_vec()).unwrap(), input);
         assert_eq!(
-            Snapshot::decode(encode_snapshot(&snapshot(3)).as_slice()).unwrap(),
+            Snapshot::decode(encode_snapshot(&snapshot(3)).unwrap().as_slice()).unwrap(),
             snapshot(3)
         );
         let chunk = TimelineChunk {
@@ -259,7 +267,7 @@ mod tests {
             samples: vec![snapshot(3)],
         };
         assert_eq!(
-            TimelineChunk::decode(encode_history(&chunk).as_slice()).unwrap(),
+            TimelineChunk::decode(encode_history(&chunk).unwrap().as_slice()).unwrap(),
             chunk
         );
     }
@@ -359,16 +367,59 @@ mod tests {
         let mut max_history_samples = 0;
         let mut max_snapshot_bytes = 0;
         let mut max_history_bytes = 0;
-        for _ in 0..216_000 {
+        let mut max_actions = 0;
+        let mut active_samples = 0;
+        let mut sequence = [0_u64; 2];
+        let mut submitted_actions = 0_usize;
+        for tick in 0..216_000 {
+            for (index, player_id) in [1_u32, 2].into_iter().enumerate() {
+                sequence[index] += 1;
+                let kind = if tick == 0 {
+                    InputKind::Join
+                } else if tick == 1 {
+                    InputKind::Ready
+                } else if tick % 30 == 0 {
+                    submitted_actions += 1;
+                    InputKind::Action
+                } else {
+                    InputKind::Motion
+                };
+                let frame = Input {
+                    protocol_major: PROTOCOL_MAJOR,
+                    room_epoch: "soak-epoch".into(),
+                    player_id,
+                    session_id: format!("soak-{player_id}"),
+                    sequence: sequence[index],
+                    move_x: if tick % 120 < 60 { 250 } else { -250 },
+                    move_z: 0,
+                    kind: kind as i32,
+                    target_id: if kind == InputKind::Action { 61 } else { 0 },
+                }
+                .encode_to_vec();
+                authority.accept_frame(&frame).unwrap();
+            }
             if let Some(published) = authority.tick() {
+                max_actions = max_actions.max(published.snapshot.actions.len());
+                if published
+                    .snapshot
+                    .room
+                    .as_ref()
+                    .is_some_and(|room| room.phase == 2)
+                {
+                    active_samples += 1;
+                }
                 max_snapshot_bytes =
-                    max_snapshot_bytes.max(encode_snapshot(&published.snapshot).len());
+                    max_snapshot_bytes.max(encode_snapshot(&published.snapshot).unwrap().len());
                 if let Some(history) = published.history {
                     max_history_samples = max_history_samples.max(history.samples.len());
-                    max_history_bytes = max_history_bytes.max(encode_history(&history).len());
+                    max_history_bytes =
+                        max_history_bytes.max(encode_history(&history).unwrap().len());
                 }
             }
         }
+        assert!(submitted_actions > 10_000);
+        assert!(active_samples > 1_000);
+        assert!(max_actions <= 3_601, "action maximum was {max_actions}");
         assert!(authority.pending.len() <= MAX_PENDING_INPUTS);
         assert!(
             authority.network_history.len()
@@ -383,5 +434,26 @@ mod tests {
             max_history_bytes <= MAX_HISTORY_BYTES,
             "history maximum was {max_history_bytes}"
         );
+    }
+
+    #[test]
+    fn publication_payload_limit_accepts_boundary_and_rejects_overflow() {
+        assert_eq!(
+            bounded_payload(vec![0; MAX_SNAPSHOT_BYTES], MAX_SNAPSHOT_BYTES, "snapshot")
+                .unwrap()
+                .len(),
+            MAX_SNAPSHOT_BYTES
+        );
+        assert!(
+            bounded_payload(
+                vec![0; MAX_SNAPSHOT_BYTES + 1],
+                MAX_SNAPSHOT_BYTES,
+                "snapshot"
+            )
+            .is_err()
+        );
+        let mut oversized = snapshot(3);
+        oversized.sessions[0].session_id = "x".repeat(MAX_SNAPSHOT_BYTES + 1);
+        assert!(encode_snapshot(&oversized).is_err());
     }
 }

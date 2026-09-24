@@ -138,7 +138,10 @@ case "$command" in
     compose build authority web
     compose up -d --wait relay authority web
     authority_id=$(compose ps -q authority)
+    restart_count_before=$(docker inspect "$authority_id" --format '{{.RestartCount}}')
+    started_before=$(docker inspect "$authority_id" --format '{{.State.StartedAt}}')
     epoch_before=$(compose logs authority | sed -n 's/.*"room_epoch":"\([^"]*\)".*/\1/p' | head -1)
+    starts_before=$(compose logs authority | grep -c '"event":"authority_started"')
     test -n "$epoch_before"
     compose stop relay
     compose exec -T authority th-authority --healthcheck=live
@@ -152,7 +155,10 @@ case "$command" in
       attempts=$((attempts + 1)); test "$attempts" -lt 30; sleep 1
     done
     test "$(compose ps -q authority)" = "$authority_id"
-    epoch_after_relay=$(compose logs authority | sed -n 's/.*"room_epoch":"\([^"]*\)".*/\1/p' | head -1)
+    test "$(docker inspect "$authority_id" --format '{{.RestartCount}}')" = "$restart_count_before"
+    test "$(docker inspect "$authority_id" --format '{{.State.StartedAt}}')" = "$started_before"
+    test "$(compose logs authority | grep -c '"event":"authority_started"')" = "$starts_before"
+    epoch_after_relay=$(compose logs authority | sed -n 's/.*"room_epoch":"\([^"]*\)".*/\1/p' | tail -1)
     test "$epoch_after_relay" = "$epoch_before"
     compose restart authority
     attempts=0

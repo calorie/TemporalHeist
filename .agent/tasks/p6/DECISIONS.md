@@ -53,6 +53,15 @@ pending inputs, 128 replication frames, 660 ticks/221 retained network snapshots
 4,096-byte input frames, 64 KiB snapshots, and 2 MiB history chunks. Environment
 dependent CPU, RSS, and wall-clock duration remain diagnostics.
 
+Snapshot and history limits apply to the fully encoded protobuf before publication.
+An oversize frame ends only the replaceable MoQ session, is reported as a structured
+relay degradation, and enters the existing reconnect loop. The simulation process and
+epoch remain alive.
+
+The low-volume health endpoint deliberately handles connections serially with a 250 ms
+read/write deadline. This gives a fixed one-connection resource bound and prevents a
+slow partial request from blocking subsequent probes indefinitely.
+
 Release Rust builds use BuildKit registry and target caches qualified by the required
 agent/run ID. The binary is copied out before the runtime stage. This keeps concurrent
 worktree caches independent and avoids rebuilding every dependency after source edits.

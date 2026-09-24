@@ -67,18 +67,25 @@ resource bounds, and real two-browser restart recovery are complete.
   containers passed exact health, fixed UID/GID, read-only root, dropped capability,
   no-new-privileges, writable tmpfs, and forbidden tool/source absence checks.
 - Runtime contract RED rejected missing healthchecks, readiness, logging, and write
-  failure recovery. GREEN passed authority health coverage and a 216,000 virtual-tick
-  soak with at most 221 retained network samples, 1,024 pending inputs, 128 queued
-  replication frames, 64 KiB snapshots, and 2 MiB history chunks.
+  failure recovery. GREEN passed authority health coverage and an active two-player,
+  216,000 virtual-tick soak with 14,398 legal actions and sustained movement. It kept
+  at most 221 retained network samples, 1,024 pending inputs, 128 queued replication
+  frames, 64 KiB snapshots, and 2 MiB history chunks. Exact-boundary tests prove the
+  encoded payload limits reject oversize data before MoQ `write_frame`.
+- The health listener services one connection at a time and applies a 250 ms bound to
+  the complete read/write exchange. A slow-client test proves a partial request cannot
+  retain the listener indefinitely or create unbounded tasks.
 - `sh container p6-runtime-agent runtime-reliability` passed real fault injection:
   relay stop preserved liveness while readiness changed ready → unready → ready;
-  authority identity and epoch stayed fixed. Authority restart changed epoch, and
-  Docker SIGTERM logged `shutdown_complete` and exited within five seconds.
+  authority container RestartCount, StartedAt, `authority_started` count, process
+  identity, and epoch stayed fixed. Authority restart changed epoch, and Docker
+  SIGTERM logged `shutdown_complete` and exited within five seconds.
 - `sh container p6-runtime-agent runtime-browser-recovery` passed with two Chromium
   clients. Both reconnected without reload (`navigation` counts `[1,1]` and in-memory
   identities survived), kept the epoch, resumed ticks/movement, then discarded the old
-  Timeline/Temporal Bridge after authority restart, rejoined, readied, and reached
-  Active with zero page or renderer errors.
+  Timeline/Temporal Bridge after authority restart. Both clients produced a non-null
+  presentation for the new epoch with zero stale segments/pulses, rejoined, readied,
+  and reached Active with zero page or renderer errors.
 - Full `verify` passed fmt/clippy, 10 authority tests, 39 simulation tests, TypeScript,
   protocol, browser UX, and raw WebGPU SwiftShader checks. Fresh `acceptance` passed
   the complete two-client mission and Temporal Bridge agreement with zero errors.
