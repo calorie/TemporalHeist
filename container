@@ -12,6 +12,19 @@ if [ -d /Applications/Docker.app/Contents/Resources/bin ]; then
 fi
 TH_AGENT_ID="$agent_id"
 export TH_AGENT_ID
+release_metadata() {
+  TH_RELEASE_SOURCE=${TH_RELEASE_SOURCE:-https://github.com/calorie/TemporalHeist}
+  TH_RELEASE_REVISION=${TH_RELEASE_REVISION:-$(git rev-parse HEAD)}
+  short_revision=$(printf '%s' "$TH_RELEASE_REVISION" | cut -c1-12)
+  TH_RELEASE_VERSION=${TH_RELEASE_VERSION:-0.6.0-rc.1-$short_revision}
+  if [ -n "${SOURCE_DATE_EPOCH:-}" ] && [ -z "${TH_RELEASE_CREATED:-}" ]; then
+    echo 'TH_RELEASE_CREATED (RFC3339) is required when SOURCE_DATE_EPOCH is overridden' >&2
+    exit 2
+  fi
+  SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(git show -s --format=%ct "$TH_RELEASE_REVISION")}
+  TH_RELEASE_CREATED=${TH_RELEASE_CREATED:-$(git show -s --format=%cI "$TH_RELEASE_REVISION")}
+  export TH_RELEASE_SOURCE TH_RELEASE_REVISION TH_RELEASE_VERSION TH_RELEASE_CREATED SOURCE_DATE_EPOCH
+}
 BUILDX_CONFIG=${BUILDX_CONFIG:-/tmp/th-buildx-$agent_id}
 export BUILDX_CONFIG
 mkdir -p "$BUILDX_CONFIG"
@@ -33,22 +46,75 @@ case "$command" in
     compose run --rm dev sh containers/verify.sh
     ;;
   acceptance)
+    release_metadata
     compose pull --policy missing relay
     compose build authority web browser
     compose up -d relay authority web
     compose --profile test run --rm browser
     ;;
   visual)
+    release_metadata
     compose pull --policy missing relay
     compose build authority web visual-browser-a visual-browser-b
     compose --profile visual up -d relay authority web visual-browser-a visual-browser-b
+    for service in visual-browser-a visual-browser-b; do
+      compose exec -T "$service" sh -c '
+        attempts=0
+        until wget -qO- http://127.0.0.1:6080/vnc.html 2>/dev/null | grep -q noVNC; do
+          attempts=$((attempts + 1))
+          test "$attempts" -lt 30
+          sleep 1
+        done
+      '
+    done
     compose exec -T visual-browser-a node containers/visual-browser-check.mjs
     compose exec -T visual-browser-b node containers/visual-browser-check.mjs
-    published_a=$(compose port visual-browser-a 9222)
-    published_b=$(compose port visual-browser-b 9222)
-    echo "Chromium A CDP: http://$published_a/json/list"
-    echo "Chromium B CDP: http://$published_b/json/list"
+    published_a=$(compose port visual-browser-a 6080)
+    published_b=$(compose port visual-browser-b 6080)
+    echo "Player A noVNC: http://$published_a/vnc.html?autoconnect=1&resize=scale"
+    echo "Player B noVNC: http://$published_b/vnc.html?autoconnect=1&resize=scale"
     echo "Cleanup: sh container $agent_id down --volumes --remove-orphans"
+    ;;
+  release-build)
+    release_metadata
+    compose build authority web
+    ;;
+  release-inspect)
+    release_metadata
+    manifest=${TH_RELEASE_MANIFEST:-.release/$agent_id/manifest.json}
+    mkdir -p "$(dirname "$manifest")"
+    authority_image="temporal-heist-authority:$TH_RELEASE_VERSION"
+    web_image="temporal-heist-web:$TH_RELEASE_VERSION"
+    sh containers/assert-release-images.sh
+    {
+      printf '{"schemaVersion":1,"sourceSha":"%s","version":"%s","created":"%s","images":[' \
+        "$TH_RELEASE_REVISION" "$TH_RELEASE_VERSION" "$TH_RELEASE_CREATED"
+      docker image inspect "$authority_image" --format '{"role":"authority","reference":"'"$authority_image"'","id":{{json .Id}},"repoDigests":{{json .RepoDigests}},"size":{{json .Size}},"labels":{{json .Config.Labels}}}'
+      printf ','
+      docker image inspect "$web_image" --format '{"role":"web","reference":"'"$web_image"'","id":{{json .Id}},"repoDigests":{{json .RepoDigests}},"size":{{json .Size}},"labels":{{json .Config.Labels}}}'
+      printf ']}\n'
+    } >"$manifest"
+    printf '%s\n' "$manifest"
+    ;;
+  release-smoke)
+    release_metadata
+    compose pull --policy missing relay
+    compose build authority web
+    compose up -d relay authority web
+    compose exec -T web wget -qO- http://127.0.0.1:5173/healthz | grep -qx ok
+    if compose exec -T web wget -qO- http://127.0.0.1:5173/healthz/ >/dev/null 2>&1; then
+      echo '/healthz/ must not use the SPA fallback' >&2
+      exit 1
+    fi
+    test "$(compose exec -T web id -u)" = 101
+    test "$(compose exec -T authority id -u)" = 65532
+    for service in authority web; do
+      container_id=$(compose ps -q "$service")
+      test "$(docker inspect "$container_id" --format '{{.HostConfig.ReadonlyRootfs}}')" = true
+      docker inspect "$container_id" --format '{{json .HostConfig.CapDrop}}' | grep -q 'ALL'
+      docker inspect "$container_id" --format '{{json .HostConfig.SecurityOpt}}' | grep -q 'no-new-privileges'
+    done
+    sh containers/assert-release-images.sh
     ;;
   down)
     shift

@@ -10,6 +10,8 @@ sh container <run-id> bootstrap
 sh container <run-id> verify
 sh container <run-id> acceptance
 sh container <run-id> visual
+sh container <run-id> release-build
+sh container <run-id> release-inspect
 sh containers/verify-two-stack-isolation.sh <worktree-a> <run-a> <worktree-b> <run-b> [evidence-dir]
 sh container <run-id> up -d relay authority web
 sh container <run-id> --profile test run --rm browser
@@ -36,6 +38,15 @@ browser services, verifies disjoint Compose resources and no host ports, tears o
 project down with volumes, and checks that the other project and its in-network
 health remain intact. It writes JSON evidence and acceptance logs outside both
 worktrees.
+
+`release-build` creates `temporal-heist-authority:<version>` and
+`temporal-heist-web:<version>` from locked sources with OCI provenance labels.
+`release-inspect` writes `.release/<run-id>/manifest.json` with their immutable
+config IDs, optional repository digests, sizes, labels, and source SHA. Set
+`TH_RELEASE_VERSION`, `TH_RELEASE_CREATED`, and `SOURCE_DATE_EPOCH` explicitly for
+a named release; otherwise metadata is derived reproducibly from the Git commit.
+`visual` exposes each container-owned headed Chromium through a distinct ephemeral
+loopback noVNC URL. A host browser is only the remote display client.
 
 ## Dependency / toolchain
 

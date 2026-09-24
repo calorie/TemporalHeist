@@ -24,7 +24,7 @@ await new Promise((resolve, reject) => {
 
 const context = await chromium.launchPersistentContext('/browser-profile', {
   channel: 'chromium',
-  headless: true,
+  headless: false,
   viewport,
   deviceScaleFactor: 1,
   args: [

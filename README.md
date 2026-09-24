@@ -20,11 +20,11 @@ MoQ is intentionally isolated behind application adapters. The game domain must 
 
 Repository-wide durable facts are in `.agentic/PROJECT.md`.
 
-The P3 vault data heist task is:
+The active P6 local demo Release Candidate task is:
 
-- `.agent/tasks/p3/SPEC.md` — complete mission acceptance criteria.
-- `.agent/tasks/p3/DECISIONS.md` — authority, theft, and presentation decisions.
-- `.agent/tasks/p3/STATE.md` — release verification evidence and remaining review items.
+- `.agent/tasks/p6/SPEC.md` — release acceptance criteria.
+- `.agent/tasks/p6/DECISIONS.md` — release boundary and durable decisions.
+- `.agent/tasks/p6/STATE.md` — implementation and verification status.
 
 Supporting design documents:
 
@@ -45,7 +45,7 @@ codex plugin add agentic-engineering@agentic-engineering
 
 Then start Codex in this repository and give it this objective:
 
-> Read `.agentic/PROJECT.md`, `.agent/tasks/p3/{SPEC,STATE,DECISIONS}.md`, and the gameplay, architecture, and protocol docs. Continue from the recorded release state, maintaining durable verification evidence. Resolve reversible engineering choices autonomously.
+> Read `.agentic/PROJECT.md`, `.agent/tasks/p6/{SPEC,STATE,DECISIONS}.md`, and the gameplay, architecture, protocol, and container docs. Continue from the recorded release state, maintaining durable verification evidence. Resolve reversible engineering choices autonomously.
 
 Codex should choose its own effort, subagent use, worktrees, verification strategy, and PR topology according to `AGENTS.md`; the user should not need to orchestrate agents.
 
@@ -74,7 +74,8 @@ authority, browser, and raw WebGPU path.
 
 ## Status
 
-P0–P2 are complete; P3 adds the live vault theft to the verified mission loop.
+P0–P4 and the WebGPU Temporal Bridge are complete. P6 packages that game as a
+reproducible, hardened local/container demo Release Candidate.
 Bootstrap and run every project command through the container wrapper:
 
 ~~~sh
@@ -82,6 +83,8 @@ sh container local bootstrap
 sh container local verify
 sh container local acceptance
 sh container local visual
+sh container local release-build
+sh container local release-inspect
 sh container local down --volumes --remove-orphans
 ~~~
 
@@ -106,11 +109,10 @@ Chromium clients. It records JSON evidence and both client screenshots in that r
 private `artifacts` volume. Use a different lowercase run ID for each checkout or
 concurrent stack.
 
-`visual` starts separate container-owned Chromium A/B services with independent
-profiles and prints two ephemeral loopback Chrome DevTools Protocol (CDP)
-endpoints. Open `chrome://inspect`, add either printed `127.0.0.1:<port>` target,
-and select **inspect**. Both Chromium services, profiles, and ports belong only to
-that run ID.
+`visual` starts separate container-owned headed Chromium A/B services with independent
+profiles and prints two ephemeral loopback noVNC URLs. Open those URLs in any host
+browser to view and control the container display. The host browser is only a remote
+display client; Chromium, WebGPU, profiles, and game networking remain in containers.
 
 To prove release isolation with two distinct checkouts, run the production acceptance
 flow concurrently through the host-side Docker orchestrator:

@@ -15,5 +15,6 @@ target/
 dist/
 test-results/
 playwright-report/
+.release/
 spikes/protocol/compiled/
 spikes/protocol/generated/
