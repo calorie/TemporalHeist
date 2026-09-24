@@ -32,5 +32,6 @@ node tests/renderer-gpu.mjs
 node tests/isolation-harness-contract.mjs
 node tests/stacked-ci-contract.mjs
 node tests/release-artifact-contract.mjs
+node tests/runtime-reliability-contract.mjs
 npx vite build apps/web
 node tests/browser-ux.mjs

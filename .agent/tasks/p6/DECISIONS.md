@@ -38,3 +38,24 @@ Release commands reject tracked or untracked changes in the build context. Runti
 image references use `<run-id>-<version>` while the OCI version label keeps the
 friendly release version. This binds recorded HEAD provenance to clean inputs and
 prevents worktrees at the same commit from racing on a shared local tag.
+
+## 2026-09-24 — Runtime lifecycle
+
+Authority liveness means its process and health server can respond. Readiness means
+the current authority publication session is connected to the relay. A relay outage
+therefore changes readiness without ending the simulation or changing `room_epoch`;
+the MoQ session is replaceable and retries in-process. Restarting the authority
+process creates a fresh epoch, which the existing client Timeline treats as a hard
+boundary and uses to clear canonical and Temporal Bridge history.
+
+Resource release gates use deterministic capacity and encoded-size limits: 1,024
+pending inputs, 128 replication frames, 660 ticks/221 retained network snapshots,
+4,096-byte input frames, 64 KiB snapshots, and 2 MiB history chunks. Environment
+dependent CPU, RSS, and wall-clock duration remain diagnostics.
+
+Release Rust builds use BuildKit registry and target caches qualified by the required
+agent/run ID. The binary is copied out before the runtime stage. This keeps concurrent
+worktree caches independent and avoids rebuilding every dependency after source edits.
+
+Acceptance force-recreates and health-waits relay, authority, and web so each run is
+independent of mutable state left by visual, recovery, or earlier acceptance runs.

@@ -2,9 +2,10 @@
 
 ## Status
 
-Artifact-contract layer is implemented and locally verified from main `5d974a9`.
-Named hardened release images, provenance manifest, exact web health, and headed
-noVNC play surfaces are ready for review. Runtime reliability remains unstarted.
+Artifact-contract and runtime-reliability layers are implemented and container-verified.
+Authority health/readiness, structured lifecycle logs, bounded shutdown, reconnecting
+MoQ sessions, browser write-failure recovery, Compose health ordering, deterministic
+resource bounds, and real two-browser restart recovery are complete.
 
 ## Review stack
 
@@ -65,8 +66,28 @@ noVNC play surfaces are ready for review. Runtime reliability remains unstarted.
   immutable IDs/digests/sizes/labels, and the exact clean source SHA. Runtime
   containers passed exact health, fixed UID/GID, read-only root, dropped capability,
   no-new-privileges, writable tmpfs, and forbidden tool/source absence checks.
+- Runtime contract RED rejected missing healthchecks, readiness, logging, and write
+  failure recovery. GREEN passed authority health coverage and a 216,000 virtual-tick
+  soak with at most 221 retained network samples, 1,024 pending inputs, 128 queued
+  replication frames, 64 KiB snapshots, and 2 MiB history chunks.
+- `sh container p6-runtime-agent runtime-reliability` passed real fault injection:
+  relay stop preserved liveness while readiness changed ready → unready → ready;
+  authority identity and epoch stayed fixed. Authority restart changed epoch, and
+  Docker SIGTERM logged `shutdown_complete` and exited within five seconds.
+- `sh container p6-runtime-agent runtime-browser-recovery` passed with two Chromium
+  clients. Both reconnected without reload (`navigation` counts `[1,1]` and in-memory
+  identities survived), kept the epoch, resumed ticks/movement, then discarded the old
+  Timeline/Temporal Bridge after authority restart, rejoined, readied, and reached
+  Active with zero page or renderer errors.
+- Full `verify` passed fmt/clippy, 10 authority tests, 39 simulation tests, TypeScript,
+  protocol, browser UX, and raw WebGPU SwiftShader checks. Fresh `acceptance` passed
+  the complete two-client mission and Temporal Bridge agreement with zero errors.
+- Acceptance initially reused Active state left by recovery and failed its Lobby
+  precondition. It now force-recreates and health-waits the runtime. Agent-qualified
+  BuildKit Cargo caches reduced a source-only authority rebuild from more than four
+  minutes to 31 seconds; unchanged builds are cache hits.
 
 ## Next action
 
-Open the artifact-contract base PR, then branch `p6/runtime-reliability` on this
-verified contract without waiting for the base PR to merge.
+Commit and review runtime reliability, then implement clean-checkout soak, CI evidence
+upload, and scheduled two-stack isolation in the release-evidence layer.

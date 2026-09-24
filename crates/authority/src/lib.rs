@@ -13,6 +13,9 @@ pub const NETWORK_HISTORY_TICKS: u64 = 660;
 pub const GROUP_INTERVAL_TICKS: u64 = TICK_RATE;
 pub const TRACK_RETENTION: Duration = Duration::from_secs(30);
 pub const MAX_PENDING_INPUTS: usize = 1024;
+pub const OUTPUT_QUEUE_CAPACITY: usize = 128;
+pub const MAX_SNAPSHOT_BYTES: usize = 64 * 1024;
+pub const MAX_HISTORY_BYTES: usize = 2 * 1024 * 1024;
 
 static EPOCH_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -348,5 +351,37 @@ mod tests {
         assert_eq!(samples.front().unwrap().server_tick, 240);
         assert_eq!(samples.back().unwrap().server_tick, 900);
         assert_eq!(samples.len(), 221);
+    }
+
+    #[test]
+    fn six_hour_virtual_soak_keeps_resources_and_payloads_bounded() {
+        let mut authority = Authority::new("soak-epoch".into());
+        let mut max_history_samples = 0;
+        let mut max_snapshot_bytes = 0;
+        let mut max_history_bytes = 0;
+        for _ in 0..216_000 {
+            if let Some(published) = authority.tick() {
+                max_snapshot_bytes =
+                    max_snapshot_bytes.max(encode_snapshot(&published.snapshot).len());
+                if let Some(history) = published.history {
+                    max_history_samples = max_history_samples.max(history.samples.len());
+                    max_history_bytes = max_history_bytes.max(encode_history(&history).len());
+                }
+            }
+        }
+        assert!(authority.pending.len() <= MAX_PENDING_INPUTS);
+        assert!(
+            authority.network_history.len()
+                <= NETWORK_HISTORY_TICKS as usize / SNAPSHOT_INTERVAL_TICKS as usize + 1
+        );
+        assert!(max_history_samples <= 221);
+        assert!(
+            max_snapshot_bytes <= MAX_SNAPSHOT_BYTES,
+            "snapshot maximum was {max_snapshot_bytes}"
+        );
+        assert!(
+            max_history_bytes <= MAX_HISTORY_BYTES,
+            "history maximum was {max_history_bytes}"
+        );
     }
 }

@@ -136,7 +136,8 @@ function handlers(generation: number) {
     },
     error: (error: unknown) => {
       if (generation !== transportGeneration) return;
-      recordError(error);
+      const message = error instanceof Error ? error.message : String(error);
+      setState(`degraded: ${message}`);
       scheduleReconnect();
     },
   };
@@ -158,7 +159,8 @@ async function reconnect() {
     await next.connect(relay, room, playerId);
   } catch (error) {
     if (generation === transportGeneration) {
-      recordError(error);
+      const message = error instanceof Error ? error.message : String(error);
+      setState(`degraded: ${message}`);
       scheduleReconnect(1000);
     }
   } finally {
