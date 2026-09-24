@@ -3,6 +3,10 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
 const workflow = await readFile('.github/workflows/vertical-slice.yml', 'utf8');
+assert.match(workflow, /github\.event_name.*github\.ref/,
+  'CI concurrency must separate manual, scheduled, release, PR, and push runs');
+assert.match(workflow, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \|\| github\.event_name == 'push' \}\}/,
+  'manual and scheduled RC runs must not cancel each other');
 const pullRequest = workflow.match(/^  pull_request:\n((?:^ {4,}.*\n|^\n)*)/m)?.[1];
 const activityTypes = pullRequest?.match(/^    types: \[([^\]]+)\]$/m)?.[1].split(/,\s*/);
 assert.ok(activityTypes?.includes('labeled'), 'adding component-only must re-evaluate acceptance');

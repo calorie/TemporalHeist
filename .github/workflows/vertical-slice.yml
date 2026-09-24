@@ -15,8 +15,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: vertical-slice-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: vertical-slice-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
   component-verification:

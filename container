@@ -220,20 +220,41 @@ case "$command" in
     cat "$evidence_dir/webgpu.log"
     ;;
   release-evidence)
-    require_clean_release_context
     release_metadata
     evidence_dir=.release/$agent_id
-    mkdir -p "$evidence_dir"
-    finalize_release_evidence() {
+    evidence_complete=0
+    capture_release_metadata() {
       compose config --format json >"$evidence_dir/compose-config.json" 2>/dev/null || true
       compose ps --all --format json >"$evidence_dir/compose-resources.json" 2>/dev/null || true
       compose logs --no-color --no-log-prefix authority >"$evidence_dir/authority-lifecycle.jsonl" 2>/dev/null || true
+    }
+    best_effort_release_export() {
       mkdir -p "$evidence_dir/artifacts"
       compose --profile test run --rm --no-deps \
         -v "$(pwd)/$evidence_dir/artifacts:/evidence" browser \
         sh -c 'cp -R /artifacts/. /evidence/ 2>/dev/null || true' >/dev/null 2>&1 || true
     }
-    trap finalize_release_evidence EXIT HUP INT TERM
+    strict_release_export() {
+      mkdir -p "$evidence_dir/artifacts"
+      compose --profile test run --rm --no-deps --entrypoint sh \
+        -v "$(pwd)/$evidence_dir/artifacts:/evidence" browser \
+        -c 'find /evidence -mindepth 1 -delete && cp -R /artifacts/. /evidence/'
+    }
+    finish_release_evidence() {
+      if [ "$evidence_complete" -eq 0 ]; then
+        capture_release_metadata
+        compose run --rm dev rm -f "/workspace/$evidence_dir/index.json" >/dev/null 2>&1 || true
+        best_effort_release_export
+      fi
+    }
+    trap finish_release_evidence EXIT HUP INT TERM
+    compose build dev
+    compose run --rm dev sh -c '
+      rm -rf "/workspace/.release/$TH_AGENT_ID"
+      mkdir -p "/workspace/.release/$TH_AGENT_ID"
+      find /artifacts -mindepth 1 -delete
+    '
+    require_clean_release_context
     sh "$0" "$agent_id" release-build
     TH_RELEASE_MANIFEST="$evidence_dir/manifest.json" sh "$0" "$agent_id" release-inspect
     sh "$0" "$agent_id" release-smoke
@@ -241,8 +262,10 @@ case "$command" in
     sh "$0" "$agent_id" acceptance
     sh "$0" "$agent_id" runtime-reliability >"$evidence_dir/runtime-reliability.log" 2>&1
     sh "$0" "$agent_id" runtime-browser-recovery >"$evidence_dir/runtime-browser-recovery.log" 2>&1
-    finalize_release_evidence
+    capture_release_metadata
+    strict_release_export
     TH_EVIDENCE_DIR="/workspace/$evidence_dir" compose run --rm dev node containers/evidence-index.mjs
+    evidence_complete=1
     trap - EXIT HUP INT TERM
     printf '%s\n' "$evidence_dir/index.json"
     ;;
@@ -253,6 +276,12 @@ case "$command" in
     worktree_a=$worktree_root/a
     worktree_b=$worktree_root/b
     cleanup_worktrees() {
+      if [ -e "$worktree_a/.git" ]; then
+        (cd "$worktree_a" && sh container "$agent_id-a" down --volumes --remove-orphans) >/dev/null 2>&1 || true
+      fi
+      if [ -e "$worktree_b/.git" ]; then
+        (cd "$worktree_b" && sh container "$agent_id-b" down --volumes --remove-orphans) >/dev/null 2>&1 || true
+      fi
       git worktree remove --force "$worktree_a" >/dev/null 2>&1 || true
       git worktree remove --force "$worktree_b" >/dev/null 2>&1 || true
     }

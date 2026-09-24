@@ -24,5 +24,9 @@ assert.match(harness, /"worktrees": \[/);
 assert.match(harness, /stackBDisplayAfterARemoval/);
 assert.match(harness, /visual-a\.log/);
 assert.match(harness, /visual-b\.log/);
+assert.match(harness, /artifactsA/);
+assert.match(harness, /artifactsB/);
+assert.match(harness, /export_visual_artifacts compose_a/);
+assert.match(harness, /export_visual_artifacts compose_b/);
 
 console.log('Two-stack isolation harness contract passed');

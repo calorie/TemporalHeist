@@ -24,8 +24,9 @@ async function filesUnder(root) {
 }
 
 const release = await json(`${outputDir}/manifest.json`);
-const e2ePath = `/artifacts/e2e-${runId}/evidence.json`;
-const rendererPath = `/artifacts/renderer-gpu-${runId}/evidence.json`;
+const artifactRoot = `${outputDir}/artifacts`;
+const e2ePath = `${artifactRoot}/e2e-${runId}/evidence.json`;
+const rendererPath = `${artifactRoot}/renderer-gpu-${runId}/evidence.json`;
 const [e2e, renderer] = await Promise.all([json(e2ePath), json(rendererPath)]);
 const soakLog = await readFile(`${outputDir}/soak.log`, 'utf8');
 const soakLine = soakLog.split('\n').find((line) => line.includes('SOAK_EVIDENCE '));
@@ -37,11 +38,11 @@ assert(e2e.renderers.every(({ backend, adapter }) => backend === 'webgpu' && ada
 assert(e2e.errors.every((errors) => errors.length === 0));
 assert(e2e.browserErrors.every((errors) => errors.length === 0));
 
-const artifactFiles = await filesUnder('/artifacts');
+const artifactFiles = await filesUnder(artifactRoot);
 const artifactPaths = [];
 for (const file of artifactFiles) {
   const info = await stat(file);
-  artifactPaths.push({ path: file.replace('/artifacts/', 'artifacts/'), bytes: info.size });
+  artifactPaths.push({ path: path.relative(outputDir, file), bytes: info.size });
 }
 
 const index = {

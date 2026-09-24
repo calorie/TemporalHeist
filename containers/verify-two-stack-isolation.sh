@@ -13,7 +13,8 @@ head_a=$(git -C "$worktree_a" rev-parse HEAD); head_b=$(git -C "$worktree_b" rev
 [ -z "$(git -C "$worktree_a" status --porcelain)" ]; [ -z "$(git -C "$worktree_b" status --porcelain)" ]
 if [ -d /Applications/Docker.app/Contents/Resources/bin ]; then PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"; export PATH; fi
 project_a=th-$run_a; project_b=th-$run_b
-mkdir -p "$evidence_dir"; log_a=$evidence_dir/visual-a.log; log_b=$evidence_dir/visual-b.log
+mkdir -p "$evidence_dir"; evidence_dir=$(cd "$evidence_dir" && pwd -P)
+log_a=$evidence_dir/visual-a.log; log_b=$evidence_dir/visual-b.log
 compose_a() { (cd "$worktree_a" && sh container "$run_a" "$@"); }
 compose_b() { (cd "$worktree_b" && sh container "$run_b" "$@"); }
 pid_a=; pid_b=
@@ -36,6 +37,17 @@ published_ports() {
   done | sort
 }
 json_array() { result=''; for value in $1; do [ -z "$result" ] || result="$result,"; result="$result\"$value\""; done; printf '[%s]' "$result"; }
+export_visual_artifacts() {
+  compose_command=$1; export_run_id=$2; destination=$3
+  mkdir -p "$destination"
+  "$compose_command" --profile visual run --rm --no-deps --entrypoint sh \
+    -v "$destination:/evidence" visual-browser-a \
+    -c 'find /evidence -mindepth 1 -delete && cp -R /artifacts/. /evidence/' >/dev/null
+  for player in 1 2; do
+    test -s "$destination/visual-$export_run_id/player-$player-lobby.png"
+    test -s "$destination/visual-$export_run_id/player-$player-metadata.json"
+  done
+}
 
 (compose_a visual >"$log_a" 2>&1) & pid_a=$!
 (compose_b visual >"$log_b" 2>&1) & pid_b=$!
@@ -43,6 +55,10 @@ status_a=0; status_b=0
 wait "$pid_a" || status_a=$?; pid_a=
 wait "$pid_b" || status_b=$?; pid_b=
 [ "$status_a" -eq 0 ] && [ "$status_b" -eq 0 ] || { echo "Visual stack failed (A=$status_a B=$status_b); see $evidence_dir" >&2; exit 1; }
+export_visual_artifacts compose_a "$run_a" "$evidence_dir/artifacts/$run_a"
+export_visual_artifacts compose_b "$run_b" "$evidence_dir/artifacts/$run_b"
+artifacts_a=$(cd "$evidence_dir" && find "artifacts/$run_a" -type f | sort)
+artifacts_b=$(cd "$evidence_dir" && find "artifacts/$run_b" -type f | sort)
 for project in "$project_a" "$project_b"; do
   for service in relay authority web visual-browser-a visual-browser-b; do
     [ -n "$(service_id "$project" "$service")" ] || { echo "Missing $project service=$service" >&2; exit 1; }
@@ -82,6 +98,8 @@ cat >"$evidence_dir/manifest.json" <<EOF_JSON
   "publishedPortsB": $(json_array "$published_ports_b"),
   "browserProfiles": ["${project_a}_visual-profile-a","${project_a}_visual-profile-b","${project_b}_visual-profile-a","${project_b}_visual-profile-b"],
   "artifactLogs": ["visual-a.log", "visual-b.log"],
+  "artifactsA": $(json_array "$artifacts_a"),
+  "artifactsB": $(json_array "$artifacts_b"),
   "stackARemovedWithVolumes": true,
   "stackBResourceIdsPreserved": true,
   "stackBDisplayAfterARemoval": "$stack_b_display_after_a_removal"
