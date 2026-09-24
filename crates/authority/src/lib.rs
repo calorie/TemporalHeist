@@ -378,7 +378,7 @@ mod tests {
                     InputKind::Join
                 } else if tick == 1 {
                     InputKind::Ready
-                } else if tick % 30 == 0 {
+                } else if tick >= 300 && tick % 300 == 0 {
                     submitted_actions += 1;
                     InputKind::Action
                 } else {
@@ -390,10 +390,20 @@ mod tests {
                     player_id,
                     session_id: format!("soak-{player_id}"),
                     sequence: sequence[index],
-                    move_x: if tick % 120 < 60 { 250 } else { -250 },
-                    move_z: 0,
+                    move_x: if tick < 19 {
+                        1000
+                    } else if tick % 60 < 30 {
+                        250
+                    } else {
+                        -250
+                    },
+                    move_z: if tick < if player_id == 1 { 60 } else { 36 } {
+                        1000
+                    } else {
+                        0
+                    },
                     kind: kind as i32,
-                    target_id: if kind == InputKind::Action { 61 } else { 0 },
+                    target_id: if kind == InputKind::Action { 31 } else { 0 },
                 }
                 .encode_to_vec();
                 authority.accept_frame(&frame).unwrap();
@@ -417,9 +427,10 @@ mod tests {
                 }
             }
         }
-        assert!(submitted_actions > 10_000);
+        assert!(submitted_actions > 1_000);
         assert!(active_samples > 1_000);
-        assert!(max_actions <= 3_601, "action maximum was {max_actions}");
+        assert!(max_actions >= 40, "action maximum was only {max_actions}");
+        assert!(max_actions <= 50, "action maximum was {max_actions}");
         assert!(authority.pending.len() <= MAX_PENDING_INPUTS);
         assert!(
             authority.network_history.len()

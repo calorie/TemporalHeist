@@ -68,7 +68,9 @@ resource bounds, and real two-browser restart recovery are complete.
   no-new-privileges, writable tmpfs, and forbidden tool/source absence checks.
 - Runtime contract RED rejected missing healthchecks, readiness, logging, and write
   failure recovery. GREEN passed authority health coverage and an active two-player,
-  216,000 virtual-tick soak with 14,398 legal actions and sustained movement. It kept
+  216,000 virtual-tick soak with 1,438 accepted terminal actions and sustained legal
+  movement. Both players move into terminal 31 range before acting; retained live and
+  Echo actions reach 40–50 entries rather than remaining empty. The soak kept
   at most 221 retained network samples, 1,024 pending inputs, 128 queued replication
   frames, 64 KiB snapshots, and 2 MiB history chunks. Exact-boundary tests prove the
   encoded payload limits reject oversize data before MoQ `write_frame`.
