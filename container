@@ -219,9 +219,27 @@ case "$command" in
     cat "$evidence_dir/soak.log"
     cat "$evidence_dir/webgpu.log"
     ;;
+  release-evidence-permissions-probe)
+    probe_dir=.release/.permissions-probe-$agent_id
+    rm -rf "$probe_dir"
+    mkdir -p "$probe_dir"
+    compose build dev
+    compose run --rm dev sh -c '
+      mkdir -p "/workspace/.release/.permissions-probe-$TH_AGENT_ID/stale"
+      touch "/workspace/.release/.permissions-probe-$TH_AGENT_ID/stale/root-owned"
+      find "/workspace/.release/.permissions-probe-$TH_AGENT_ID" -mindepth 1 -delete
+    '
+    printf '{"result":"host-write-passed"}\n' >"$probe_dir/manifest.json"
+    printf 'host redirect passed\n' >"$probe_dir/probe.log"
+    test -s "$probe_dir/manifest.json"
+    test -s "$probe_dir/probe.log"
+    rm -rf "$probe_dir"
+    printf '%s\n' 'Release evidence host-write permissions probe passed'
+    ;;
   release-evidence)
     release_metadata
     evidence_dir=.release/$agent_id
+    mkdir -p "$evidence_dir"
     evidence_complete=0
     capture_release_metadata() {
       compose config --format json >"$evidence_dir/compose-config.json" 2>/dev/null || true
@@ -249,9 +267,8 @@ case "$command" in
     }
     trap finish_release_evidence EXIT HUP INT TERM
     compose build dev
-    compose run --rm dev sh -c '
-      rm -rf "/workspace/.release/$TH_AGENT_ID"
-      mkdir -p "/workspace/.release/$TH_AGENT_ID"
+    compose run --rm -e TH_EVIDENCE_DIR="/workspace/$evidence_dir" dev sh -c '
+      find "$TH_EVIDENCE_DIR" -mindepth 1 -delete
       find /artifacts -mindepth 1 -delete
     '
     require_clean_release_context

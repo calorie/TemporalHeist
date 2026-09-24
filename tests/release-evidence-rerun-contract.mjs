@@ -5,14 +5,19 @@ const wrapper = await readFile('container', 'utf8');
 const indexer = await readFile('containers/evidence-index.mjs', 'utf8');
 const releaseCase = wrapper.slice(wrapper.indexOf('\n  release-evidence)'), wrapper.indexOf('\n  two-stack-isolation)'));
 
-const resetHost = releaseCase.indexOf('rm -rf "/workspace/.release/$TH_AGENT_ID"');
+const createHostDir = releaseCase.indexOf('mkdir -p "$evidence_dir"');
+const resetHost = releaseCase.indexOf('find "$TH_EVIDENCE_DIR" -mindepth 1 -delete');
 const resetVolume = releaseCase.indexOf('find /artifacts -mindepth 1 -delete');
 const firstReleaseStep = releaseCase.indexOf('release-build');
 const cleanCheck = releaseCase.lastIndexOf('require_clean_release_context');
-assert(resetHost >= 0 && resetHost < firstReleaseStep, 'stale host evidence must be cleared first');
+assert(createHostDir >= 0 && createHostDir < resetHost,
+  'the host runner must own the evidence directory before a container clears its contents');
+assert(resetHost >= 0 && resetHost < firstReleaseStep, 'stale host evidence contents must be cleared first');
 assert(resetVolume >= 0 && resetVolume < firstReleaseStep, 'stale volume evidence must be cleared first');
 assert(resetHost < cleanCheck && resetVolume < cleanCheck,
   'even a dirty-context failure must not retain an earlier passed index');
+assert.doesNotMatch(releaseCase, /rm -rf "\/workspace\/\.release\/\$TH_AGENT_ID"/,
+  'a root container must not replace the host-owned bind mount directory');
 
 const strictExport = releaseCase.indexOf('strict_release_export');
 const buildIndex = releaseCase.lastIndexOf('evidence-index.mjs');

@@ -13,8 +13,14 @@ assert.match(wrapper, /evidence-index\.mjs/);
 assert.match(wrapper, /compose config --format json/);
 assert.match(wrapper, /runtime-browser-recovery/);
 assert.match(wrapper, /runtime-reliability/);
-assert.match(wrapper, /rm -rf "\/workspace\/\.release\/\$TH_AGENT_ID"/,
-  'reruns must clear stale host evidence before work starts');
+assert.match(wrapper, /mkdir -p "\$evidence_dir"/,
+  'the host runner must create the evidence directory');
+assert.match(wrapper, /-e TH_EVIDENCE_DIR="\/workspace\/\$evidence_dir"[\s\S]*find "\$TH_EVIDENCE_DIR" -mindepth 1 -delete/,
+  'reruns must clear stale host evidence contents before work starts');
+assert.doesNotMatch(wrapper, /rm -rf "\/workspace\/\.release\/\$TH_AGENT_ID"/,
+  'a root container must not replace the host-owned evidence directory');
+assert.match(wrapper, /release-evidence-permissions-probe\)/,
+  'a practical host-write permissions probe is required');
 assert.match(wrapper, /find \/artifacts -mindepth 1 -delete/,
   'reruns must clear the private artifact volume');
 assert.match(wrapper, /evidence_complete=0/);

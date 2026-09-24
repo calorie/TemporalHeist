@@ -273,7 +273,10 @@ sh container <run-id> release-evidence
 ~~~
 
 Every attempt first clears that run's private artifact volume and ignored host
-evidence directory. A successful attempt strictly exports the volume, builds the
+evidence directory contents. The host runner creates and retains ownership of the
+directory itself; a root container must never delete and recreate that bind-mount
+root. Verify this Linux CI invariant with
+`sh container <run-id> release-evidence-permissions-probe`. A successful attempt strictly exports the volume, builds the
 schema-v1 index from the exported tree, and writes
 `.release/<run-id>/index.json` only after every required export passes. A failed attempt may export partial
 diagnostics on a best-effort basis, but must not retain a prior `passed` index.

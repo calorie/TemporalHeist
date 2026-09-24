@@ -12,6 +12,7 @@ sh container <run-id> acceptance
 sh container <run-id> visual
 sh container <run-id> release-build
 sh container <run-id> release-inspect
+sh container <run-id> release-evidence-permissions-probe
 sh container <run-id> release-evidence
 sh container <run-id> two-stack-isolation
 sh container <run-id> up -d relay authority web
@@ -60,6 +61,9 @@ writes `.release/<run-id>/index.json` plus image provenance, Compose metadata,
 structured lifecycle logs, WebGPU adapter/backend details, screenshots, and traces.
 CI uses the same entry point for release, manual, and weekly scheduled runs and
 uploads evidence before removing the isolated stack.
+`release-evidence-permissions-probe` creates the evidence directory as the host
+runner, clears root-owned stale contents from a container, then proves the host can
+redirect fresh manifest and log files. This guards Linux CI bind-mount ownership.
 
 ## Dependency / toolchain
 
