@@ -59,8 +59,12 @@ noVNC play surfaces are ready for review. Runtime reliability remains unstarted.
   suite. `visual` completed A/B RFB 3.8 handshakes, found both Temporal Heist targets,
   and reported SwiftShader WebGPU on ephemeral loopback ports `61630` and `61629`.
   Killing websockify made the bounded display checker fail as required. A dirty-tree
-  `release-build` was rejected before any image build. Clean release build/inspect/
-  smoke remains the final post-commit verification.
+  `release-build` was rejected before any image build.
+- Clean commit `010f0b8` passed `release-build`, `release-inspect`, and
+  `release-smoke`. The schema-v1 manifest recorded run-qualified references,
+  immutable IDs/digests/sizes/labels, and the exact clean source SHA. Runtime
+  containers passed exact health, fixed UID/GID, read-only root, dropped capability,
+  no-new-privileges, writable tmpfs, and forbidden tool/source absence checks.
 
 ## Next action
 
