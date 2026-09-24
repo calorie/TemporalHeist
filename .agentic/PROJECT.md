@@ -101,6 +101,12 @@ handshake through the noVNC WebSocket before printing URLs.
   Track/subscription retention must be explicit (at least 30 seconds); the library
   default is shorter than the Echo delay. Gameplay correctness never depends on
   relay retention alone.
+- `sh container <run-id> runtime-reliability` builds the release runtime and verifies
+  authority liveness/readiness transitions, relay recovery without epoch replacement,
+  authority restart epoch replacement, and bounded SIGTERM shutdown.
+- `sh container <run-id> runtime-browser-recovery` verifies two Chromium clients
+  recover without reload, resume movement, replace epoch/timeline state, rejoin, and
+  ready after relay and authority faults.
 - Infrastructure files and this document remain English for the contract check.
 - CI runs component verification on every PR and full browser acceptance on
   pushes to `main` and PRs by default. Use the `component-only` label only on

@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use crate::health::Health;
 use anyhow::Context;
 use moq_net::track::{Info, Subscription};
 use tokio::sync::mpsc;
@@ -14,6 +15,42 @@ pub async fn run(
     names: TrackNames,
     input_tx: mpsc::Sender<Vec<u8>>,
     mut output_rx: mpsc::Receiver<PublishedTick>,
+    health: Health,
+    room_epoch: String,
+) -> anyhow::Result<()> {
+    loop {
+        health.set_ready(false);
+        match run_session(
+            &relay_url,
+            &names,
+            &input_tx,
+            &mut output_rx,
+            &health,
+            &room_epoch,
+        )
+        .await
+        {
+            Ok(()) if output_rx.is_closed() => return Ok(()),
+            Ok(()) => tracing::warn!(
+                event = "relay_degraded",
+                room_epoch,
+                "MoQ session ended; reconnecting"
+            ),
+            Err(error) => {
+                tracing::warn!(event = "relay_degraded", room_epoch, error = %error, "MoQ session failed; reconnecting")
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
+async fn run_session(
+    relay_url: &url::Url,
+    names: &TrackNames,
+    input_tx: &mpsc::Sender<Vec<u8>>,
+    output_rx: &mut mpsc::Receiver<PublishedTick>,
+    health: &Health,
+    room_epoch: &str,
 ) -> anyhow::Result<()> {
     let outgoing = moq_net::Origin::random().produce();
     let incoming = moq_net::Origin::random().produce();
@@ -24,11 +61,12 @@ pub async fn run(
         .context("initialize MoQ client")?
         .with_publisher(outgoing.consume())
         .with_subscriber(incoming.clone());
-    let mut connection = client.reconnect(relay_url);
+    let mut connection = client.reconnect(relay_url.clone());
     while !connection.connected() {
         connection.status().await.context("connect to MoQ relay")?;
     }
-    tracing::info!(version = ?connection.version(), "connected to MoQ relay");
+    health.set_ready(true);
+    tracing::info!(event = "relay_recovered", room_epoch, version = ?connection.version(), "connected to MoQ relay");
 
     let mut authority = outgoing
         .create_broadcast(
@@ -56,26 +94,31 @@ pub async fn run(
             ));
         }
     }
-    drop(input_tx);
-
     let mut world_group = world.append_group().context("open initial world group")?;
     let mut group_start_tick = None;
     loop {
         tokio::select! {
+            status = connection.status() => match status.context("observe MoQ relay status")? {
+                moq_native::Status::Connected => {
+                    health.set_ready(true);
+                    tracing::info!(event = "relay_recovered", room_epoch, "MoQ relay session recovered");
+                }
+                moq_native::Status::Disconnected => {
+                    health.set_ready(false);
+                    tracing::warn!(event = "relay_degraded", room_epoch, "MoQ relay session disconnected");
+                }
+                _ => health.set_ready(false),
+            },
             result = readers.join_next() => match result {
                 Some(Ok(Ok(()))) => tracing::warn!("input subscription ended"),
                 Some(Ok(Err(error))) => tracing::warn!(error = %error, "input subscription failed"),
                 Some(Err(error)) => tracing::warn!(error = %error, "input subscription task failed"),
                 None => anyhow::bail!("all input subscriptions ended"),
             },
-            result = connection.closed() => {
-                result.context("MoQ relay reconnect loop stopped")?;
-                anyhow::bail!("MoQ relay reconnect loop stopped");
-            },
             published = output_rx.recv() => {
                 let Some(published) = published else { return Ok(()) };
                 let tick = published.snapshot.server_tick;
-                world_group.write_frame(moq_net::Timestamp::now(), encode_snapshot(&published.snapshot))
+                world_group.write_frame(moq_net::Timestamp::now(), encode_snapshot(&published.snapshot)?)
                     .context("publish world frame")?;
                 let start = *group_start_tick.get_or_insert(tick);
                 if tick.saturating_sub(start) >= GROUP_INTERVAL_TICKS {
@@ -85,7 +128,7 @@ pub async fn run(
                 }
                 if let Some(chunk) = published.history {
                     let mut group = history.append_group().context("open history group")?;
-                    group.write_frame(moq_net::Timestamp::now(), encode_history(&chunk))
+                    group.write_frame(moq_net::Timestamp::now(), encode_history(&chunk)?)
                         .context("publish history frame")?;
                     group.finish().context("finish history group")?;
                     tracing::debug!(server_tick = tick, samples = chunk.samples.len(), "published authority history");

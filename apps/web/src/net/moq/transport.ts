@@ -1,5 +1,7 @@
 import * as Moq from '@moq/net';
 import { Input, Snapshot, TimelineChunk } from '../../generated/temporal_heist.ts';
+export const MAX_SNAPSHOT_BYTES = 64 * 1024;
+export const MAX_HISTORY_BYTES = 2 * 1024 * 1024;
 export interface TransportHandlers {
   snapshot(snapshot: Snapshot): void;
   history(chunk: TimelineChunk): void;
@@ -44,10 +46,10 @@ export class MoqTransport {
     announced.close();
     this.handlers.state(`connected:${connection.transport}`);
     const authority = connection.consume(Moq.Path.from(authorityPath));
-    void this.#receive('world', authority.track('world'), (bytes) =>
+    void this.#receive('world', authority.track('world'), MAX_SNAPSHOT_BYTES, (bytes) =>
       this.handlers.snapshot(Snapshot.decode(bytes)),
     );
-    void this.#receive('history', authority.track('history'), (bytes) =>
+    void this.#receive('history', authority.track('history'), MAX_HISTORY_BYTES, (bytes) =>
       this.handlers.history(TimelineChunk.decode(bytes)),
     );
   }
@@ -64,7 +66,12 @@ export class MoqTransport {
     this.#motion = undefined;
     this.#actions = undefined;
   }
-  async #receive(name: string, track: ConsumerTrack, decode: (bytes: Uint8Array) => void) {
+  async #receive(
+    name: string,
+    track: ConsumerTrack,
+    maxBytes: number,
+    decode: (bytes: Uint8Array) => void,
+  ) {
     try {
       const subscription = track.subscribe({ ordered: true, latencyMax: 30_000 });
       while (!this.#closed) {
@@ -74,6 +81,8 @@ export class MoqTransport {
           const frame = await group.readFrame();
           if (!frame) break;
           if (this.#closed) return;
+          if (frame.payload.byteLength > maxBytes)
+            throw new Error(`authority ${name} frame exceeds ${maxBytes} bytes`);
           decode(frame.payload);
         }
       }
@@ -88,6 +97,13 @@ export class MoqTransport {
     this.handlers.error(error);
   }
   #write(track: ProducerTrack | undefined, payload: Uint8Array) {
-    track?.writeFrame({ payload, timestamp: Moq.Time.Timestamp.now() });
+    if (!track) return;
+    try {
+      Promise.resolve(track.writeFrame({ payload, timestamp: Moq.Time.Timestamp.now() })).catch(
+        (error) => this.#fail(error),
+      );
+    } catch (error) {
+      this.#fail(error);
+    }
   }
 }

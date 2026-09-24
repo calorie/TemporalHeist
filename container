@@ -61,7 +61,7 @@ case "$command" in
     release_metadata
     compose pull --policy missing relay
     compose build authority web browser
-    compose up -d relay authority web
+    compose up -d --force-recreate --wait relay authority web
     compose --profile test run --rm browser
     ;;
   visual)
@@ -131,6 +131,78 @@ case "$command" in
       docker inspect "$container_id" --format '{{json .HostConfig.SecurityOpt}}' | grep -q 'no-new-privileges'
     done
     sh containers/assert-release-images.sh
+    ;;
+  runtime-reliability)
+    release_metadata
+    compose pull --policy missing relay
+    compose build authority web
+    cleanup_runtime_reliability() {
+      compose down --remove-orphans >/dev/null
+    }
+    trap cleanup_runtime_reliability EXIT INT TERM
+    compose up -d --force-recreate --wait relay authority web
+    authority_id=$(compose ps -q authority)
+    restart_count_before=$(docker inspect "$authority_id" --format '{{.RestartCount}}')
+    started_before=$(docker inspect "$authority_id" --format '{{.State.StartedAt}}')
+    epoch_before=$(compose logs authority | sed -n 's/.*"room_epoch":"\([^"]*\)".*/\1/p' | head -1)
+    starts_before=$(compose logs authority | grep -c '"event":"authority_started"')
+    test -n "$epoch_before"
+    compose stop relay
+    compose exec -T authority th-authority --healthcheck=live
+    attempts=0
+    while compose exec -T authority th-authority --healthcheck=ready 2>/dev/null; do
+      attempts=$((attempts + 1)); test "$attempts" -lt 30; sleep 1
+    done
+    compose start relay
+    attempts=0
+    until compose exec -T authority th-authority --healthcheck=ready; do
+      attempts=$((attempts + 1)); test "$attempts" -lt 30; sleep 1
+    done
+    test "$(compose ps -q authority)" = "$authority_id"
+    test "$(docker inspect "$authority_id" --format '{{.RestartCount}}')" = "$restart_count_before"
+    test "$(docker inspect "$authority_id" --format '{{.State.StartedAt}}')" = "$started_before"
+    test "$(compose logs authority | grep -c '"event":"authority_started"')" = "$starts_before"
+    epoch_after_relay=$(compose logs authority | sed -n 's/.*"room_epoch":"\([^"]*\)".*/\1/p' | tail -1)
+    test "$epoch_after_relay" = "$epoch_before"
+    compose restart authority
+    attempts=0
+    until compose exec -T authority th-authority --healthcheck=ready; do
+      attempts=$((attempts + 1)); test "$attempts" -lt 30; sleep 1
+    done
+    epoch_after_restart=$(compose logs authority | sed -n 's/.*"room_epoch":"\([^"]*\)".*/\1/p' | tail -1)
+    test -n "$epoch_after_restart"
+    test "$epoch_after_restart" != "$epoch_before"
+    compose stop --timeout 5 authority
+    compose logs authority | grep -q '"event":"shutdown_complete"'
+    printf '{"relayEpoch":"%s","restartEpoch":"%s","readiness":"ready-unready-ready","shutdown":"clean"}\n' "$epoch_before" "$epoch_after_restart"
+    trap - EXIT INT TERM
+    cleanup_runtime_reliability
+    ;;
+  runtime-browser-recovery)
+    release_metadata
+    compose build authority web browser
+    compose up -d --wait relay authority web
+    compose run --rm dev sh -c 'rm -f /artifacts/relay-stopped /artifacts/relay-started /artifacts/authority-restarted'
+    browser_id=$(compose --profile test run -d browser node tests/runtime-recovery.mjs)
+    wait_log() {
+      pattern=$1; attempts=0
+      until docker logs "$browser_id" 2>&1 | grep -q "$pattern"; do
+        attempts=$((attempts + 1)); test "$attempts" -lt 90; sleep 1
+      done
+    }
+    wait_log 'baseline-ready'
+    compose stop relay
+    docker exec "$browser_id" touch /artifacts/relay-stopped
+    wait_log 'relay-outage-observed'
+    compose start relay
+    docker exec "$browser_id" touch /artifacts/relay-started
+    wait_log 'relay-recovered'
+    compose restart authority
+    docker exec "$browser_id" touch /artifacts/authority-restarted
+    wait_log 'authority-recovered'
+    test "$(docker wait "$browser_id")" = 0
+    docker logs "$browser_id"
+    docker rm "$browser_id" >/dev/null
     ;;
   down)
     shift

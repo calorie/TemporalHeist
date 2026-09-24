@@ -7,12 +7,16 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY map ./map
 COPY proto ./proto
-RUN cargo build --release --locked -p th-authority
+ARG TH_BUILD_CACHE_ID=default
+RUN --mount=type=cache,id=th-cargo-registry-${TH_BUILD_CACHE_ID},target=/usr/local/cargo/registry \
+    --mount=type=cache,id=th-cargo-target-${TH_BUILD_CACHE_ID},target=/workspace/target \
+    cargo build --release --locked -p th-authority \
+    && cp /workspace/target/release/th-authority /tmp/th-authority
 
 FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS authority
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=authority-build /workspace/target/release/th-authority /usr/local/bin/th-authority
+COPY --from=authority-build /tmp/th-authority /usr/local/bin/th-authority
 ARG TH_RELEASE_SOURCE
 ARG TH_RELEASE_REVISION
 ARG TH_RELEASE_VERSION
