@@ -2,9 +2,9 @@
 
 ## Status
 
-Artifact-contract layer implemented from main `5d974a9`. Named hardened release
-images, provenance manifest, exact web health, and headed noVNC play surfaces are in
-verification. Runtime reliability remains unstarted.
+Artifact-contract layer is implemented and locally verified from main `5d974a9`.
+Named hardened release images, provenance manifest, exact web health, and headed
+noVNC play surfaces are ready for review. Runtime reliability remains unstarted.
 
 ## Review stack
 
@@ -41,6 +41,10 @@ verification. Runtime reliability remains unstarted.
   protocol/contracts, raw WebGPU at two viewports, and production build/browser UX.
 - `sh container p6-artifact-agent acceptance`: passed the full two-client mission,
   Temporal Bridge agreement, restart/reset flow, and zero browser/renderer errors.
+- noVNC/Xvfb packages were moved to a dedicated `visual-browser` target so automated
+  acceptance keeps the smaller browser runner. The separated target passed both
+  noVNC endpoint probes and actual A/B Temporal Heist/WebGPU target inspection on
+  ephemeral loopback ports `61373` and `61372`.
 - An early release-build compiled both images successfully but returned
   `container: line 90: relay: command not found` because the wrapper file was edited
   while that shell was still reading it. A stable-file rerun passed and the condition
@@ -48,5 +52,5 @@ verification. Runtime reliability remains unstarted.
 
 ## Next action
 
-Commit the artifact contract, rerun release build/inspect/smoke against that source
-SHA, and hand the verified base to `p6/runtime-reliability`.
+Open the artifact-contract base PR, then branch `p6/runtime-reliability` on this
+verified contract without waiting for the base PR to merge.
