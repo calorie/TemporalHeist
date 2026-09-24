@@ -136,7 +136,11 @@ case "$command" in
     release_metadata
     compose pull --policy missing relay
     compose build authority web
-    compose up -d --wait relay authority web
+    cleanup_runtime_reliability() {
+      compose down --remove-orphans >/dev/null
+    }
+    trap cleanup_runtime_reliability EXIT INT TERM
+    compose up -d --force-recreate --wait relay authority web
     authority_id=$(compose ps -q authority)
     restart_count_before=$(docker inspect "$authority_id" --format '{{.RestartCount}}')
     started_before=$(docker inspect "$authority_id" --format '{{.State.StartedAt}}')
@@ -171,6 +175,8 @@ case "$command" in
     compose stop --timeout 5 authority
     compose logs authority | grep -q '"event":"shutdown_complete"'
     printf '{"relayEpoch":"%s","restartEpoch":"%s","readiness":"ready-unready-ready","shutdown":"clean"}\n' "$epoch_before" "$epoch_after_restart"
+    trap - EXIT INT TERM
+    cleanup_runtime_reliability
     ;;
   runtime-browser-recovery)
     release_metadata

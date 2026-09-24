@@ -76,7 +76,9 @@ resource bounds, and real two-browser restart recovery are complete.
   encoded payload limits reject oversize data before MoQ `write_frame`.
 - The health listener services one connection at a time and applies a 250 ms bound to
   the complete read/write exchange. A slow-client test proves a partial request cannot
-  retain the listener indefinitely or create unbounded tasks.
+  retain the listener indefinitely or create unbounded tasks. Fragmented requests wait
+  for the complete HTTP header terminator; incomplete headers are capped at 4 KiB and
+  receive 431 rather than allowing memory growth or a premature close/RST.
 - `sh container p6-runtime-agent runtime-reliability` passed real fault injection:
   relay stop preserved liveness while readiness changed ready → unready → ready;
   authority container RestartCount, StartedAt, `authority_started` count, process
